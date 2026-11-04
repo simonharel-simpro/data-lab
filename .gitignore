@@ -1,4 +1,22 @@
-# Bootstrap ignore (loop preflight). Phase 1 extends this file.
-.harness/
-spike-astro/
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Local config (keep .env.example tracked)
+.env
+
+# Node / app
 node_modules/
+/app/dist/
+/app/.astro/
+
+*.log
+
+# Throwaway Astro prototype: never committed (Phase 2B promotes it, then deletes it)
+spike-astro/
+
+# Autonomous-loop bookkeeping
+.harness/

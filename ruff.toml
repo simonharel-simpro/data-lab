@@ -1,0 +1,10 @@
+# Single ruff config for every Python tree (packages/, projects/, tests/, tools/).
+line-length = 120
+target-version = "py312"
+extend-exclude = ["tools/weavit-ui", "spike-astro", "app"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]

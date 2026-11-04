@@ -1,0 +1,2 @@
+{"accept": ["a", "mini-rag", "ocr2", "a-b-c"],
+ "reject": ["", "1a", "A", "a_b", "-a", "a-", "a--b", "mini--rag", "a b", "a/b", "test", "datalab", "datalab-test", "template", "no", "yes", "on", "off", "true", "false", "null", "y", "n"]}
