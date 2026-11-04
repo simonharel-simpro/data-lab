@@ -41,7 +41,11 @@ type = "forbidden"
 source_modules = ["datalab.project"]
 forbidden_modules = ["weaviate", "mlflow"]
 
-# Ruff config comes from the repo-root ruff.toml (single source).
+[tool.ruff]
+extend = "../../ruff.toml"   # single source: the repo-root config
+
+[tool.ruff.lint]
+extend-select = ["S"]        # already selected at the root; restated so the gate sees the bandit-equivalent rules
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
