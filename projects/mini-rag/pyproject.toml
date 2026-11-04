@@ -21,6 +21,7 @@ dev = [
     "ruff==0.17.3",
     "pip-audit>=2.10.1",
     "pyyaml>=6.0",             # the EMBEDDER/compose guard test parses compose.yaml
+    "import-linter>=2.15",
 ]
 
 # A build system makes src/<pkg> importable (without one uv treats the project as virtual).
@@ -39,6 +40,16 @@ sources = ["src"]
 
 [tool.uv.sources]
 datalab = { path = "../../packages/datalab", editable = true }
+
+[tool.importlinter]
+root_package = "mini_rag"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "scoring stays pure (no I/O clients)"
+type = "forbidden"
+source_modules = ["mini_rag.scoring"]
+forbidden_modules = ["weaviate", "mlflow", "anthropic", "httpx2", "datalab"]
 
 [tool.ruff]
 extend = "../../ruff.toml"   # single source: the repo-root config
