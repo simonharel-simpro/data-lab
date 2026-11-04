@@ -1,0 +1,25 @@
+---
+import type { MetricState } from '../lib/mlflow.ts';
+
+interface Props {
+  state: MetricState;
+  metricKey?: string;
+}
+const { state, metricKey } = Astro.props;
+// Links to MLflow only in dev: the static export must not point at 127.0.0.1 (D-14). Never render `reason`.
+const linked = import.meta.env.DEV;
+---
+{state.kind === 'no-metric' && <p class="muted">Pas de métrique déclarée.</p>}
+{state.kind === 'no-runs' && <p class="muted">Aucun run MLflow pour l'instant.</p>}
+{state.kind === 'metric-not-logged' && (
+  <p class="badge">{state.runCount} runs, aucun ne journalise <code>{metricKey}</code></p>
+)}
+{state.kind === 'unavailable' && <p class="badge">Métriques indisponibles (MLflow injoignable)</p>}
+{state.kind === 'ok' && (
+  <div>
+    <div class="metric">{metricKey} = {state.value.toFixed(3)}</div>
+    <div class="muted">
+      Meilleur de {state.runCount} runs · {linked ? <a href={state.runUrl}>{state.runName}</a> : <span>{state.runName}</span>}
+    </div>
+  </div>
+)}

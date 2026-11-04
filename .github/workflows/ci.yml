@@ -1,0 +1,76 @@
+# CI-parity: the same checks as the local pre-commit/pre-push hooks. Each phase appends its own job (2B: app, 3: pilot).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false # the Weavit fork is not needed for the Python checks
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: pre-commit (ruff, gitleaks, file size, declared deps)
+        run: uvx pre-commit run --all-files
+      - name: root compose test
+        run: uvx pytest tests/
+      - name: datalab unit tests + coverage floor
+        working-directory: packages/datalab
+        run: uv sync && uv run pytest --cov=datalab
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    # No MLflow in CI: cards with a metric render "unavailable"; DATALAB_STRICT_EXPORT stays unset on purpose.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: astro check
+        run: npm run check
+      - name: unit tests + line coverage floor (70 %)
+        run: npm test
+      - name: build with the real projects/ (zero projects is valid, F-15)
+        run: npm run build
+      - name: BOM + CRLF card builds (F-11, G-9)
+        run: npm run build
+        env:
+          DATALAB_PROJECTS_DIR: test-fixtures/crlf-bom
+      - name: name != folder fails the build (S-9, D-13)
+        run: "! npm run build"
+        env:
+          DATALAB_PROJECTS_DIR: test-fixtures/bad-name
+
+  pilot:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/mini-rag
+    # Unit tests only: no Weaviate, MLflow (sqlite in tmp) or DGX in CI; integration tests are marked and deselected.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: mini-rag unit tests + coverage floor
+        run: uv sync && uv run pytest --cov

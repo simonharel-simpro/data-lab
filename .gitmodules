@@ -1,0 +1,3 @@
+[submodule "tools/weavit-ui"]
+	path = tools/weavit-ui
+	url = https://github.com/simonharel-simpro/weavit-ui.git

@@ -1,0 +1,20 @@
+{"id": "q01", "question": "Which host port does the data-lab MLflow server listen on?", "answer": "5050"}
+{"id": "q02", "question": "Which host port serves the Weaviate REST API?", "answer": "8090"}
+{"id": "q03", "question": "Which host port serves the Weaviate gRPC API?", "answer": "50052"}
+{"id": "q04", "question": "Which Weaviate version does the shared stack run?", "answer": "1.40.2"}
+{"id": "q05", "question": "Which MLflow version does the shared stack run?", "answer": "3.17.2"}
+{"id": "q06", "question": "Which Astro version does the presentation app use?", "answer": "7.4.1"}
+{"id": "q07", "question": "Which embedding model does the text2vec-transformers module run?", "answer": "bge-small-en-v1.5"}
+{"id": "q08", "question": "Which environment variable sets the MLflow tracking URI for data-lab?", "answer": "DATALAB_MLFLOW_TRACKING_URI"}
+{"id": "q09", "question": "What is the maximum number of lines allowed for a Python module under src/?", "answer": "200"}
+{"id": "q10", "question": "Which Node major version does the app run on?", "answer": "22"}
+{"id": "q11", "question": "Which database backend does the MLflow server use?", "answer": "SQLite"}
+{"id": "q12", "question": "Which tool manages Python environments in data-lab?", "answer": "uv"}
+{"id": "q13", "question": "Which command deletes the named volumes of every project?", "answer": "docker compose down -v"}
+{"id": "q14", "question": "Which Weaviate module computes the embeddings?", "answer": "text2vec-transformers"}
+{"id": "q15", "question": "Which framework was chosen for the presentation app?", "answer": "Astro"}
+{"id": "q16", "question": "Which GitHub account hosts the Weavit UI fork?", "answer": "simonharel-simpro"}
+{"id": "q17", "question": "Which MLflow host port does the Demo-RAG stack use?", "answer": "5000"}
+{"id": "q18", "question": "What is the line coverage floor of the app unit tests, in percent?", "answer": "70"}
+{"id": "q19", "question": "What is the password of the MLflow admin user?", "answer": null}
+{"id": "q20", "question": "How much does hosting data-lab in the cloud cost per month?", "answer": null}

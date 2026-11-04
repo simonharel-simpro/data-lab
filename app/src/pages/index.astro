@@ -1,0 +1,32 @@
+---
+import Base from '../layouts/Base.astro';
+import Metric from '../components/Metric.astro';
+import { loadProjects } from '../lib/projects.ts';
+import { missing } from '../lib/completeness.ts';
+import { metricState } from '../lib/mlflow.ts';
+
+const cards = await Promise.all(
+  (await loadProjects()).map(async (e) => ({
+    e,
+    gaps: missing(e.data, e.body ?? ''),
+    state: await metricState(e.data),
+  })),
+);
+---
+<Base title="Projets">
+  <h1>Projets</h1>
+  {cards.length === 0 && (
+    <p class="muted">Aucun projet pour l'instant. Créez-en un avec <code>datalab-new &lt;nom&gt;</code>.</p>
+  )}
+  <div class="grid">
+    {cards.map(({ e, gaps, state }) => (
+      <article class="card">
+        <span class="status">{e.data.status}</span>
+        <h2><a href={`/projects/${e.id}/`}>{e.data.title}</a></h2>
+        <p class="muted">{e.data.tags.join(' · ')}</p>
+        <Metric state={state} metricKey={e.data.metric?.key} />
+        {gaps.length > 0 && <p class="badge">À compléter : {gaps.join(', ')}</p>}
+      </article>
+    ))}
+  </div>
+</Base>

@@ -1,0 +1,129 @@
+import os
+import shutil
+import subprocess
+import tomllib
+from pathlib import Path
+
+import pytest
+import yaml
+
+from datalab import new_project
+from datalab.new_project import main
+from datalab.project import load
+from tests.conftest import REPO_ROOT
+
+
+def _tree(root: Path) -> list[str]:
+    return sorted(str(p.relative_to(root)) for p in root.rglob("*"))
+
+
+def _frontmatter(card: Path) -> dict[str, object]:
+    return yaml.safe_load(card.read_text(encoding="utf-8").split("---\n")[1])
+
+
+def test_g_7_title_with_yaml_specials(fake_repo: Path) -> None:
+    assert main(["demo", "--title", "RAG: v2 # b"], root=fake_repo) == 0
+
+    assert _frontmatter(fake_repo / "projects" / "demo" / "PROJECT.md")["title"] == "RAG: v2 # b"
+
+
+def test_title_defaults_to_name(fake_repo: Path) -> None:
+    assert main(["demo"], root=fake_repo) == 0
+
+    assert _frontmatter(fake_repo / "projects" / "demo" / "PROJECT.md")["title"] == "demo"
+
+
+def test_g_12_package_name_prefixed(fake_repo: Path) -> None:
+    assert main(["demo"], root=fake_repo) == 0
+
+    pyproject = tomllib.loads((fake_repo / "projects" / "demo" / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pyproject["project"]["name"] == "proj-demo"
+
+
+def test_u_10_new_project_excludes_venv_and_lock(fake_repo: Path) -> None:
+    assert main(["demo"], root=fake_repo) == 0
+
+    out = fake_repo / "projects" / "demo"
+    assert not (out / ".venv").exists()
+    assert not (out / ".env").exists()
+    assert not (out / "uv.lock").exists()
+    assert (out / ".env.example").is_file()
+
+
+def test_u_10_no_placeholder_left(fake_repo: Path) -> None:
+    assert main(["demo"], root=fake_repo) == 0
+
+    out = fake_repo / "projects" / "demo"
+    leftovers = [p for p in out.rglob("*") if p.is_file() and "__DATALAB_" in p.read_text(encoding="utf-8")]
+    assert leftovers == []
+    assert load(out, root=fake_repo).name == "demo"
+
+
+@pytest.mark.parametrize("kind", ["empty-dir", "file"])
+def test_u_10_refuses_existing_empty_dir_and_writes_nothing(fake_repo: Path, kind: str) -> None:
+    target = fake_repo / "projects" / "x"
+    if kind == "empty-dir":
+        target.mkdir()
+    else:
+        target.write_text("", encoding="utf-8")
+    before = _tree(fake_repo)
+
+    assert main(["x"], root=fake_repo) == 2
+
+    assert _tree(fake_repo) == before
+
+
+def test_f_8_failed_copy_leaves_no_project_dir(fake_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(*_args: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(new_project, "_rewrite", broken)
+    assert main(["x"], root=fake_repo) == 1
+    assert sorted(p.name for p in (fake_repo / "projects").iterdir()) == []
+
+    monkeypatch.undo()
+    assert main(["x"], root=fake_repo) == 0
+    assert (fake_repo / "projects" / "x" / "PROJECT.md").is_file()
+
+
+def test_f_3_reserved_names_rejected(fake_repo: Path) -> None:
+    assert main(["test"], root=fake_repo) == 2
+    assert main(["../escape"], root=fake_repo) == 2
+
+    assert sorted(p.name for p in (fake_repo / "projects").iterdir()) == []
+    assert not (fake_repo / "escape").exists()
+
+
+def test_missing_template_exits_1(fake_repo: Path) -> None:
+    shutil.rmtree(fake_repo / "templates")
+
+    assert main(["demo"], root=fake_repo) == 1
+    assert not (fake_repo / "projects" / "demo").exists()
+
+
+@pytest.mark.integration
+def test_b1_package_added_after_first_sync_imports(fake_repo: Path) -> None:
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is not on PATH")
+    real_pkg = REPO_ROOT / "packages" / "datalab"
+    shutil.rmtree(fake_repo / "packages" / "datalab")
+    ignore = shutil.ignore_patterns(".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".coverage", "uv.lock")
+    shutil.copytree(real_pkg, fake_repo / "packages" / "datalab", ignore=ignore)
+    assert main(["demo"], root=fake_repo) == 0
+    project = fake_repo / "projects" / "demo"
+    env = {k: v for k, v in os.environ.items() if k not in {"VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT"}}
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        # Fixed argv, absolute binary, no shell.
+        return subprocess.run(  # noqa: S603
+            [uv, *args], cwd=project, env=env, capture_output=True, text=True, check=False, timeout=600
+        )
+
+    synced = run("sync", "--offline")
+    assert synced.returncode == 0, synced.stderr
+    (project / "src" / "demo_pkg").mkdir()
+    (project / "src" / "demo_pkg" / "__init__.py").write_text("", encoding="utf-8")
+
+    imported = run("run", "--offline", "python", "-c", "import demo_pkg, datalab.project")
+    assert imported.returncode == 0, imported.stderr
