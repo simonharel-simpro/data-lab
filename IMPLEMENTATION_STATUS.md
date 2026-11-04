@@ -8,7 +8,7 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 | 2A | `datalab` package + project template + `datalab-new` | ✅ landed 2026-11-04 (/check clean) | `phase-2a-datalab-package` |
 | 2B | Astro presentation app | ✅ landed 2026-11-04 (/check clean) | `phase-2b-astro-app` |
 | 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | ✅ landed locally 2026-11-04 (/check clean) — fork push + manual GUI checks pending | `phase-2c-weavit-autoconnect` + fork `feat/autoconnect-data-lab` |
-| 3 | Pilot project `mini-rag` | ✅ implemented 2026-11-04, awaiting /check — DGX acceptance pending | `phase-3-mini-rag-pilot` |
+| 3 | Pilot project `mini-rag` | ✅ landed 2026-11-04 (/check clean) — DGX acceptance pending | `phase-3-mini-rag-pilot` |
 
 ## Phase 1 — Foundation
 **Implemented:** 2026-11-04 · **Agent:** general-purpose · **Tooling:** ✅ pytest 1 passed; pre-commit (pre-push stage) green
