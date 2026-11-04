@@ -8,7 +8,7 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 | 2A | `datalab` package + project template + `datalab-new` | ✅ landed 2026-11-04 (/check clean) | `phase-2a-datalab-package` |
 | 2B | Astro presentation app | ✅ landed 2026-11-04 (/check clean) | `phase-2b-astro-app` |
 | 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | ✅ landed locally 2026-11-04 (/check clean) — fork push + manual GUI checks pending | `phase-2c-weavit-autoconnect` + fork `feat/autoconnect-data-lab` |
-| 3 | Pilot project `mini-rag` | pending | — |
+| 3 | Pilot project `mini-rag` | ✅ implemented 2026-11-04, awaiting /check — DGX acceptance pending | `phase-3-mini-rag-pilot` |
 
 ## Phase 1 — Foundation
 **Implemented:** 2026-11-04 · **Agent:** general-purpose · **Tooling:** ✅ pytest 1 passed; pre-commit (pre-push stage) green
@@ -34,3 +34,9 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 - data-lab: submodule pointer → local fork commit (fork push pending user approval)
 - Pending: 2 manual GUI checks (profile on 8090/50052 → connects; empty gRPC port → `skip: ports`); fork push + merge into fork main
 - Notes: pnpm 11 under Node 22 needs `--config.verify-deps-before-run=false`; a cleared Host is saved as `''` → `skip/host` (fails safe)
+
+## Phase 3 — Pilot project mini-rag
+**Implemented:** 2026-11-04 · **Agent:** general-purpose · **Tooling:** ✅ 41 unit (cov 89.8 %, floor 70), 2 integration (bm25, vector) vs live Weaviate, pyright 0, ruff, pip-audit 0 vulns, pre-commit pre-push green
+- Files: projects/mini-rag/{PROJECT.md,README.md,.env.example,pyproject.toml,uv.lock,data/corpus/*,data/questions.jsonl,src/mini_rag/*,tests/*}; ci.yml `pilot` job; declared-deps hook for mini-rag; README, ARCHITECTURE; app G-8 test
+- **Acceptance pending:** the DGX LLM (port 8000) was down during the whole phase — the 4 real runs + card check are not done. One live FAILED run (`bm25-k3`, smoke) exists in MLflow `mini-rag/retrieval`; collection `MiniRag_t2v_bge_small_en_v1_5_w120o20_9e8526f5` built.
+- To finish: `cd projects/mini-rag && for r in bm25 vector; do for k in 3 5; do uv run python -m mini_rag.run --retrieval $r --k $k; done; done`, then check the card in `npm run dev` and `npm run build`. Model id `deepseek-v4-flash` unconfirmed.

@@ -57,3 +57,20 @@ jobs:
         run: "! npm run build"
         env:
           DATALAB_PROJECTS_DIR: test-fixtures/bad-name
+
+  pilot:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/mini-rag
+    # Unit tests only: no Weaviate, MLflow (sqlite in tmp) or DGX in CI; integration tests are marked and deselected.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: mini-rag unit tests + coverage floor
+        run: uv sync && uv run pytest --cov

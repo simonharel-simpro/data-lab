@@ -62,3 +62,17 @@
 - Territory was: `ConnectionModal.tsx:169` binds the Host input with `set({ localHost: e.currentTarget.value })`, so clearing it persists `''`; `connectionManager.ts:86` (`||`) still treats `''` as `localhost`. Blank ports become `Number('') = 0`.
 - I did: kept the plan literally — only `undefined`, `127.0.0.1` and `localhost` are accepted, so a UI profile with a cleared Host gets `skip/host` (safe direction: no auto-connect, never a wrong target). Blank ports (`0`) get `skip/ports` as intended.
 - One-off or pattern?: one-off — if a cleared Host should auto-connect, add `''` to the accepted set (and a test); orchestrator's call.
+
+## Phase 3 — Demo-RAG's `GEN_MODEL` is an OpenRouter id, not the DGX model
+
+- Plan assumed: the DGX URL and model come from Demo-RAG's `.env` (`DGX_BASE_URL`, `GEN_MODEL`) into `MINI_RAG_*`.
+- Territory was: that `.env` has `GEN_PROVIDER=openrouter` and `GEN_MODEL=deepseek/deepseek-v4.1-flash` (an OpenRouter model id); the DGX id is Demo-RAG's code default `deepseek-v4-flash`, which is also the plan's `gen_model` default.
+- I did: copied only `DGX_BASE_URL` → `MINI_RAG_DGX_BASE_URL` in `projects/mini-rag/.env` (gitignored, verified with `git check-ignore`); kept the default `deepseek-v4-flash`. Not confirmed against the server: the DGX on :8000 refused connections during the whole phase.
+- One-off or pattern?: likely recurs — any project porting Demo-RAG's LLM settings must read `GEN_PROVIDER` before trusting `GEN_MODEL`.
+
+## Phase 3 — coverage floor in `addopts` breaks `pytest -m integration`
+
+- Plan assumed: pytest `addopts` holds `--cov=mini_rag --cov-fail-under=70 -m 'not integration'`.
+- Territory was: with the floor in `addopts`, `uv run pytest -m integration` (2 tests, a slice of the code) fails on coverage even when green; the orchestrator's verify commands (`pytest --cov`, `pytest -m integration`) follow `packages/datalab`'s layout instead.
+- I did: same as datalab — `addopts = "-ra --strict-markers -m 'not integration'"`, `[tool.coverage.run] source = ["mini_rag"]`, `[tool.coverage.report] fail_under = 70`; the CI job `pilot` runs `uv run pytest --cov` (floor enforced, failing). Floor unchanged (70).
+- One-off or pattern?: likely recurs — the template could carry this coverage block so every project gets the same split.

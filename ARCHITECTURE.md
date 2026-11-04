@@ -19,6 +19,9 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
 - **Hooks:** pre-commit (ruff check/format, gitleaks, file-size, declared deps); the same checks run in GitHub Actions.
+- **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (DGX LLM over the Anthropic
+  Messages API; httpx2 is the SDK's HTTP client and gives the tests `MockTransport`), weaviate-client, mlflow,
+  pydantic-settings, `datalab` (editable path dep).
 - **Shared package deps:** pydantic-settings, PyYAML (`safe_load` only), weaviate-client 4.24.1 (as Demo-RAG),
   mlflow 3.17.2 (as the server image; its sqlite store backs the tests), httpx (MLflow `/health` preflight).
 
@@ -31,13 +34,14 @@ contracts/              cross-side contracts (name_vectors.json) read by the Pyt
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A)
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
+projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C patches it)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
 .github/workflows/ci.yml  CI-parity: pre-commit, root compose test, datalab unit tests (job `checks`); app check,
-                        tests, builds incl. fixtures (job `app`)
+                        tests, builds incl. fixtures (job `app`); pilot unit tests (job `pilot`)
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
@@ -139,6 +143,31 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 3. Experiments: each run is logged to the experiment `<name>` or `<name>/<sub>` with tag `project=<name>`.
 4. The app reads `projects/*/PROJECT.md`, queries MLflow for runs with exactly `tags.project = '<name>'`, picks the
    best run by the card's `metric {key, goal}` and renders it (links only in dev, D-14).
+
+### Concrete example: the `mini-rag` pilot (Phase 3)
+
+`uv run python -m mini_rag.run --retrieval bm25 --k 3` in `projects/mini-rag`:
+
+1. `datalab.project.load()` reads `PROJECT.md` (name `mini-rag`); `PilotSettings` (`MINI_RAG_*`, the DGX URL is
+   required) and `Settings` (`DATALAB_*`) are validated before any I/O; `preflight` checks MLflow.
+2. `corpus.load_corpus` chunks the frozen snapshot `data/corpus/*.md` (by `##` section, then 120 words with a
+   20-word overlap); `index.ensure_collection` reuses or builds `MiniRag_t2v_bge_small_en_v1_5_w120o20_<hash8>`
+   (vectorizer `text2vec-transformers`, embedder id in the hashed parts, U-13), count-checked with one rebuild (F-13).
+3. `run.run` opens `tracked_run(..., sub="retrieval")` → experiment `mini-rag/retrieval`, tags `project`,
+   `config_hash` (and `smoke=true` for `--n`); per question: `index.search` (`bm25` or `near_text`) →
+   `generate.DgxGenerator.answer` (Anthropic Messages API, text blocks only, `<think>` stripped, temperature 0) →
+   `scoring.outcome` (IDK → missing, token-boundary containment → correct, else hallucination).
+4. Only after every question is scored: `score = accuracy − hallucination` (or `smoke_*`) and `per_question.json`
+   are logged; a `GenerationError` leaves a FAILED run without metrics (F-13).
+5. The app shows the card with the best FINISHED run by `score` (`max`).
+
+```python
+    with tracked_run(project, settings, run_name=f"{retrieval}-k{k}", sub="retrieval", tags=tags) as run_id:
+        mlflow.log_params(params)
+        results = _answer_all(selected, retrieval, k, answer, search)
+        mlflow.log_metrics(metrics([r.outcome for r in results]).as_dict(prefix="smoke_" if partial else ""))
+        mlflow.log_dict({"results": [r.__dict__ for r in results]}, "per_question.json")
+```
 
 ## Key Domain Concepts
 

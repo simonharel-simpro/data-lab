@@ -27,3 +27,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(packages/datalab/|tools/pre_commit_checks/)
+      - id: declared-deps-mini-rag
+        name: mini-rag imports are declared dependencies
+        # Same recipe and flags as declared-deps above, run in the pilot's own env.
+        entry: uv run --locked --directory projects/mini-rag python ../../tools/pre_commit_checks/check_declared_dependencies.py
+        language: system
+        pass_filenames: false
+        files: ^(projects/mini-rag/|tools/pre_commit_checks/)

@@ -98,6 +98,23 @@ npm run check && npm test            # astro check + unit tests (line coverage f
 - **Invalid cards fail the build** with the file named (D-13): unknown `status`, a `name` that breaks the naming
   rules or differs from its folder, a `metric.key` with characters outside `A-Z a-z 0-9 _ . - /`.
 
+## Pilot
+
+`projects/mini-rag` is the end-to-end example (BM25 and vector retrieval over a frozen snapshot of these docs,
+answers from the DGX LLM). With the stack up (`docker compose up -d`):
+
+```bash
+cd projects/mini-rag && uv sync
+echo 'MINI_RAG_DGX_BASE_URL=http://<dgx-host>:8000' > .env   # gitignored; required
+for r in bm25 vector; do for k in 3 5; do uv run python -m mini_rag.run --retrieval $r --k $k; done; done
+cd ../../app && npm run dev                                   # the mini-rag card: best `score` of the 4 runs
+```
+
+The runs land in MLflow under `mini-rag/retrieval` (tag `project=mini-rag`), the chunks in a Weaviate collection
+prefixed `MiniRag_`. `--n N` runs the first N questions only: it logs `smoke_*` metrics and tag `smoke=true`, never
+`score`, so a smoke run never becomes the card's best run (D-15). A perfect run scores 0.9: 2 of the 20 questions
+are unanswerable and "I don't know" counts as missing (D-7).
+
 ## Checks
 
 ```bash
@@ -106,4 +123,5 @@ pre-commit run --all-files
 uvx pytest tests/        # compose port contract (needs docker on PATH)
 (cd packages/datalab && uv run pytest --cov=datalab)   # unit tests, coverage >= 70 %
 (cd packages/datalab && uv run pytest -m integration)  # live stack (docker compose up -d)
+(cd projects/mini-rag && uv run pytest --cov)         # pilot unit tests, coverage >= 70 %
 ```

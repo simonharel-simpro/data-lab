@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { parse } from 'yaml';
+import { cardSchema } from './card.ts';
 import { missing } from './completeness.ts';
 
 const metric = { key: 'score', goal: 'max' } as const;
@@ -39,4 +42,17 @@ test('U-9d: heading inside a code fence is not a section', () => {
 
 test('CRLF body is parsed', () => {
   assert.deepEqual(missing({ status: 'conclu', data: 'd', metric }, full + '## Enseignements\r\ne\r\n## Suite\r\ns\r\n'), []);
+});
+
+test('G-8: the template card is a valid idée card missing only Objectif', () => {
+  // Repo root is 3 levels above app/src/lib/. datalab-new writes the title as a JSON (YAML double-quoted) string.
+  const raw = readFileSync(new URL('../../../templates/project/PROJECT.md', import.meta.url), 'utf8')
+    .replaceAll('__DATALAB_PROJECT__', 'demo')
+    .replaceAll('__DATALAB_TITLE__', '"Demo"');
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(raw);
+  assert.ok(match, 'template card has no frontmatter');
+  const card = cardSchema.parse(parse(match[1]));
+  assert.equal(card.status, 'idée');
+  assert.equal(card.title, 'Demo');
+  assert.deepEqual(missing(card, match[2]), ['Objectif']);
 });

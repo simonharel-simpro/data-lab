@@ -2,7 +2,7 @@
 
 > Living document maintained by `/implement-phase`. QA uses this to know what to test.
 
-**Last updated:** 2026-11-04 (Phase 2C)
+**Last updated:** 2026-11-04 (Phase 3)
 
 ## Shared infra
 
@@ -52,3 +52,13 @@
 | WUI-02 | Empty gRPC port | same profile, gRPC blank | no auto-connect, console `autoconnect skip: ports` | 🆕 New | Phase 2C |
 | WUI-03 | Two `data-lab` profiles | duplicates | no auto-connect (`ambiguous`) | 🆕 New | Phase 2C |
 | WUI-04 | Stack down | eligible profile, Weaviate stopped | normal UI with `error` status, no retry, no other profile | 🆕 New | Phase 2C |
+
+## Pilot mini-rag
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| PIL-01 | Full run | `--retrieval bm25 --k 3`, DGX up | FINISHED run in `mini-rag/retrieval`, tag `project=mini-rag`, metrics accuracy/hallucination/score | 🆕 New | Phase 3 |
+| PIL-02 | 4 configs | bm25/vector × k 3/5 | 4 runs; app card "score = …, Meilleur de 4 runs" | 🆕 New | Phase 3 |
+| PIL-03 | DGX down | any config | run FAILED, no metrics logged | 🆕 New | Phase 3 |
+| PIL-04 | Smoke run | `--n 1` | `smoke_*` metrics + tag `smoke=true`, never counted as best | 🆕 New | Phase 3 |
+| PIL-05 | Unanswerable question | answer `null` | IDK counts correct; any answer = hallucination | 🆕 New | Phase 3 |
