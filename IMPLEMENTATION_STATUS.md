@@ -7,7 +7,7 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 | 1 | Foundation (git, compose, tooling, submodule, docs) | ✅ landed 2026-11-04 (/check clean) | `phase-1-foundation` |
 | 2A | `datalab` package + project template + `datalab-new` | ✅ landed 2026-11-04 (/check clean) | `phase-2a-datalab-package` |
 | 2B | Astro presentation app | ✅ landed 2026-11-04 (/check clean) | `phase-2b-astro-app` |
-| 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | ✅ implemented 2026-11-04, awaiting /check — fork branch NOT pushed | `phase-2c-weavit-autoconnect` + fork `feat/autoconnect-data-lab` |
+| 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | ✅ landed locally 2026-11-04 (/check clean) — fork push + manual GUI checks pending | `phase-2c-weavit-autoconnect` + fork `feat/autoconnect-data-lab` |
 | 3 | Pilot project `mini-rag` | pending | — |
 
 ## Phase 1 — Foundation
