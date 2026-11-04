@@ -20,3 +20,8 @@ spike-astro/
 
 # Autonomous-loop bookkeeping
 .harness/
+.archview/
+.harness-archive/
+
+# ArchView usage-logging trail (per-user)
+**/.claude/archview/usage.jsonl
