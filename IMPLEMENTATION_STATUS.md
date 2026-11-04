@@ -4,7 +4,7 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
-| 1 | Foundation (git, compose, tooling, submodule, docs) | ✅ implemented 2026-11-04, awaiting /check | `phase-1-foundation` |
+| 1 | Foundation (git, compose, tooling, submodule, docs) | ✅ landed 2026-11-04 (/check clean) | `phase-1-foundation` |
 | 2A | `datalab` package + project template + `datalab-new` | pending | — |
 | 2B | Astro presentation app | pending | — |
 | 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | pending | — |
