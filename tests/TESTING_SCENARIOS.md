@@ -2,7 +2,7 @@
 
 > Living document maintained by `/implement-phase`. QA uses this to know what to test.
 
-**Last updated:** 2026-11-04 (Phase 2B)
+**Last updated:** 2026-11-04 (Phase 2C)
 
 ## Shared infra
 
@@ -43,3 +43,12 @@
 | APP-04 | MLflow down | `npm run build` | cards show "Métriques indisponibles"; with `DATALAB_STRICT_EXPORT=1` the build fails | 🆕 New | Phase 2B |
 | APP-05 | Static export links | `npm run build` | no 127.0.0.1/localhost in `dist/` (D-14); dev mode links to MLflow | 🆕 New | Phase 2B |
 | APP-06 | Card saved on Windows | BOM + CRLF | parses, title renders | 🆕 New | Phase 2B |
+
+## Weavit UI auto-connect (fork)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| WUI-01 | Eligible profile | local profile `data-lab`, 127.0.0.1, 8090/50052, stack up | connected on launch without a click | 🆕 New | Phase 2C |
+| WUI-02 | Empty gRPC port | same profile, gRPC blank | no auto-connect, console `autoconnect skip: ports` | 🆕 New | Phase 2C |
+| WUI-03 | Two `data-lab` profiles | duplicates | no auto-connect (`ambiguous`) | 🆕 New | Phase 2C |
+| WUI-04 | Stack down | eligible profile, Weaviate stopped | normal UI with `error` status, no retry, no other profile | 🆕 New | Phase 2C |

@@ -48,3 +48,17 @@
 - Territory was: the check runs in `astro:build:done`, after the pages are written, so the command exits 1 but `app/dist/` holds the export with "Métriques indisponibles" cards.
 - I did: kept the plan (exit code is the gate; the app never deletes files); a showable export is one whose strict build exited 0.
 - One-off or pattern?: one-off — if shipping is ever automated, gate on the exit code (or clean `dist/` in the deploy step).
+
+## Phase 2C — the fork's pnpm gate does not run as written under Node 22 / pnpm 11
+
+- Plan assumed: `pnpm install && pnpm typecheck && pnpm test` is green in the fork with its existing scripts.
+- Territory was: the fork needs Node >= 22; nvm's Node 22 resolves pnpm 11.1.3 via corepack, which (a) ignores build scripts (electron, esbuild, protobufjs) and writes an untracked `pnpm-workspace.yaml` with `allowBuilds:` placeholders, (b) refuses every `pnpm <script>` with ERR_PNPM_IGNORED_BUILDS (its pre-run deps check), and (c) leaves no Electron binary, so the 6 `src/main/weaviate/*.test.ts` files fail at import ("Electron failed to install correctly"). The lockfile itself is unchanged.
+- I did: ran scripts with `pnpm --config.verify-deps-before-run=false <script>` and ran `node install.js` in `node_modules/electron` once (downloads the binary, no dependency or lockfile change) → 17/17 files, 275 tests green. Did not approve builds or commit `pnpm-workspace.yaml` (left untracked, to be excluded or deleted).
+- One-off or pattern?: likely recurs — any agent running this fork's gate on Node 22 hits it; pin pnpm (`packageManager`) or document the flags.
+
+## Phase 2C — a blank Host field is saved as `''`, not `undefined`
+
+- Plan assumed: an "empty" `localHost` arrives as `undefined` (accepted, since `connectionManager.ts:86` maps it to `localhost`).
+- Territory was: `ConnectionModal.tsx:169` binds the Host input with `set({ localHost: e.currentTarget.value })`, so clearing it persists `''`; `connectionManager.ts:86` (`||`) still treats `''` as `localhost`. Blank ports become `Number('') = 0`.
+- I did: kept the plan literally — only `undefined`, `127.0.0.1` and `localhost` are accepted, so a UI profile with a cleared Host gets `skip/host` (safe direction: no auto-connect, never a wrong target). Blank ports (`0`) get `skip/ports` as intended.
+- One-off or pattern?: one-off — if a cleared Host should auto-connect, add `''` to the accepted set (and a test); orchestrator's call.

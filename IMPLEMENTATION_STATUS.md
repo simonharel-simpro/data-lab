@@ -7,7 +7,7 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 | 1 | Foundation (git, compose, tooling, submodule, docs) | ✅ landed 2026-11-04 (/check clean) | `phase-1-foundation` |
 | 2A | `datalab` package + project template + `datalab-new` | ✅ landed 2026-11-04 (/check clean) | `phase-2a-datalab-package` |
 | 2B | Astro presentation app | ✅ landed 2026-11-04 (/check clean) | `phase-2b-astro-app` |
-| 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | pending | — |
+| 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | ✅ implemented 2026-11-04, awaiting /check — fork branch NOT pushed | `phase-2c-weavit-autoconnect` + fork `feat/autoconnect-data-lab` |
 | 3 | Pilot project `mini-rag` | pending | — |
 
 ## Phase 1 — Foundation
@@ -27,3 +27,10 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 - Files: app/{package.json,package-lock.json,tsconfig.json,astro.config.mjs}, app/src/{content.config.ts,env.d.ts,lib/*,integrations/export-guard.ts,components/Metric.astro,layouts/Base.astro,pages/*}, app/test-fixtures/*; ci.yml `app` job; README, ARCHITECTURE
 - `spike-astro/` removed after promotion (plan step; never committed)
 - Notes: 3 IMPLEMENTATION_NOTES entries (coverage exclude, `astro dev` detaches, strict build leaves dist/)
+
+## Phase 2C — Weavit UI fork: auto-connect
+**Implemented:** 2026-11-04 · **Agent:** general-purpose · **Tooling (fork):** ✅ typecheck 0 errors, vitest 275/275 (10 new)
+- Fork files: src/renderer/src/features/connections/{autoConnect.ts,useAutoConnectOnLaunch.ts,autoConnect.test.ts}; App.tsx (+2); README "Fork notes"
+- data-lab: submodule pointer → local fork commit (fork push pending user approval)
+- Pending: 2 manual GUI checks (profile on 8090/50052 → connects; empty gRPC port → `skip: ports`); fork push + merge into fork main
+- Notes: pnpm 11 under Node 22 needs `--config.verify-deps-before-run=false`; a cleared Host is saved as `''` → `skip/host` (fails safe)
