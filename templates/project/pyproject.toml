@@ -1,0 +1,26 @@
+[project]
+# "proj-" prefix: a project named like a dependency (e.g. mlflow) must not shadow it in `uv sync` (G-12).
+name = "proj-__DATALAB_PROJECT__"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["datalab"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+# A build system makes src/<pkg> importable (without one uv treats the project as virtual).
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# dev-mode-dirs: the editable .pth points at src/ even while it only holds .gitkeep, so a package added after
+# the first `uv sync` is importable without a reinstall.
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+sources = ["src"]
+
+[tool.uv.sources]
+datalab = { path = "../../packages/datalab", editable = true }

@@ -55,7 +55,24 @@ split-brain view: REST on data-lab, gRPC on Demo-RAG (F-4).
 
 ## New project
 
-_Added by Phase 2A (`datalab-new`)._
+```bash
+uv run --project packages/datalab datalab-new mini-rag --title "Mini RAG"   # from the repo root
+# or install the command once (editable: it finds the repo from the package location)
+uv tool install --editable packages/datalab && datalab-new mini-rag
+cd projects/mini-rag && uv sync
+```
+
+Naming rules: lowercase letters and digits, single dashes between words (`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`), not a
+reserved word (`test`, `datalab`, `datalab-test`, `template`, and the YAML words `y n yes no on off true false
+null`). An existing `projects/<name>` (even an empty folder or a file) is refused and nothing is written.
+
+The template (`templates/project/`) gives: `PROJECT.md` (the card: `name`, `title`, `status: idée`, `tags`, four
+sections to fill), a `pyproject.toml` named `proj-<name>` that depends on `packages/datalab` (editable path dep),
+an empty `src/` for your package, `.env.example` and a short README. A non-editable install of `datalab` cannot find
+the repo and refuses to run.
+
+In code: `datalab.project.load()` (identity from `PROJECT.md`), `datalab.project.collection_name()` (Weaviate),
+`datalab.tracking.tracked_run()` (MLflow run tagged `project=<name>`), `datalab.settings.Settings` (`DATALAB_*`).
 
 ## App
 
@@ -67,4 +84,6 @@ _Added by Phase 2B (Astro presentation app)._
 pre-commit install --hook-type pre-commit --hook-type pre-push
 pre-commit run --all-files
 uvx pytest tests/        # compose port contract (needs docker on PATH)
+(cd packages/datalab && uv run pytest --cov=datalab)   # unit tests, coverage >= 70 %
+(cd packages/datalab && uv run pytest -m integration)  # live stack (docker compose up -d)
 ```

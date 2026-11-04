@@ -2,6 +2,8 @@
 line-length = 120
 target-version = "py312"
 extend-exclude = ["tools/weavit-ui", "spike-astro", "app"]
+# First-party roots for import sorting, so ruff gives the same order from the repo root and from a tree.
+src = ["packages/*/src", "projects/*/src"]
 
 [lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]

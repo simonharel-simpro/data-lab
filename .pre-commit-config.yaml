@@ -18,3 +18,12 @@ repos:
         entry: python tools/check_file_size.py
         language: python
         files: ^(packages|projects)/[^/]+/src/.*\.py$
+      - id: declared-deps
+        name: datalab imports are declared dependencies
+        # Vendored recipe (tools/pre_commit_checks). It reads pyproject.toml/uv.lock and scans src/ relative to the
+        # cwd, hence --directory; it must run in the package env so import->dist mapping is authoritative;
+        # --locked fails on lock drift instead of rewriting uv.lock mid-hook.
+        entry: uv run --locked --directory packages/datalab python ../../tools/pre_commit_checks/check_declared_dependencies.py
+        language: system
+        pass_filenames: false
+        files: ^(packages/datalab/|tools/pre_commit_checks/)

@@ -17,7 +17,9 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 - **App:** Astro 7 on Node 22 (static output, no server adapter).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
-- **Hooks:** pre-commit (ruff check/format, gitleaks, file-size).
+- **Hooks:** pre-commit (ruff check/format, gitleaks, file-size, declared deps); the same checks run in GitHub Actions.
+- **Shared package deps:** pydantic-settings, PyYAML (`safe_load` only), weaviate-client 4.24.1 (as Demo-RAG),
+  mlflow 3.17.2 (as the server image; its sqlite store backs the tests), httpx (MLflow `/health` preflight).
 
 ## Project Structure
 
@@ -31,6 +33,8 @@ projects/<name>/        one project per folder: own env, PROJECT.md card (projec
 app/                    read-only Astro presentation app (Phase 2B)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C patches it)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
+tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
+.github/workflows/ci.yml  CI-parity: pre-commit, root compose test, datalab unit tests (job `checks`)
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
@@ -52,6 +56,33 @@ ruff.toml               single ruff config for every Python tree
 - **Does:** reads `DATALAB_*` settings, validates project names (`NAME_RE`), builds collection names, wraps MLflow
   runs with the non-overridable `project` tag, scaffolds new projects (`datalab-new`).
 - **Must NOT:** read unprefixed env vars such as `MLFLOW_TRACKING_URI` (F-5); validate the card beyond `name` (D-3).
+- **Modules:** `project` (pure: `NAME_RE`, `load`, `repo_root`, naming), `settings` (`Settings`, `connect_weaviate`),
+  `tracking` (`preflight`, `tracked_run`), `new_project` (`datalab-new`). Root found from the package file, so only
+  editable installs work (F-10).
+
+```python
+def collection_name(project: str, *parts: str) -> str:
+    """`<Pascal(project)>_<parts>_<hash8>`; the hash covers the raw name and part boundaries (U-2, U-3)."""
+    _check_name_shape(project)
+    bad = [p for p in parts if not isinstance(p, str)]
+    if bad:
+        raise TypeError(f"collection name parts must be str, got {bad!r}")
+    pascal = "".join(word.capitalize() for word in project.split("-"))
+    digest = hashlib.sha256(json.dumps([project, *parts]).encode("utf-8")).hexdigest()[:8]
+    return "_".join([_UNSAFE.sub("_", "_".join([pascal, *parts])), digest])
+```
+
+```python
+    extra = dict(tags or {})
+    if "project" in extra:
+        raise ValueError("tags may not override 'project': it always equals the project name")
+    # Set explicitly, so a project that skips preflight never logs through an inherited MLFLOW_TRACKING_URI (F-5).
+    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+    mlflow.set_experiment(experiment_name(project.name, sub))
+    with mlflow.start_run(run_name=run_name) as run:
+        mlflow.set_tags({"project": project.name} | extra)
+        yield run.info.run_id
+```
 
 ### Project (`projects/<name>/`)
 - **Does:** owns its data, code, env and `PROJECT.md` card; talks to the infra only through `datalab`.
