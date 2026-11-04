@@ -1,0 +1,25 @@
+{
+  "gate_tools": [
+    {
+      "stack": "python-fastapi",
+      "tool": "ruff",
+      "root": ".",
+      "tracker": "#7",
+      "reason": "no root uv project by design (ADR 3); covered by pre-commit ruff + `uvx pytest tests/`"
+    },
+    {
+      "stack": "python-fastapi",
+      "tool": "pytest",
+      "root": ".",
+      "tracker": "#7",
+      "reason": "no root uv project by design (ADR 3); covered by pre-commit ruff + `uvx pytest tests/`"
+    },
+    {
+      "stack": "python-fastapi",
+      "tool": "lint-imports",
+      "root": ".",
+      "tracker": "#7",
+      "reason": "no root uv project by design (ADR 3); covered by pre-commit ruff + `uvx pytest tests/`"
+    }
+  ]
+}
