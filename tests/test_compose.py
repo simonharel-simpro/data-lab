@@ -7,9 +7,8 @@ data-lab must coexist with Demo-RAG (5000/8080/50051) and, being unauthenticated
 import json
 import shutil
 import subprocess
+import unittest
 from pathlib import Path
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 COMPOSE_FILE = REPO_ROOT / "compose.yaml"
@@ -24,7 +23,7 @@ EXPECTED_PORTS = {
 def _compose_config() -> dict:
     docker = shutil.which("docker")
     if docker is None:
-        pytest.skip("docker is not on PATH: cannot render compose.yaml with `docker compose config`")
+        raise unittest.SkipTest("docker is not on PATH: cannot render compose.yaml with `docker compose config`")
     # Fixed argv, no shell, absolute binary path: nothing user-controlled reaches the command line.
     result = subprocess.run(  # noqa: S603
         [docker, "compose", "-f", str(COMPOSE_FILE), "config", "--format", "json"],
