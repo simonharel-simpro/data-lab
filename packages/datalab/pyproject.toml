@@ -15,7 +15,14 @@ dependencies = [
 datalab-new = "datalab.new_project:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-cov>=5", "pyright>=1.1.390"]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "pyright>=1.1.390",
+    "ruff==0.17.3",
+    "pip-audit>=2.10.1",
+    "import-linter>=2.15",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -23,6 +30,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/datalab"]
+
+[tool.importlinter]
+root_package = "datalab"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "project.py stays pure (no weaviate/mlflow)"
+type = "forbidden"
+source_modules = ["datalab.project"]
+forbidden_modules = ["weaviate", "mlflow"]
 
 # Ruff config comes from the repo-root ruff.toml (single source).
 

@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import mlflow
 import pytest
 from mlflow import MlflowClient
 from mlflow.entities import Run
@@ -72,5 +73,11 @@ def test_preflight_unreachable_raises_tracking_unavailable() -> None:
         preflight("http://127.0.0.1:9")
 
 
-def test_preflight_accepts_a_working_store(sqlite_uri: str) -> None:
-    preflight(sqlite_uri)
+def test_preflight_accepts_a_working_store(sqlite_uri: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A stray shell URI, and MLflow's own default (sqlite:///mlflow.db in the cwd) equals sqlite_uri here, so only an
+    # explicit set_tracking_uri can satisfy the assertion below (F-5).
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:9")
+
+    preflight(sqlite_uri)  # raising here fails the test
+
+    assert mlflow.get_tracking_uri() == sqlite_uri

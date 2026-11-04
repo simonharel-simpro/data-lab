@@ -1,0 +1,5 @@
+{
+  "exclude": ["packages", "projects", "templates", "tools/weavit-ui", "app", "spike-astro", "**/.venv", "**/node_modules"],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.12"
+}

@@ -43,7 +43,7 @@ def _compose_host_ports() -> dict[tuple[str, int], tuple[str, int]]:
 
 def test_f_5_settings_ignores_bare_mlflow_tracking_uri(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    assert _settings().mlflow_tracking_uri == "http://127.0.0.1:5050"
+    assert _settings().mlflow_tracking_uri == _env_example()["DATALAB_MLFLOW_TRACKING_URI"]
 
     monkeypatch.setenv("DATALAB_MLFLOW_TRACKING_URI", "x")
     assert _settings().mlflow_tracking_uri == "x"

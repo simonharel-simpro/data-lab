@@ -79,6 +79,8 @@ def _first_party_tops(files: list[Path]) -> set[str]:
 
 def _provided_import_names(declared: set[str]) -> set[str]:
     """Import names the installed env maps to a declared distribution (PIL->pillow…)."""
+    if packages_distributions is None:
+        return set()
     return {
         import_name
         for import_name, dists in packages_distributions().items()
