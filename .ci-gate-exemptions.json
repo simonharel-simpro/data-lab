@@ -21,5 +21,13 @@
       "tracker": "#7",
       "reason": "no root uv project by design (ADR 3); covered by pre-commit ruff + `uvx pytest tests/`"
     }
+  ],
+  "exemptions": [
+    {
+      "tree": "app",
+      "gate": "coverage",
+      "tracker": "#9",
+      "reason": "floor exists (`node --test --test-coverage-lines=70` in app/package.json `test`, proven to fail at 41 %) but the inventory does not detect node --test thresholds"
+    }
   ]
 }
