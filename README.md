@@ -76,7 +76,27 @@ In code: `datalab.project.load()` (identity from `PROJECT.md`), `datalab.project
 
 ## App
 
-_Added by Phase 2B (Astro presentation app)._
+A read-only Astro site (`app/`): one page per `projects/<name>/PROJECT.md`, with the project's best MLflow run
+(the card's `metric {key, goal}`, among FINISHED runs tagged exactly `project=<name>`). It never writes anything.
+
+```bash
+cd app && nvm use && npm ci
+npm run dev                          # local live mode: http://127.0.0.1:4321, cards and metrics re-read per request
+DATALAB_STRICT_EXPORT=1 npm run build   # showable static export in app/dist/ (fails if MLflow is down)
+npm run check && npm test            # astro check + unit tests (line coverage floor 70 %)
+```
+
+- **Two modes.** `npm run dev` links run names to MLflow and shows the MLflow URI in the footer. `npm run build`
+  freezes the metrics at build time and contains no link to `127.0.0.1` (D-14). Without `DATALAB_STRICT_EXPORT=1`
+  a build with MLflow down still succeeds and shows "Métriques indisponibles" on cards with a metric (that is what
+  CI does); use the strict flag for any export you show. Note: `astro dev` detaches from a non-interactive shell and
+  prints its own PID; stop it with `astro dev stop` (from `app/`) or Ctrl-C in a terminal.
+- **MLflow URI:** `DATALAB_MLFLOW_TRACKING_URI` (default `http://127.0.0.1:5050`); `MLFLOW_TRACKING_URI` is ignored.
+- **Badge "À compléter : …"** lists what the card still lacks for its status: `idée` needs `## Objectif`;
+  `en cours` adds `## Approche`, `data` and `metric`; `conclu`/`abandonné` add `## Enseignements` and `## Suite`.
+  A section with only an HTML comment (as in the template) counts as empty.
+- **Invalid cards fail the build** with the file named (D-13): unknown `status`, a `name` that breaks the naming
+  rules or differs from its folder, a `metric.key` with characters outside `A-Z a-z 0-9 _ . - /`.
 
 ## Checks
 

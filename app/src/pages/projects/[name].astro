@@ -1,0 +1,29 @@
+---
+import type { InferGetStaticPropsType } from 'astro';
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Metric from '../../components/Metric.astro';
+import { loadProjects } from '../../lib/projects.ts';
+import { missing } from '../../lib/completeness.ts';
+import { metricState } from '../../lib/mlflow.ts';
+
+export async function getStaticPaths() {
+  return (await loadProjects()).map((entry) => ({ params: { name: entry.id }, props: { entry } }));
+}
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const gaps = missing(entry.data, entry.body ?? '');
+const state = await metricState(entry.data);
+---
+<Base title={entry.data.title}>
+  <p><a href="/">← Projets</a> · <span class="status">{entry.data.status}</span></p>
+  <h1>{entry.data.title}</h1>
+  {entry.data.data && <p class="muted">Données : {entry.data.data}</p>}
+  <section class="card">
+    <Metric state={state} metricKey={entry.data.metric?.key} />
+  </section>
+  {gaps.length > 0 && <p class="badge">À compléter : {gaps.join(', ')}</p>}
+  <Content />
+</Base>

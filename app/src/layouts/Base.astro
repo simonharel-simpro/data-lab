@@ -1,0 +1,43 @@
+---
+import { mlflowUri } from '../lib/mlflow.ts';
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const dev = import.meta.env.DEV;
+const mode = dev ? 'en direct' : 'statique';
+const renderedAt = new Date().toLocaleString('fr-FR');
+---
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · data-lab</title>
+    <style is:global>
+      :root { --bg:#fafaf9; --fg:#1c1917; --muted:#78716c; --card:#fff; --line:#e7e5e4; --warn:#b45309; --warn-bg:#fef3c7; --ok:#15803d; }
+      @media (prefers-color-scheme: dark) { :root { --bg:#1c1917; --fg:#f5f5f4; --muted:#a8a29e; --card:#292524; --line:#44403c; --warn:#fbbf24; --warn-bg:#422006; --ok:#4ade80; } }
+      body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
+      main { max-width:960px; margin:0 auto; padding:24px 16px; }
+      a { color:inherit; }
+      header.top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+      footer { margin-top:32px; }
+      .muted { color:var(--muted); font-size:.875rem; }
+      .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+      .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+      .badge { display:inline-block; background:var(--warn-bg); color:var(--warn); border-radius:999px; padding:2px 10px; font-size:.8rem; }
+      .status { font-size:.8rem; border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+      .metric { font-variant-numeric:tabular-nums; font-size:1.5rem; color:var(--ok); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <a href="/"><strong>data-lab</strong></a>
+        <span class="muted">Rendu {mode} · {renderedAt}</span>
+      </header>
+      <slot />
+      {dev && <footer class="muted">MLflow : {mlflowUri()}</footer>}
+    </main>
+  </body>
+</html>

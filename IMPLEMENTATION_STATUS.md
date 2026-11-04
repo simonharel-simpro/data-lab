@@ -6,7 +6,7 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 |-------|-------|--------|--------|
 | 1 | Foundation (git, compose, tooling, submodule, docs) | ✅ landed 2026-11-04 (/check clean) | `phase-1-foundation` |
 | 2A | `datalab` package + project template + `datalab-new` | ✅ landed 2026-11-04 (/check clean) | `phase-2a-datalab-package` |
-| 2B | Astro presentation app | pending | — |
+| 2B | Astro presentation app | ✅ implemented 2026-11-04, awaiting /check | `phase-2b-astro-app` |
 | 2C | Weavit UI fork: auto-connect (`tools/weavit-ui`) | pending | — |
 | 3 | Pilot project `mini-rag` | pending | — |
 
@@ -21,3 +21,9 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 - Files: packages/datalab/{pyproject.toml,uv.lock,.python-version,src/datalab/{project,settings,tracking,new_project}.py,tests/*}, templates/project/*, tools/pre_commit_checks/check_declared_dependencies.py (+_base,_layout), .github/workflows/ci.yml; modified .pre-commit-config.yaml, README.md, ARCHITECTURE.md, ruff.toml (`src=` for isort)
 - Tests: all 31 planned rows implemented + 9 extra tied to plan sentences; each seen red (stubs, then targeted breakage)
 - Notes: 3 IMPLEMENTATION_NOTES entries (Python 3.12 pin, hook --directory, MLflow soft delete). `Project.root` = project folder.
+
+## Phase 2B — Astro presentation app
+**Implemented:** 2026-11-04 · **Agent:** general-purpose · **Tooling:** ✅ astro check 0/0/0, 43/43 node tests, line coverage 99.4 % (failing floor 70), builds: empty projects ✅, crlf-bom ✅, bad-name fails (D-13) ✅, no loopback links in dist (D-14) ✅
+- Files: app/{package.json,package-lock.json,tsconfig.json,astro.config.mjs}, app/src/{content.config.ts,env.d.ts,lib/*,integrations/export-guard.ts,components/Metric.astro,layouts/Base.astro,pages/*}, app/test-fixtures/*; ci.yml `app` job; README, ARCHITECTURE
+- `spike-astro/` removed after promotion (plan step; never committed)
+- Notes: 3 IMPLEMENTATION_NOTES entries (coverage exclude, `astro dev` detaches, strict build leaves dist/)

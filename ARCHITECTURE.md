@@ -14,7 +14,8 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (inference image `1.13.3`, English-only in v1, D-5 / #6). Default vectorizer `none`: collections opt in.
 - **Experiment tracking:** MLflow 3.17.2, SQLite backend, artifacts served by the tracking server.
 - **Python:** 3.12, managed with uv; one env per project; ruff (single root `ruff.toml`), pytest.
-- **App:** Astro 7 on Node 22 (static output, no server adapter).
+- **App:** Astro 7.4.1 on Node 22 (static output, no server adapter); zod via `astro/zod`; tests with `node --test`
+  (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
 - **Hooks:** pre-commit (ruff check/format, gitleaks, file-size, declared deps); the same checks run in GitHub Actions.
@@ -30,11 +31,13 @@ contracts/              cross-side contracts (name_vectors.json) read by the Pyt
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A)
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
-app/                    read-only Astro presentation app (Phase 2B)
+app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
+                        src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C patches it)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
-.github/workflows/ci.yml  CI-parity: pre-commit, root compose test, datalab unit tests (job `checks`)
+.github/workflows/ci.yml  CI-parity: pre-commit, root compose test, datalab unit tests (job `checks`); app check,
+                        tests, builds incl. fixtures (job `app`)
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
@@ -89,8 +92,43 @@ def collection_name(project: str, *parts: str) -> str:
 - **Must NOT:** hardcode ports or URIs; write into another project's collections or experiments.
 
 ### App (`app/`, Phase 2B)
-- **Does:** reads cards and MLflow runs (REST, D-1), renders project pages; dev mode and static export.
-- **Must NOT:** write anything — no MLflow writes, no Weaviate access, no card edits; launch runs (#4).
+- **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`) and MLflow runs
+  (REST, D-1), renders an index and one page per project.
+- **Must NOT:** write anything — the app only calls MLflow's `experiments/search`, `runs/search` and `/health`; no
+  Weaviate access, no card edits; never launch runs (#4). Pages never import MLflow code other than `metricState()`.
+- **Two modes, one code base (no server adapter, S-2):** `astro dev` re-reads cards and metrics per request and
+  links run names to MLflow; `astro build` is a static export with metrics frozen and no MLflow link or URI (D-14).
+- **Modules:** `lib/name.ts` (`NAME_RE`, same literal as Python), `lib/card.ts` (zod schema, statuses),
+  `lib/completeness.ts` (badge), `lib/mlflow.ts` + `lib/mlflow-rest.ts` (best run), `lib/report.ts` (build report),
+  `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
+  Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
+- **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.
+- **Metric value contract (U-6):** the value of a run is `run.data.metrics` — MLflow's *latest* value of the key,
+  not the max over steps. Only exactly `metric.key` counts (a `smoke_score` never stands in for `score`, D-15).
+- **Build report on `globalThis` (B-1):** during `astro build` the pages and the integration load separate module
+  instances, so `reportUnavailable()` writes to `globalThis.__datalabBuildReport`; the `astro:build:done` hook logs
+  it and, with `DATALAB_STRICT_EXPORT=1`, fails the build when any card's metrics were unavailable (F-1).
+
+```ts
+export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
+  if (runs.length === 0) return { kind: 'no-runs' };
+  const carrying = runs.flatMap((run) => {
+    const m = run.data.metrics.find((x) => x.key === metric.key);
+    return m ? [{ run, value: m.value }] : [];
+  });
+  if (carrying.length === 0) return { kind: 'metric-not-logged', runCount: runs.length };
+  const finite = carrying.filter((c): c is { run: MlflowRun; value: number } => Number.isFinite(c.value));
+  if (finite.length === 0) return { kind: 'no-runs' };
+  const sign = metric.goal === 'max' ? -1 : 1;
+  finite.sort(
+    (a, b) =>
+      sign * (a.value - b.value) ||
+      b.run.info.start_time - a.run.info.start_time ||
+      (a.run.info.run_id < b.run.info.run_id ? -1 : a.run.info.run_id > b.run.info.run_id ? 1 : 0),
+  );
+  return { kind: 'picked', run: finite[0].run, value: finite[0].value, runCount: finite.length };
+}
+```
 
 ## Data Flow
 

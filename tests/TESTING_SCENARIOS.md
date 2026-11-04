@@ -2,7 +2,7 @@
 
 > Living document maintained by `/implement-phase`. QA uses this to know what to test.
 
-**Last updated:** 2026-11-04 (Phase 2A)
+**Last updated:** 2026-11-04 (Phase 2B)
 
 ## Shared infra
 
@@ -32,3 +32,14 @@
 | DL-03 | Inherited MLFLOW_TRACKING_URI | env points at Demo-RAG :5000 | data-lab URI (5050) used | 🆕 New | Phase 2A |
 | DL-04 | Card with BOM/CRLF | PROJECT.md saved on Windows | loads | 🆕 New | Phase 2A |
 | DL-05 | MLflow down | `preflight` on unreachable URI | `TrackingUnavailable` | 🆕 New | Phase 2A |
+
+## Presentation app (`app/`)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| APP-01 | Zero projects | `projects/` holds only `.gitkeep` | build OK, index shows the empty state | 🆕 New | Phase 2B |
+| APP-02 | Card + best run | card with `metric: {key, goal}`, runs tagged `project=<name>` | best finite value shown (tie → latest start_time, then run_id) | 🆕 New | Phase 2B |
+| APP-03 | Invalid card | `name` ≠ folder | build fails naming the file (D-13) | 🆕 New | Phase 2B |
+| APP-04 | MLflow down | `npm run build` | cards show "Métriques indisponibles"; with `DATALAB_STRICT_EXPORT=1` the build fails | 🆕 New | Phase 2B |
+| APP-05 | Static export links | `npm run build` | no 127.0.0.1/localhost in `dist/` (D-14); dev mode links to MLflow | 🆕 New | Phase 2B |
+| APP-06 | Card saved on Windows | BOM + CRLF | parses, title renders | 🆕 New | Phase 2B |

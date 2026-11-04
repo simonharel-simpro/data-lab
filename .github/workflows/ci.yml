@@ -26,3 +26,34 @@ jobs:
       - name: datalab unit tests + coverage floor
         working-directory: packages/datalab
         run: uv sync && uv run pytest --cov=datalab
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    # No MLflow in CI: cards with a metric render "unavailable"; DATALAB_STRICT_EXPORT stays unset on purpose.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: astro check
+        run: npm run check
+      - name: unit tests + line coverage floor (70 %)
+        run: npm test
+      - name: build with the real projects/ (zero projects is valid, F-15)
+        run: npm run build
+      - name: BOM + CRLF card builds (F-11, G-9)
+        run: npm run build
+        env:
+          DATALAB_PROJECTS_DIR: test-fixtures/crlf-bom
+      - name: name != folder fails the build (S-9, D-13)
+        run: "! npm run build"
+        env:
+          DATALAB_PROJECTS_DIR: test-fixtures/bad-name
