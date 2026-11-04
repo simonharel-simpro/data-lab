@@ -1,0 +1,4 @@
+# Bootstrap ignore (loop preflight). Phase 1 extends this file.
+.harness/
+spike-astro/
+node_modules/
