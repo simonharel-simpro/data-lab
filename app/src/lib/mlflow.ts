@@ -88,6 +88,36 @@ async function projectExperiments(base: string, project: string, fetchImpl: type
   return parseExperiments(raw).filter((e) => e.name === project || e.name.startsWith(`${project}/`));
 }
 
+async function searchRuns(
+  base: string,
+  project: string,
+  metric: Metric,
+  experimentIds: string[],
+  fetchImpl: typeof fetch,
+): Promise<MlflowRun[]> {
+  return parseRuns(
+    await post(base, 'runs/search', {
+      experiment_ids: experimentIds,
+      filter: `tags.project = '${project}' AND attributes.status = 'FINISHED'`,
+      order_by: [`metrics.\`${metric.key}\` ${metric.goal === 'max' ? 'DESC' : 'ASC'}`, 'attributes.start_time DESC'],
+      max_results: 1000,
+      run_view_type: 'ACTIVE_ONLY',
+    }, fetchImpl),
+  );
+}
+
+function toOk(pick: PickedRun, experiments: readonly MlflowExperiment[], base: string): BestRun {
+  const { run_id, run_name, experiment_id } = pick.run.info;
+  return {
+    kind: 'ok',
+    runName: run_name ?? run_id,
+    value: pick.value,
+    runCount: pick.runCount,
+    experiment: experiments.find((e) => e.experiment_id === experiment_id)?.name ?? experiment_id,
+    runUrl: `${base}/#/experiments/${experiment_id}/runs/${run_id}`,
+  };
+}
+
 /** Best finished run tagged exactly `project=<project>`. Throws only on a programming error (invalid input). */
 export async function bestRun(
   project: string,
@@ -102,26 +132,10 @@ export async function bestRun(
   try {
     const experiments = await projectExperiments(base, project, fetchImpl);
     if (experiments.length === 0) return { kind: 'no-runs' };
-    const runs = parseRuns(
-      await post(base, 'runs/search', {
-        experiment_ids: experiments.map((e) => e.experiment_id),
-        filter: `tags.project = '${project}' AND attributes.status = 'FINISHED'`,
-        order_by: [`metrics.\`${metric.key}\` ${metric.goal === 'max' ? 'DESC' : 'ASC'}`, 'attributes.start_time DESC'],
-        max_results: 1000,
-        run_view_type: 'ACTIVE_ONLY',
-      }, fetchImpl),
-    );
-    const pick = pickBest(runs, metric);
+    const ids = experiments.map((e) => e.experiment_id);
+    const pick = pickBest(await searchRuns(base, project, metric, ids, fetchImpl), metric);
     if (pick.kind !== 'picked') return pick;
-    const { run_id, run_name, experiment_id } = pick.run.info;
-    return {
-      kind: 'ok',
-      runName: run_name ?? run_id,
-      value: pick.value,
-      runCount: pick.runCount,
-      experiment: experiments.find((e) => e.experiment_id === experiment_id)?.name ?? experiment_id,
-      runUrl: `${base}/#/experiments/${experiment_id}/runs/${run_id}`,
-    };
+    return toOk(pick, experiments, base);
   } catch (err) {
     const reason = (err as Error).message;
     reportUnavailable(project, reason);
