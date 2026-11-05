@@ -5,7 +5,7 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 
 | Phase | Theme | Status | Branch | /check | Landed |
 |-------|-------|--------|--------|--------|--------|
-| 1 | Run integrity & resilience (pilot) | implemented (awaiting /check) | fix-phase-1-run-integrity | — | — |
+| 1 | Run integrity & resilience (pilot) | ✅ complete | fix-phase-1-run-integrity | clean @ d8284c5 (1 fix-check iter) | 2026-11-05 |
 | 2 | Gates, input validation & dependency hygiene | pending | — | — | — |
 | 3 | App boundaries (TS) | pending | — | — | — |
 | 4 | Test gaps — Python | pending | — | — | — |
