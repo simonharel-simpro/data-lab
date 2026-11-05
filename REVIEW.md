@@ -1,6 +1,7 @@
 # Architecture Review — data-lab
 
 **Date:** 2026-11-04
+**Last healed:** 2026-11-05 — 3/3 gaps resolved (F4.3/M1.7 numbers_equal table; F5.2/M0.7 pinned template dev deps + `datalab-new` runs `uv lock`; M1.4 scheme-grammar URL validators)
 **Project type:** Python (generic, no FastAPI) — `packages/datalab`, `projects/mini-rag`, `templates/project`, root `tests/` + `tools/`; Astro 7 / TypeScript static app — `app/`. Out of scope: `tools/weavit-ui/` (vendored git submodule).
 **Models:** `sonnet` (dimension agents 1–5), resilience-auditor, `/audit-ci --report-only`; orchestrator re-verified every 🔴/🟡 and every contested row.
 
@@ -76,7 +77,7 @@ Mechanical findings: 0 in all four roots. Id-literal cross-check (ports, trackin
 |----------|---------|---------|---------------|----------------|
 | 🟡 Warning | Trailing newline accepted by Python, rejected by JS: `NAME_RE: Final = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")` with `.match` → `validate_name("mini-rag\n")` returns `'mini-rag\n'` (reproduced); `name_vectors.json` has no such vector, so both F-12 tests pass. Agent rated 🔴; downgraded — card loading is protected by `name == folder.name`, exposure is `datalab-new`/direct API calls | `packages/datalab/src/datalab/project.py:13,35,101,122`; `contracts/name_vectors.json`; `packages/datalab/tests/test_project.py:23` | MISSING BEHAVIOUR; TQ9 | Add `"a\n"`, `"mini-rag\n"`, `"a\r"` to `reject` first (red), then `fullmatch` |
 | 🟡 Warning | `collection_name` hash is a persistent key but never pinned: tests only assert inequality + charset; `_check_name_shape` rejection and `experiment_name` bad-project untested | `packages/datalab/src/datalab/project.py:99-111`; `test_project.py:34-45` | MISSING BEHAVIOUR; TQ8 | One labelled golden value + determinism test + bad-project tests |
-| 🟡 Warning | `parse_number` / `normalize` / `contains_phrase` / `numbers_equal` covered only via `outcome()` with a few examples (`"1,200"` vs `"1200"`); no multiplier, unknown-unit, NFKC, empty-needle cases | `projects/mini-rag/src/mini_rag/scoring.py:62-100`; `tests/test_scoring.py` | TQ9; MISSING BEHAVIOUR | Parametrized tables + Hypothesis (idempotent `normalize`, symmetric `numbers_equal`) |
+| ✅ Resolved (was 🟡 Warning) | `parse_number` / `normalize` / `contains_phrase` / `numbers_equal` covered only via `outcome()` with a few examples (`"1,200"` vs `"1200"`); no multiplier, unknown-unit, NFKC, empty-needle cases | `projects/mini-rag/src/mini_rag/scoring.py:62-100`; `tests/test_scoring.py` | TQ9; MISSING BEHAVIOUR | Parametrized tables + Hypothesis (idempotent `normalize`, symmetric `numbers_equal`) |
 | 🟡 Warning | `metrics()` has one 6/2/2 example; no invariants (rates sum to 1, score ∈ [-1,1]) | `tests/test_scoring.py:34-42`; `scoring.py:111-125` | TQ9 | Property test over `lists(sampled_from(Outcome), min_size=1)` |
 | 🟡 Warning | `main()` / `_args` untested: `--retrieval` choices, `--n`/`--k`, "config validated before any I/O (F-13)" | `projects/mini-rag/src/mini_rag/run.py:89-118`; `tests/test_run.py` | MISSING BEHAVIOUR | `main([...bogus])` → `SystemExit`; settings failure before I/O |
 | 🟡 Warning | Partial assertions on run logging: only `retrieval`/`collection` params checked; artifact checked via `assert '"q4"' in text` / `assert '"hallucination"' in text`; `config_hash` not shown to vary with k/model/size | `projects/mini-rag/tests/test_run.py:56-72,99,117-121` | TQ3 partial assertions | Parse the JSON, assert per-question equality; vary hash inputs |
@@ -102,7 +103,7 @@ Calibration (script vs judgment): none — the script's 0 % rows agree with the 
 | Severity | Finding | File(s) | Rule Violated | Recommendation |
 |----------|---------|---------|---------------|----------------|
 | 🟡 Warning | Unbounded `>=` runtime deps: `"pydantic-settings>=2.6"`, `"pyyaml>=6.0"`, `"httpx>=0.27"` (datalab); `"pydantic-settings>=2.6"` (mini-rag); dev groups likewise (uv.lock mitigates) | `packages/datalab/pyproject.toml:7-11,19-24`; `projects/mini-rag/pyproject.toml:13,18-24` | dependency hygiene: floating versions | `~=` or exact pins, as already done for weaviate-client/mlflow/ruff |
-| 🟡 Warning | Template ships `dev = ["pytest>=8"]` and no lock/`.python-version` (IMPLEMENTATION_NOTES: uv then picks Python 3.14 locally while CI is 3.12) | `templates/project/pyproject.toml:5,9` | dependency hygiene (template) | Pin + ship `.python-version`; have `datalab-new` run `uv lock` |
+| ✅ Resolved (was 🟡 Warning) | Template ships `dev = ["pytest>=8"]` and no lock/`.python-version` (IMPLEMENTATION_NOTES: uv then picks Python 3.14 locally while CI is 3.12) | `templates/project/pyproject.toml:5,9` | dependency hygiene (template) | Pin + ship `.python-version`; have `datalab-new` run `uv lock` |
 | 🔵 Info | Bare `# type: ignore[...]` without reason, e.g. `PilotSettings(_env_file=None)  # type: ignore[call-arg]`, `tomllib = None  # type: ignore[assignment]` (others carry a reason) | `projects/mini-rag/tests/test_settings.py:28`; `projects/mini-rag/tests/test_run.py:34,35`; `projects/mini-rag/tests/test_integration.py:19`; `packages/datalab/tests/test_integration.py:103`; `tools/pre_commit_checks/_layout.py:35,61,95`; `tools/pre_commit_checks/check_declared_dependencies.py:33,40` | suppression without justification | Add reasons; a typed `settings()` factory in conftest removes most |
 | 🔵 Info | `# noqa: S603` without justification on 3 test subprocess calls | `packages/datalab/tests/test_new_project.py:119`; `packages/datalab/tests/test_settings.py:27`; `tests/test_compose.py:28` | suppression without justification | `# noqa: S603  # fixed argv, no user input` |
 | 🔵 Info | `api_key="not-needed",  # placeholder: the LAN DGX is unauthenticated` — documented placeholder, not a secret | `projects/mini-rag/src/mini_rag/generate.py:52` | hardcoded `api_key=` (accepted) | None |
@@ -150,16 +151,16 @@ Full matrix: [`CI_REVIEW_2026-11-04.md`](CI_REVIEW_2026-11-04.md). Script core v
 - [ ] `app/tsconfig.json` → `astro/tsconfigs/strictest` (or `noUncheckedIndexedAccess`)
 - [ ] Justify bare `# type: ignore` / `# noqa: S603`; add a typed `settings()` conftest factory
 - [ ] `beforeEach(() => readReport().clear())` in `mlflow.test.ts`; pass `env` to `warmUp`
-- [ ] Bound `>=` deps (`~=`), pin template dev deps, ship `templates/project/.python-version`
+- [x] Bound `>=` deps (`~=`), pin template dev deps, ship `templates/project/.python-version`
 
 ### Phase 1 — Structural Improvements (medium effort)
 - [ ] `run()`: write `per_question.json` locally before MLflow logging; cap MLflow retries/timeout for the run
 - [ ] Add a corpus content hash to `index_name` and run params
 - [ ] `DgxGenerator.answer`: `GenerationError` on non-JSON/list 200 and on `stop_reason == "max_tokens"`
-- [ ] Fail fast: empty chunk list, `--k < 1`, `HttpUrl` for DGX / MLflow URIs
+- [x] Fail fast: empty chunk list, `--k < 1`, `HttpUrl` for DGX / MLflow URIs
 - [ ] zod schemas for MLflow REST (`z.infer` types); `src/lib/config.ts` as single env reader
 - [ ] Group `run()` params into dataclasses
-- [ ] Fill the §4 test gaps (scoring tables + Hypothesis properties, `main()`, `search()`, completeness, mlflow error paths, golden `collection_name`, env parity)
+- [x] Fill the §4 test gaps (scoring tables + Hypothesis properties, `main()`, `search()`, completeness, mlflow error paths, golden `collection_name`, env parity)
 
 ### Phase 2 — Architectural Changes (higher effort)
 - [ ] Lock or build-then-alias for shared Weaviate collections (concurrent runs)

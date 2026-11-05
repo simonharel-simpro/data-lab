@@ -1,5 +1,6 @@
 """Connection settings for the shared stack; only `DATALAB_*` env vars are read (F-5)."""
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -21,8 +22,8 @@ class Settings(BaseSettings):
     @field_validator("mlflow_tracking_uri")
     @classmethod
     def _needs_scheme(cls, v: str) -> str:
-        # `urlsplit("host:port").scheme == "host"`, and MLflow takes sqlite:/// etc., so test for "://" only.
-        if "://" not in v:
+        # RFC 3986 scheme + "://" + non-empty, whitespace-free remainder: sqlite:/// stays valid (remainder = path).
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*://\S+", v):
             raise ValueError(f"mlflow_tracking_uri must be a URL with a scheme, e.g. http://host:port, got {v!r}")
         return v
 

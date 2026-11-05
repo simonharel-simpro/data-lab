@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from mini_rag.scoring import Outcome, contains_phrase, metrics, normalize, outcome, parse_number
+from mini_rag.scoring import Outcome, contains_phrase, metrics, normalize, numbers_equal, outcome, parse_number
 
 
 def test_u_12_containment_counts_as_correct() -> None:
@@ -78,6 +78,29 @@ def test_parse_number_table(text: str, expected: float | None) -> None:
         assert result is None
     else:
         assert result == pytest.approx(expected)
+
+
+# math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-12): equal iff |x - y| <= max(1e-9 * max(|x|, |y|), 1e-12).
+@pytest.mark.parametrize(
+    ("a", "b", "expected"),
+    [
+        ("1,200", "1200", True),  # thousands separator: both parse to 1200.0
+        ("1.2k", "1200", True),  # 1.2 * 1e3 = 1200.0
+        ("1 million", "1000000", True),
+        # |diff| = 0.5 <= 1e-9 * 1_000_000_000.5 ~= 1.0
+        ("1000000000", "1000000000.5", True),
+        # |diff| = 2 > 1e-9 * 1_000_000_002 ~= 1.000000002
+        ("1000000000", "1000000002", False),
+        ("0.0000000000001", "0", True),  # 1e-13 <= abs_tol 1e-12 (rel part is ~0)
+        ("0.00000000001", "0", False),  # 1e-11 > abs_tol 1e-12
+        ("-5", "5", False),  # |diff| = 10 > 1e-9 * 5
+        ("five", "5", False),  # left unparseable
+        ("5", "five", False),  # right unparseable
+        ("five", "seven", False),  # both unparseable
+    ],
+)
+def test_numbers_equal_table(a: str, b: str, expected: bool) -> None:
+    assert numbers_equal(a, b) is expected
 
 
 _NORMALIZE_CASES = [

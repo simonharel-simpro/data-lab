@@ -109,3 +109,17 @@ def test_sqlite_tracking_uri_still_validates(tmp_path: Path) -> None:
     uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
 
     assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("uri", ["http://", "://", "garbage://", "x ://y", "http:// host"])
+def test_malformed_tracking_uri_fails_at_settings(uri: str) -> None:
+    with pytest.raises(ValidationError, match="scheme"):
+        Settings(_env_file=None, mlflow_tracking_uri=uri)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(
+    "uri",
+    ["sqlite:////abs/mlflow.db", "sqlite:///rel.db", "postgresql://u@h/db", "mysql://u@h:3306/db", "http://h:5000"],
+)
+def test_valid_tracking_uri_schemes_still_validate(uri: str) -> None:
+    assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]
