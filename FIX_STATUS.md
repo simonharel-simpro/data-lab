@@ -7,7 +7,7 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 |-------|-------|--------|--------|--------|--------|
 | 1 | Run integrity & resilience (pilot) | ✅ complete | fix-phase-1-run-integrity | clean @ d8284c5 (1 fix-check iter) | 2026-11-05 |
 | 2 | Gates, input validation & dependency hygiene | ✅ complete | fix-phase-2-gates-validation-deps | clean @ da43950 (1 fix-check iter) | 2026-11-05 |
-| 3 | App boundaries (TS) | pending | — | — | — |
+| 3 | App boundaries (TS) | implemented (awaiting /check) | fix-phase-3-app-boundaries | — | — |
 | 4 | Test gaps — Python | pending | — | — | — |
 | 5 | Test gaps — TS | pending | — | — | — |
 
@@ -38,3 +38,16 @@ Cross-phase regressions: none (first phase).
 
 Environment note: the gates-app hook needs node >=22.22 on PATH (`.nvmrc`). Under node 20 it fails loudly at `astro check`, and a one-line comment on the hook says so. `pre-commit install` has not been run; that is left to the user.
 Cross-phase regressions: none (`assert-zero --done` OK).
+
+## Phase 3 — App boundaries (TS)
+
+**Implemented:** 2026-11-05 · **Branch:** fix-phase-3-app-boundaries · **Agent:** general-purpose (node 22)
+**Tooling:** `npm test` 53/53 pass, 100% line / 93.02% branch coverage · `astro check` 0 errors · `tsc` 0 errors · `npm run build` OK · pre-push hooks all pass
+
+- ✅ 3.1 `noUncheckedIndexedAccess` enabled; 10 → 0 errors. Existing tests were edited only to narrow types, with the same assertions and no `!`
+- ✅ 3.2 zod-validated MLflow REST parsers + `mlflow-rest.test.ts` (5 tests, each seen red under a schema mutation). grep 3→0
+- ✅ 3.3 `src/lib/config.ts` owns the env var names + `config.test.ts`. grep 3→0. Also `Base.astro` import repointed (outside the file list; recorded deviation)
+- ✅ 3.4 Build report isolated by `beforeEach(clear)` + a new dedup test
+
+Behaviour note for the PR: the verbatim `Run` schema is stricter than the old parser. `data: null` or a string run now throws, so the card shows `unavailable`; ±Infinity `start_time` → 0. See IMPLEMENTATION_NOTES.md.
+Cross-phase regressions: none.

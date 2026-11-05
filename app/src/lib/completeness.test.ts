@@ -51,8 +51,10 @@ test('G-8: the template card is a valid idée card missing only Objectif', () =>
     .replaceAll('__DATALAB_TITLE__', '"Demo"');
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(raw);
   assert.ok(match, 'template card has no frontmatter');
-  const card = cardSchema.parse(parse(match[1]));
+  const [, front, body] = match;
+  assert.ok(front !== undefined && body !== undefined);
+  const card = cardSchema.parse(parse(front));
   assert.equal(card.status, 'idée');
   assert.equal(card.title, 'Demo');
-  assert.deepEqual(missing(card, match[2]), ['Objectif']);
+  assert.deepEqual(missing(card, body), ['Objectif']);
 });

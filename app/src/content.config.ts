@@ -1,14 +1,16 @@
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { cardSchema } from './lib/card.ts';
+import { projectsDir } from './lib/config.ts';
 
 const projects = defineCollection({
-  // Each project owns ../projects/<name>/PROJECT.md; the folder name is the entry id. DATALAB_PROJECTS_DIR exists
-  // only for the CI build fixtures (app/test-fixtures/*). Dot-folders (datalab-new temp dirs) are not matched.
+  // Each project owns ../projects/<name>/PROJECT.md; the folder name is the entry id (base: see config.ts).
+  // Dot-folders (datalab-new temp dirs) are not matched.
   loader: glob({
-    base: process.env.DATALAB_PROJECTS_DIR ?? '../projects',
+    base: projectsDir(),
     pattern: '*/PROJECT.md',
-    generateId: ({ entry }) => entry.split('/')[0],
+    // `*/PROJECT.md` guarantees a first segment: `?? entry` only satisfies noUncheckedIndexedAccess.
+    generateId: ({ entry }) => entry.split('/')[0] ?? entry,
   }),
   schema: cardSchema,
 });

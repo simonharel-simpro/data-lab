@@ -1,5 +1,6 @@
 # Fix Plan — Phase 3: App boundaries (TS)
 
+**Status:** ✅ Complete — branch fix-phase-3-app-boundaries, 2026-11-05
 **Severity:** 🟡
 **Agent:** general-purpose. Brief it on `app/` conventions:
 - Astro 7.4.1 static output;

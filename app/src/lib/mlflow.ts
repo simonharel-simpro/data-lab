@@ -4,11 +4,10 @@ import { METRIC_KEY_RE } from './card.ts';
 import { isValidName } from './name.ts';
 import { post, parseExperiments, parseRuns, TransientError, type MlflowExperiment, type MlflowRun } from './mlflow-rest.ts';
 import { reportUnavailable } from './report.ts';
+import { mlflowUri, type Env } from './config.ts';
 
 export type { MlflowRun } from './mlflow-rest.ts';
 export { readReport, reportUnavailable } from './report.ts';
-
-type Env = Record<string, string | undefined>;
 
 export type BestRun =
   | { kind: 'ok'; runName: string; value: number; runCount: number; experiment: string; runUrl: string }
@@ -17,11 +16,6 @@ export type BestRun =
   | { kind: 'unavailable'; reason: string };
 export type MetricState = BestRun | { kind: 'no-metric' };
 export type PickedRun = { kind: 'picked'; run: MlflowRun; value: number; runCount: number };
-
-/** The only place the tracking URI is read; never MLFLOW_URL / MLFLOW_TRACKING_URI (Demo-RAG's, F-2). */
-export function mlflowUri(env: Env = process.env): string {
-  return env.DATALAB_MLFLOW_TRACKING_URI ?? 'http://127.0.0.1:5050';
-}
 
 const warmUps = new WeakMap<typeof fetch, Promise<void>>();
 
@@ -72,7 +66,9 @@ export function pickBest(
       b.run.info.start_time - a.run.info.start_time ||
       (a.run.info.run_id < b.run.info.run_id ? -1 : a.run.info.run_id > b.run.info.run_id ? 1 : 0),
   );
-  return { kind: 'picked', run: finite[0].run, value: finite[0].value, runCount: finite.length };
+  const best = finite[0];
+  if (!best) return { kind: 'no-runs' };
+  return { kind: 'picked', run: best.run, value: best.value, runCount: finite.length };
 }
 
 /** Experiments `<project>` and `<project>/<sub>`; the first search is retried once on timeout/5xx (F-1). */

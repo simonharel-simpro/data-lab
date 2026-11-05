@@ -108,7 +108,8 @@ def collection_name(project: str, *parts: str) -> str:
 - **Two modes, one code base (no server adapter, S-2):** `astro dev` re-reads cards and metrics per request and
   links run names to MLflow; `astro build` is a static export with metrics frozen and no MLflow link or URI (D-14).
 - **Modules:** `lib/name.ts` (`NAME_RE`, same literal as Python), `lib/card.ts` (zod schema, statuses),
-  `lib/completeness.ts` (badge), `lib/mlflow.ts` + `lib/mlflow-rest.ts` (best run), `lib/report.ts` (build report),
+  `lib/completeness.ts` (badge), `lib/mlflow.ts` + `lib/mlflow-rest.ts` (best run, zod-checked responses),
+  `lib/report.ts` (build report), `lib/config.ts` (the only module that names the app's `DATALAB_*` env vars),
   `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
   Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
 - **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.

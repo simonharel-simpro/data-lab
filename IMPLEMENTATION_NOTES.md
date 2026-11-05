@@ -76,3 +76,17 @@
 - Territory was: with the floor in `addopts`, `uv run pytest -m integration` (2 tests, a slice of the code) fails on coverage even when green; the orchestrator's verify commands (`pytest --cov`, `pytest -m integration`) follow `packages/datalab`'s layout instead.
 - I did: same as datalab — `addopts = "-ra --strict-markers -m 'not integration'"`, `[tool.coverage.run] source = ["mini_rag"]`, `[tool.coverage.report] fail_under = 70`; the CI job `pilot` runs `uv run pytest --cov` (floor enforced, failing). Floor unchanged (70).
 - One-off or pattern?: likely recurs — the template could carry this coverage block so every project gets the same split.
+
+## Fix Phase 3 (review-2026-11-04) — `Base.astro` also imported `mlflowUri` from `mlflow.ts`
+
+- Plan assumed: fix unit 3.3 touches `mlflow.ts`, `content.config.ts`, `export-guard.ts`, `mlflow.test.ts`; deleting `mlflowUri` from `mlflow.ts` with no re-export shim.
+- Territory was: `app/src/layouts/Base.astro:2` imports `mlflowUri` from `../lib/mlflow.ts` (dev footer); deleting it without a shim breaks `astro check`.
+- I did: repointed that import to `../lib/config.ts` (one line), honouring "no re-export shim"; `import.meta.env.DEV` there is untouched.
+- One-off or pattern?: likely recurs — a planner's "Files" list built from `grep` over `.ts` misses `.astro` importers; include `src/**/*.astro` when listing callers.
+
+## Fix Phase 3 (review-2026-11-04) — the verbatim `Run` schema is stricter than the old parser on `data`
+
+- Plan assumed: the 3.2 zod schema keeps the old `parseRuns` behaviour ("existing tests pass unchanged").
+- Territory was: the old parser read a run whose `data` was present but not an object (`null`, a string) as "no metrics"; `.default({ metrics: [] })` only covers an absent `data`, so such a run now throws `unexpected response` and the card shows `unavailable`. Also ±Infinity `start_time` (old `Number(x) || 0` kept it) now becomes 0. No test pinned either; real MLflow omits empty `data` rather than nulling it.
+- I did: kept the spec's schema verbatim (fail-loud on a malformed run is the plan's stated direction); no test added for an unspecified behaviour.
+- One-off or pattern?: one-off — if `data: null` should stay tolerated, `z.preprocess((d) => d ?? undefined, …)` on `data` plus a test; orchestrator's call.

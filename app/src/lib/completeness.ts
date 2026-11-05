@@ -28,8 +28,11 @@ export function sections(body: string): Map<string, boolean> {
     } else if (fence === null) {
       const h = HEADING.exec(line);
       if (h) {
-        chunks.push({ name: h[1].normalize('NFC').trim(), lines: [] });
-        continue;
+        const name = h[1];
+        if (name !== undefined) {
+          chunks.push({ name: name.normalize('NFC').trim(), lines: [] });
+          continue;
+        }
       }
     }
     chunks.at(-1)?.lines.push(line);
