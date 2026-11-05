@@ -8,7 +8,7 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 | 1 | Run integrity & resilience (pilot) | ✅ complete | fix-phase-1-run-integrity | clean @ d8284c5 (1 fix-check iter) | 2026-11-05 |
 | 2 | Gates, input validation & dependency hygiene | ✅ complete | fix-phase-2-gates-validation-deps | clean @ da43950 (1 fix-check iter) | 2026-11-05 |
 | 3 | App boundaries (TS) | ✅ complete | fix-phase-3-app-boundaries | clean @ f47e288 (1 fix-check iter) | 2026-11-05 |
-| 4 | Test gaps — Python | implemented (awaiting /check) | fix-phase-4-python-test-gaps | — | — |
+| 4 | Test gaps — Python | ✅ complete | fix-phase-4-python-test-gaps | clean @ d0f4594 (1 fix-check iter) | 2026-11-05 |
 | 5 | Test gaps — TS | pending | — | — | — |
 
 ## Phase 1 — Run integrity & resilience (pilot)
