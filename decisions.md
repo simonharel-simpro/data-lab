@@ -77,6 +77,22 @@ machine).
 **Consequences:** French projects get weaker vector search or bring their own vectors. Changing the model means
 new collections, not an in-place migration.
 
+## 2026-11-05 — OpenRouter as the default LLM endpoint for mini-rag
+
+**Status:** accepted
+**Context:** The pilot depended on the user's LAN DGX, whose availability the user doubts. Runs must still be
+reproducible and comparable with earlier DGX runs.
+**Decision:** Default `MINI_RAG_LLM_BASE_URL` to `https://openrouter.ai/api` (OpenRouter's Anthropic Messages
+endpoint, so the `anthropic` SDK and the generator are unchanged) with `deepseek/deepseek-v4-flash`, the same model
+the DGX serves. `MINI_RAG_LLM_API_KEY` is required (`SecretStr`, from the gitignored `.env`); the DGX stays one
+override away. The endpoint is logged as the `llm_base_url` param and is part of `config_hash`; the key never is.
+**Alternatives considered:** Keep the DGX as default (the reliability problem stays); OpenRouter's
+OpenAI-compatible API (a second SDK and a rewrite of the generator); `anthropic/claude-haiku-5.5` as default
+(better answers, but no longer comparable with DGX runs).
+**Consequences:** Questions and retrieved passages (a snapshot of this repo's public docs) leave the machine, and
+runs cost OpenRouter credits (a few cents per sweep). OpenRouter may route to different upstream providers, so
+determinism is weaker than on the DGX.
+
 ## 2026-11-05 — Weavit UI in the browser: a web mode in the fork
 
 **Status:** accepted

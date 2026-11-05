@@ -24,8 +24,8 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   `gates-app` (`npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
-- **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (DGX LLM over the Anthropic
-  Messages API; httpx2 is the SDK's HTTP client and gives the tests `MockTransport`), weaviate-client, mlflow,
+- **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (LLM over the Anthropic
+  Messages API: OpenRouter by default, the LAN DGX by override; httpx2 is the SDK's HTTP client and gives the tests `MockTransport`), weaviate-client, mlflow,
   pydantic-settings, `datalab` (editable path dep).
 - **Shared package deps:** pydantic-settings, PyYAML (`safe_load` only), weaviate-client 4.24.1 (as Demo-RAG),
   mlflow 3.17.2 (as the server image; its sqlite store backs the tests), httpx (MLflow `/health` preflight).
@@ -158,8 +158,8 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 
 `uv run python -m mini_rag.run --retrieval bm25 --k 3` in `projects/mini-rag`:
 
-1. `datalab.project.load()` reads `PROJECT.md` (name `mini-rag`); `PilotSettings` (`MINI_RAG_*`, the DGX URL is
-   required) and `Settings` (`DATALAB_*`) are validated before any I/O; `preflight` checks MLflow. `preflight` and
+1. `datalab.project.load()` reads `PROJECT.md` (name `mini-rag`); `PilotSettings` (`MINI_RAG_*`, the LLM API key is
+   required; base URL defaults to OpenRouter) and `Settings` (`DATALAB_*`) are validated before any I/O; `preflight` checks MLflow. `preflight` and
    `tracked_run` bound MLflow HTTP retries (`MLFLOW_HTTP_REQUEST_MAX_RETRIES=2`, `MLFLOW_HTTP_REQUEST_TIMEOUT=30`
    via `setdefault`; a user value wins), so an outage fails fast instead of hanging.
 2. `corpus.load_corpus` chunks the frozen snapshot `data/corpus/*.md` (by `##` section, then 120 words with a
@@ -170,7 +170,7 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 3. `run.run` takes a frozen `RunConfig` (retrieval, k, n, size, overlap, collection, corpus_hash), logged as params
    and covered by `config_hash`; it opens `tracked_run(..., sub="retrieval")` → experiment `mini-rag/retrieval`,
    tags `project`, `config_hash` (and `smoke=true` for `--n`); per question: `index.search` (`bm25` or
-   `near_text`) → `generate.DgxGenerator.answer` (Anthropic Messages API, text blocks only, `<think>` stripped,
+   `near_text`) → `generate.LlmGenerator.answer` (Anthropic Messages API, text blocks only, `<think>` stripped,
    temperature 0) → `scoring.outcome` (IDK → missing, token-boundary containment → correct, else hallucination).
    Each scored answer is appended as it is produced to `projects/<project>/results/<run_id>.jsonl` (gitignored
    crash copy), so a kill, a `GenerationError` or an MLflow outage keeps the answers computed so far.

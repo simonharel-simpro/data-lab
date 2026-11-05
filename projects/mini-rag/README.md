@@ -1,11 +1,11 @@
 # mini-rag
 
-The data-lab pilot: BM25 and vector retrieval over a frozen snapshot of data-lab's docs, answers from the DGX LLM,
+The data-lab pilot: BM25 and vector retrieval over a frozen snapshot of data-lab's docs, answers from an LLM (OpenRouter by default, or the DGX),
 scored and logged to the shared MLflow (`mini-rag/retrieval`, tag `project=mini-rag`).
 
 ```bash
 uv sync
-echo 'MINI_RAG_DGX_BASE_URL=http://<dgx-host>:8000' > .env   # gitignored; required, no default
+echo 'MINI_RAG_LLM_API_KEY=<openrouter-key>' > .env          # gitignored; required, no default (DGX: .env.example)
 uv run python -m mini_rag.run --retrieval bm25 --k 3         # also: vector, --k 5
 uv run python -m mini_rag.run --retrieval vector --k 3 --n 2 # smoke run: smoke_* metrics, tag smoke=true
 uv run pytest --cov                                          # unit tests, coverage >= 70 %
