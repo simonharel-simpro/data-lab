@@ -1,5 +1,6 @@
 # Fix Plan — Phase 4: Test gaps — Python
 
+**Status:** ✅ Complete — branch fix-phase-4-python-test-gaps, 2026-11-05
 **Severity:** 🟡
 **Agent:** python-fastapi. This is generic Python: ignore the FastAPI layering rules. Tests use pytest with AAA layout. Name them `test_<id>_<behaviour>` (or `test_<behaviour>`) and use the existing `conftest.py` fixtures (`fake_repo`, `sqlite_uri`, autouse `_isolated`).
 **Depends on:** Phases 1 and 2. They change `run()` (`RunConfig`, `corpus_hash`), the name regex and the template these tests target.

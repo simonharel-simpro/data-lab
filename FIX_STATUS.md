@@ -8,7 +8,7 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 | 1 | Run integrity & resilience (pilot) | ✅ complete | fix-phase-1-run-integrity | clean @ d8284c5 (1 fix-check iter) | 2026-11-05 |
 | 2 | Gates, input validation & dependency hygiene | ✅ complete | fix-phase-2-gates-validation-deps | clean @ da43950 (1 fix-check iter) | 2026-11-05 |
 | 3 | App boundaries (TS) | ✅ complete | fix-phase-3-app-boundaries | clean @ f47e288 (1 fix-check iter) | 2026-11-05 |
-| 4 | Test gaps — Python | pending | — | — | — |
+| 4 | Test gaps — Python | implemented (awaiting /check) | fix-phase-4-python-test-gaps | — | — |
 | 5 | Test gaps — TS | pending | — | — | — |
 
 ## Phase 1 — Run integrity & resilience (pilot)
@@ -51,3 +51,20 @@ Cross-phase regressions: none (`assert-zero --done` OK).
 
 Behaviour note for the PR: the verbatim `Run` schema is stricter than the old parser. `data: null` or a string run now throws, so the card shows `unavailable`; ±Infinity `start_time` → 0. See IMPLEMENTATION_NOTES.md.
 Cross-phase regressions: none.
+
+## Phase 4 — Test gaps (Python)
+
+**Implemented:** 2026-11-05 · **Branch:** fix-phase-4-python-test-gaps · **Agent:** python-fastapi
+**Tooling:** mini-rag 114 passed (96.49% cov) · datalab 56 passed · pyright 0 · ruff clean · pre-push hooks pass. Tests only; `src/` untouched.
+
+- ✅ 4.1 golden `collection_name` + bad-project paths
+- ✅ 4.2 tables for `parse_number`/`normalize`/`contains_phrase` (+ an extra `("", "")` row so the empty-needle guard is actually covered)
+- ✅ 4.3 `metrics()` invariants, enumerated exhaustively for n=1..4
+- ✅ 4.4 every logged param, the full per-question artifact, and config_hash sensitivity to k/model/size. grep 2→0
+- ✅ 4.5 `index.search()` units + the failed-objects branch. grep 2→0
+- ✅ 4.6 a real failure condition for `datalab-new` (no private-helper patch). grep 1→0
+- ✅ 4.7 chunking boundaries + empty-folder error. grep 1→0
+- ✅ 4.8 port parity across the three `.env.example` copies
+
+Each new test pins existing behaviour. Each was seen red under a targeted source mutation. No source bugs found, so no xfail tests.
+Gap: `corpus.py:21`'s `\r\n` replace is redundant, since `str.split()` already treats `\r` as whitespace. No test can kill that mutation.

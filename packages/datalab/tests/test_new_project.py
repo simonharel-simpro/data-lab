@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from datalab import new_project
 from datalab.new_project import main
 from datalab.project import load
 from tests.conftest import REPO_ROOT
@@ -75,17 +74,26 @@ def test_u_10_refuses_existing_empty_dir_and_writes_nothing(fake_repo: Path, kin
     assert _tree(fake_repo) == before
 
 
-def test_f_8_failed_copy_leaves_no_project_dir(fake_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def broken(*_args: object) -> None:
-        raise OSError("disk full")
+def test_f_8_failed_copy_leaves_no_project_dir(fake_repo: Path) -> None:
+    stray = fake_repo / "templates" / "project" / "README.md"
+    original = stray.read_text(encoding="utf-8")
+    stray.write_text(original + "\n__DATALAB_UNKNOWN__\n", encoding="utf-8")
 
-    monkeypatch.setattr(new_project, "_rewrite", broken)
     assert main(["x"], root=fake_repo) == 1
-    assert sorted(p.name for p in (fake_repo / "projects").iterdir()) == []
+    assert sorted(p.name for p in (fake_repo / "projects").iterdir()) == []  # neither `x` nor `.x.tmp-*`
 
-    monkeypatch.undo()
+    stray.write_text(original, encoding="utf-8")
     assert main(["x"], root=fake_repo) == 0
     assert (fake_repo / "projects" / "x" / "PROJECT.md").is_file()
+
+
+def test_binary_template_file_is_copied_unchanged(fake_repo: Path) -> None:
+    payload = b"\xff\xfe\x00"
+    (fake_repo / "templates" / "project" / "blob.bin").write_bytes(payload)
+
+    assert main(["demo"], root=fake_repo) == 0
+
+    assert (fake_repo / "projects" / "demo" / "blob.bin").read_bytes() == payload
 
 
 def test_f_3_reserved_names_rejected(fake_repo: Path) -> None:
