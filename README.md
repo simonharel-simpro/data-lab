@@ -47,9 +47,22 @@ Why not 5000 / 8080 / 50051: the Demo-RAG stack already uses them and keeps runn
 
 ## Weavit UI
 
-The fork lives in `tools/weavit-ui` — build and run it as described in [its README](tools/weavit-ui/README.md).
+The fork lives in `tools/weavit-ui`. It runs **in the browser** (web mode) or as the desktop app.
 
-Create once a **local** connection profile named exactly **`data-lab`** with **HTTP port 8090 AND gRPC port
+```bash
+tools/weavit-web.sh              # http://127.0.0.1:3080 — node >= 22; builds on first run
+tools/weavit-web.sh --rebuild    # after updating the submodule
+```
+
+Web mode creates the `data-lab` profile itself and auto-connects. In dev, each project page links its best run's
+collection ("Ouvrir dans Weavit", via the run's `collection` param; `DATALAB_WEAVIT_URL` overrides the address).
+The RAG tab's **OpenRouter (deepseek-v4-flash)** preset uses `OPENROUTER_API_KEY` from the root `.env`: the
+launcher hands it to the local server, which keeps it in memory and sends it to Weaviate only as the
+`X-OpenAI-Api-Key` header. The server listens on 127.0.0.1 only and refuses foreign `Host`/`Origin` headers: it can
+delete collections.
+
+Desktop app: build and run it as described in [its README](tools/weavit-ui/README.md), and create once a
+**local** connection profile named exactly **`data-lab`** with **HTTP port 8090 AND gRPC port
 50052**, both filled in explicitly. An empty gRPC field falls back to 50051 — Demo-RAG's Weaviate — and you get a
 split-brain view: REST on data-lab, gRPC on Demo-RAG (F-4).
 

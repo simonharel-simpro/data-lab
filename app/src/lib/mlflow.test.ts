@@ -9,9 +9,10 @@ const score = { key: 'score', goal: 'max' } as const;
 
 beforeEach(() => readReport().clear());
 
-function run(id: string, metrics: Record<string, number>, start = 1, exp = '1'): MlflowRun {
+function run(id: string, metrics: Record<string, number>, start = 1, exp = '1', params: Record<string, string> = {}): MlflowRun {
   const m = Object.entries(metrics).map(([key, value]) => ({ key, value }));
-  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start }, data: { metrics: m } };
+  const p = Object.entries(params).map(([key, value]) => ({ key, value }));
+  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start }, data: { metrics: m, params: p } };
 }
 
 /** Fake MLflow: route by REST path; an Error reply is thrown, a function gets the call count for that path. */
@@ -215,4 +216,21 @@ test('should warn once per project when the same reason repeats', (t) => {
   assert.equal(warn.mock.callCount(), 1);
   reportUnavailable('p', 'r2');
   assert.equal(warn.mock.callCount(), 2);
+});
+
+test('ok result carries the best run\'s Weaviate collection when it logged a valid one', async () => {
+  const runs = [run('r1', { score: 0.9 }, 1, '1', { collection: 'MiniRag_x_6f5bda78' }), run('r2', { score: 0.1 }, 1, '1', { collection: 'Other' })];
+  const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs } });
+  const r = await bestRun('p', score, f.impl, env);
+  assert.equal(r.kind === 'ok' && r.collection, 'MiniRag_x_6f5bda78');
+});
+
+test('ok result has no collection when the param is absent or not a collection name', async () => {
+  const cases: Record<string, string>[] = [{}, { collection: 'mini rag' }, { collection: '<script>' }];
+  for (const params of cases) {
+    const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs: [run('r', { score: 1 }, 1, '1', params)] } });
+    const r = await bestRun('p', score, f.impl, env);
+    assert.equal(r.kind, 'ok');
+    assert.ok(!('collection' in r), JSON.stringify(params));
+  }
 });
