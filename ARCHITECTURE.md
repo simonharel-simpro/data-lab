@@ -18,7 +18,11 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
-- **Hooks:** pre-commit (ruff check/format, gitleaks, file-size, declared deps); the same checks run in GitHub Actions.
+- **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps.
+  Pre-push stage: `gates-datalab`, `gates-mini-rag` (lint-imports + pyright + pytest with coverage per tree),
+  `gates-app` (`npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
+  stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
+  gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
 - **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (DGX LLM over the Anthropic
   Messages API; httpx2 is the SDK's HTTP client and gives the tests `MockTransport`), weaviate-client, mlflow,
   pydantic-settings, `datalab` (editable path dep).
@@ -40,8 +44,9 @@ app/                    read-only Astro presentation app (Phase 2B): src/lib (pu
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C patches it)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
-.github/workflows/ci.yml  CI-parity: pre-commit, root compose test, datalab unit tests (job `checks`); app check,
-                        tests, builds incl. fixtures (job `app`); pilot unit tests (job `pilot`)
+.github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
+                        datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
+                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); Python gates `--locked`
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
