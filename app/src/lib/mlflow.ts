@@ -5,12 +5,22 @@ import { isValidName } from './name.ts';
 import { post, parseExperiments, parseRuns, TransientError, type MlflowExperiment, type MlflowRun } from './mlflow-rest.ts';
 import { reportUnavailable } from './report.ts';
 import { mlflowUri, type Env } from './config.ts';
+import { runCollection } from './weavit.ts';
 
 export type { MlflowRun } from './mlflow-rest.ts';
 export { readReport, reportUnavailable } from './report.ts';
 
 export type BestRun =
-  | { kind: 'ok'; runName: string; value: number; runCount: number; experiment: string; runUrl: string }
+  | {
+      kind: 'ok';
+      runName: string;
+      value: number;
+      runCount: number;
+      experiment: string;
+      runUrl: string;
+      /** The Weaviate collection the best run used, when it logged a valid `collection` param. */
+      collection?: string;
+    }
   | { kind: 'no-runs' }
   | { kind: 'metric-not-logged'; runCount: number }
   | { kind: 'unavailable'; reason: string };
@@ -104,6 +114,7 @@ async function searchRuns(
 
 function toOk(pick: PickedRun, experiments: readonly MlflowExperiment[], base: string): BestRun {
   const { run_id, run_name, experiment_id } = pick.run.info;
+  const collection = runCollection(pick.run.data.params);
   return {
     kind: 'ok',
     runName: run_name ?? run_id,
@@ -111,6 +122,7 @@ function toOk(pick: PickedRun, experiments: readonly MlflowExperiment[], base: s
     runCount: pick.runCount,
     experiment: experiments.find((e) => e.experiment_id === experiment_id)?.name ?? experiment_id,
     runUrl: `${base}/#/experiments/${experiment_id}/runs/${run_id}`,
+    ...(collection ? { collection } : {}),
   };
 }
 
