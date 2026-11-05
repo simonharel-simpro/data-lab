@@ -1,3 +1,4 @@
+default_install_hook_types: [pre-commit, pre-push]
 exclude: ^tools/weavit-ui/
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -7,9 +8,11 @@ repos:
         args: [--fix]
       - id: ruff-format
         types_or: [python, pyi]
+  # keep in sync with the gitleaks release URL in .github/workflows/ci.yml
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
     hooks:
+      # CI: this hook scans staged files only; ci.yml runs a full-history scan
       - id: gitleaks
   - repo: local
     hooks:
@@ -35,3 +38,27 @@ repos:
         language: system
         pass_filenames: false
         files: ^(projects/mini-rag/|tools/pre_commit_checks/)
+      # Pre-push parity with ci.yml's gates + tests. pip-audit, npm audit and the gitleaks history scan stay CI-only
+      # because they need the network.
+      - id: gates-datalab
+        name: datalab gates (contracts, types) + unit tests + coverage floor
+        entry: bash -c 'cd packages/datalab && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov=datalab'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(packages/datalab/|contracts/)
+      - id: gates-mini-rag
+        name: mini-rag gates (contracts, types) + unit tests + coverage floor
+        entry: bash -c 'cd projects/mini-rag && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(projects/mini-rag/|packages/datalab/src/)
+      - id: gates-app
+        name: app astro check + unit tests + coverage floor
+        # Needs node >=22.22 on PATH (see .nvmrc); node 20 rejects --test-coverage-lines.
+        entry: bash -c 'cd app && npm run check && npm test'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(app/|contracts/|\.env\.example$)

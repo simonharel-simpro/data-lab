@@ -1,5 +1,6 @@
 # Fix Plan — Phase 2: Gates, input validation & dependency hygiene
 
+**Status:** ✅ Complete — branch fix-phase-2-gates-validation-deps, 2026-11-05
 **Severity:** 🟡
 **Agent:**
 - python-fastapi for 2.1, 2.4 and 2.5. This is generic Python: ignore the FastAPI layering rules.

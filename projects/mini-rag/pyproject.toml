@@ -10,7 +10,7 @@ dependencies = [
     "httpx2==2.16.0",          # anthropic 2.3's HTTP client; tests use its MockTransport
     "weaviate-client==4.24.1",
     "mlflow==3.17.2",
-    "pydantic-settings>=2.6",
+    "pydantic-settings~=2.16",
 ]
 
 [dependency-groups]

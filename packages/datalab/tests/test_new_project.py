@@ -38,6 +38,8 @@ def test_g_12_package_name_prefixed(fake_repo: Path) -> None:
 
     pyproject = tomllib.loads((fake_repo / "projects" / "demo" / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["project"]["name"] == "proj-demo"
+    assert (fake_repo / "projects" / "demo" / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+    assert pyproject["tool"]["coverage"]["report"]["fail_under"] == 70
 
 
 def test_u_10_new_project_excludes_venv_and_lock(fake_repo: Path) -> None:

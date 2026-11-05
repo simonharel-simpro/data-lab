@@ -6,7 +6,7 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 | Phase | Theme | Status | Branch | /check | Landed |
 |-------|-------|--------|--------|--------|--------|
 | 1 | Run integrity & resilience (pilot) | ✅ complete | fix-phase-1-run-integrity | clean @ d8284c5 (1 fix-check iter) | 2026-11-05 |
-| 2 | Gates, input validation & dependency hygiene | pending | — | — | — |
+| 2 | Gates, input validation & dependency hygiene | implemented (awaiting /check) | fix-phase-2-gates-validation-deps | — | — |
 | 3 | App boundaries (TS) | pending | — | — | — |
 | 4 | Test gaps — Python | pending | — | — | — |
 | 5 | Test gaps — TS | pending | — | — | — |
@@ -24,3 +24,17 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 
 Existing-test edit: `datalab/tests/test_settings.py::test_f_5_settings_ignores_bare_mlflow_tracking_uri` input `"x"` → `"http://x:1"`, because 1.5 now refuses a scheme-less URI by design. The test means the same thing.
 Cross-phase regressions: none (first phase).
+
+## Phase 2 — Gates, input validation & dependency hygiene
+
+**Implemented:** 2026-11-05 · **Branch:** fix-phase-2-gates-validation-deps · **Agents:** python-fastapi (2.1, 2.4, 2.5), general-purpose (2.2, 2.3)
+**Tooling:** gate_runner exit 0 (with node 22 on PATH). The pre-push suite now runs gates-datalab, gates-mini-rag and gates-app, all passing. gitleaks full history: 25 commits, no leaks. pip-audit exit 0 in both trees.
+
+- ✅ 2.1 `fullmatch` for project names. Red-first commit `bcd326e` was confirmed red by the orchestrator. grep 3→0
+- ✅ 2.2 CI: full-history gitleaks, locked lint-imports/pyright/pip-audit/pytest, `npm audit`. grep 2→0
+- ✅ 2.3 Local pre-push parity: three gate hooks, plus `default_install_hook_types`
+- ✅ 2.4 Runtime specs bounded (`~=`). `uv.lock` changed only in specifier metadata; no version moved. grep 4→0
+- ✅ 2.5 Template inherits the dev list, gates and `.python-version` 3.12. grep 1→0
+
+Environment note: the gates-app hook needs node >=22.22 on PATH (`.nvmrc`). Under node 20 it fails loudly at `astro check`, and a one-line comment on the hook says so. `pre-commit install` has not been run; that is left to the user.
+Cross-phase regressions: none (`assert-zero --done` OK).
