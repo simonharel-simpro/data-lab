@@ -136,7 +136,9 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
       b.run.info.start_time - a.run.info.start_time ||
       (a.run.info.run_id < b.run.info.run_id ? -1 : a.run.info.run_id > b.run.info.run_id ? 1 : 0),
   );
-  return { kind: 'picked', run: finite[0].run, value: finite[0].value, runCount: finite.length };
+  const best = finite[0];
+  if (!best) return { kind: 'no-runs' };
+  return { kind: 'picked', run: best.run, value: best.value, runCount: finite.length };
 }
 ```
 
