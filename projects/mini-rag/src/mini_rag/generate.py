@@ -1,7 +1,8 @@
-"""Answers from the user's DGX LLM over the Anthropic Messages API.
+"""Answers from an LLM over the Anthropic Messages API: OpenRouter by default, or the user's LAN DGX.
 
-Ported from Demo-RAG `llm.py` (`strip_thinking`, `AnthropicMessagesClient`), trimmed of usage accounting. The DGX
-returns a `thinking` block before the text and may inline `<think>...</think>`, so `content[0].text` is wrong (B1).
+Ported from Demo-RAG `llm.py` (`strip_thinking`, `AnthropicMessagesClient`), trimmed of usage accounting. Reasoning
+models return a `thinking` block before the text and may inline `<think>...</think>`, so `content[0].text` is wrong
+(B1).
 """
 
 import re
@@ -36,12 +37,13 @@ def _prompt(question: str, passages: list[Chunk]) -> str:
     return f"Passages:\n{body}\n\nQuestion: {question}"
 
 
-class DgxGenerator:
+class LlmGenerator:
     def __init__(
         self,
         base_url: str,
         model: str,
         *,
+        api_key: str,
         timeout_s: float,
         max_tokens: int,
         http_client: httpx2.Client | None = None,
@@ -49,7 +51,7 @@ class DgxGenerator:
         self.model, self.max_tokens = model, max_tokens
         self.sdk = anthropic.Anthropic(
             base_url=base_url,
-            api_key="not-needed",  # placeholder: the LAN DGX is unauthenticated and ignores it
+            api_key=api_key,
             timeout=timeout_s,
             max_retries=2,
             http_client=http_client,
@@ -62,18 +64,18 @@ class DgxGenerator:
                 max_tokens=self.max_tokens,
                 system=SYSTEM,
                 messages=[{"role": "user", "content": _prompt(question, passages)}],
-                # anthropic>=2 dropped `temperature` from the signature; the DGX honours it: deterministic runs.
+                # anthropic>=2 dropped `temperature` from the signature; both endpoints honour it: deterministic runs.
                 extra_body={"temperature": 0},
             )
         except anthropic.APIError as err:
-            raise GenerationError(f"dgx {self.model}: {err}") from err
+            raise GenerationError(f"llm {self.model}: {err}") from err
         if not isinstance(message, anthropic.types.Message):
-            raise GenerationError(f"dgx {self.model}: malformed response ({type(message).__name__})")
+            raise GenerationError(f"llm {self.model}: malformed response ({type(message).__name__})")
         if message.stop_reason == "max_tokens":
             raise GenerationError(
-                f"dgx {self.model}: answer truncated at max_tokens={self.max_tokens}; raise MINI_RAG_MAX_TOKENS"
+                f"llm {self.model}: answer truncated at max_tokens={self.max_tokens}; raise MINI_RAG_MAX_TOKENS"
             )
         text = strip_thinking("".join(getattr(b, "text", "") for b in message.content or [] if b.type == "text"))
         if not text:
-            raise GenerationError(f"dgx {self.model}: no text in response")
+            raise GenerationError(f"llm {self.model}: no text in response")
         return text

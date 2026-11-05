@@ -101,11 +101,11 @@ npm run check && npm test            # astro check + unit tests (line coverage f
 ## Pilot
 
 `projects/mini-rag` is the end-to-end example (BM25 and vector retrieval over a frozen snapshot of these docs,
-answers from the DGX LLM). With the stack up (`docker compose up -d`):
+answers from an LLM, OpenRouter by default). With the stack up (`docker compose up -d`):
 
 ```bash
 cd projects/mini-rag && uv sync
-echo 'MINI_RAG_DGX_BASE_URL=http://<dgx-host>:8000' > .env   # gitignored; required
+echo 'MINI_RAG_LLM_API_KEY=<openrouter-key>' > .env          # gitignored; required (DGX: see .env.example)
 for r in bm25 vector; do for k in 3 5; do uv run python -m mini_rag.run --retrieval $r --k $k; done; done
 cd ../../app && npm run dev                                   # the mini-rag card: best `score` of the 4 runs
 ```

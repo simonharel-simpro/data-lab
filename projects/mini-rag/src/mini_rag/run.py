@@ -16,7 +16,7 @@ from datalab.project import Project, load
 from datalab.settings import Settings, connect_weaviate
 from datalab.tracking import preflight, tracked_run
 from mini_rag.corpus import OVERLAP, SIZE, Chunk, load_corpus
-from mini_rag.generate import DgxGenerator
+from mini_rag.generate import LlmGenerator
 from mini_rag.index import Retrieval, corpus_hash, ensure_collection, search
 from mini_rag.questions import Question, load_questions
 from mini_rag.scoring import Outcome, metrics, outcome
@@ -94,7 +94,7 @@ def run(
     partial = len(selected) < len(questions)  # D-15: a subset logs smoke_* only, never `score`
     params = {"retrieval": str(config.retrieval), "k": config.k, "n": config.n}
     params |= {"questions_hash": _sha256([q.id for q in selected])}
-    params |= {"gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
+    params |= {"llm_base_url": pilot.llm_base_url, "gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
     params |= {"size": config.size, "overlap": config.overlap, "collection": config.collection}
     params |= {"corpus_hash": config.corpus_hash}
     tags = {"config_hash": _sha256(params)} | ({"smoke": "true"} if partial else {})
@@ -129,9 +129,10 @@ def main(argv: list[str] | None = None) -> int:
     questions = load_questions(project.root / "data" / "questions.jsonl")
     chunks = load_corpus(project.root / "data" / "corpus", size=SIZE, overlap=OVERLAP)
     preflight(settings.mlflow_tracking_uri)
-    generator = DgxGenerator(
-        pilot.dgx_base_url, pilot.gen_model, timeout_s=pilot.gen_timeout_s, max_tokens=pilot.max_tokens
-    )
+    generator = LlmGenerator(
+        pilot.llm_base_url, pilot.gen_model, api_key=pilot.llm_api_key.get_secret_value(),
+        timeout_s=pilot.gen_timeout_s, max_tokens=pilot.max_tokens,
+    )  # fmt: skip
     corpus = corpus_hash(chunks)
     with connect_weaviate(settings) as client:
         name = ensure_collection(client, chunks, size=SIZE, overlap=OVERLAP, corpus=corpus)

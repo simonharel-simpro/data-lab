@@ -44,7 +44,7 @@ def _run(  # every knob a config-identity test varies is a keyword
 ) -> str:
     settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
     pilot = PilotSettings(  # type: ignore[call-arg]
-        _env_file=None, dgx_base_url="http://dgx.invalid", gen_model=gen_model, max_tokens=384
+        _env_file=None, llm_base_url="http://llm.invalid", llm_api_key="sk-or-test", gen_model=gen_model, max_tokens=384
     )
     project = Project(name="mini-rag", root=tmp_path)
     config = RunConfig(
@@ -82,6 +82,7 @@ def test_run_logs_project_tag_and_experiment(tmp_path: Path, sqlite_uri: str) ->
         "k": "3",
         "n": "None",
         "questions_hash": "9201f68b69af8a419b78d4666e6a712712b6882ccb4d43baafe034e60e457d05",
+        "llm_base_url": "http://llm.invalid",
         "gen_model": "test-gen-model",
         "max_tokens": "384",
         "size": "120",
@@ -97,7 +98,7 @@ def test_f_13_generation_error_marks_run_failed_without_metrics(tmp_path: Path, 
     def failing(question: str, passages: list[Chunk]) -> str:
         calls.append(question)
         if len(calls) == 3:
-            raise GenerationError("dgx down")
+            raise GenerationError("llm down")
         return "5050"
 
     with pytest.raises(GenerationError):
@@ -192,7 +193,7 @@ def test_f_13_mlflow_failure_after_answers_keeps_results_locally(
 def test_f_13_generation_error_keeps_earlier_answers(tmp_path: Path, sqlite_uri: str) -> None:
     def failing_on_q3(question: str, passages: list[Chunk]) -> str:
         if question == _QUESTIONS[2].question:
-            raise GenerationError("dgx down")
+            raise GenerationError("llm down")
         return _answer(question, passages)
 
     with pytest.raises(GenerationError):
