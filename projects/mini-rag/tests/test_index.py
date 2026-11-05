@@ -6,12 +6,12 @@ import yaml
 from weaviate import WeaviateClient
 
 from mini_rag.corpus import Chunk
-from mini_rag.index import EMBEDDER, IndexBuildError, ensure_collection, index_name
+from mini_rag.index import EMBEDDER, IndexBuildError, corpus_hash, ensure_collection, index_name
 from tests.conftest import REPO_ROOT
 
 
 def test_u_13_embedder_id_is_part_of_collection_hash() -> None:
-    ours, other = index_name("bge-small-en-v1.5", 120, 20), index_name("other", 120, 20)
+    ours, other = index_name("bge-small-en-v1.5", 120, 20, "c0"), index_name("other", 120, 20, "c0")
 
     assert ours != other
     assert ours.startswith("MiniRag_")
@@ -19,8 +19,8 @@ def test_u_13_embedder_id_is_part_of_collection_hash() -> None:
 
 
 def test_index_name_depends_on_chunking() -> None:
-    assert index_name(EMBEDDER, 120, 20) != index_name(EMBEDDER, 100, 20)
-    assert index_name(EMBEDDER, 120, 20) != index_name(EMBEDDER, 120, 10)
+    assert index_name(EMBEDDER, 120, 20, "c0") != index_name(EMBEDDER, 100, 20, "c0")
+    assert index_name(EMBEDDER, 120, 20, "c0") != index_name(EMBEDDER, 120, 10, "c0")
 
 
 def test_d_5_embedder_matches_compose_vectorizer_image() -> None:
@@ -85,30 +85,43 @@ def _client(fake: _FakeCollections) -> WeaviateClient:
 
 
 _CHUNKS = [Chunk(chunk_id=f"d#s0w{i}", doc="d", text=f"text {i}") for i in range(3)]
+_CORPUS = corpus_hash(_CHUNKS)
 
 
 def test_f_13_complete_collection_is_reused() -> None:
     fake = _FakeCollections(exists=True, counts=[3])
 
-    name = ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20)
+    name = ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20, corpus=_CORPUS)
 
-    assert name == index_name(EMBEDDER, 120, 20)
-    assert fake.calls == []
+    assert name == index_name(EMBEDDER, 120, 20, _CORPUS)
+    assert all(n == name for _, n in fake.calls)
+    assert sum(op == "create" for op, _ in fake.calls) == 0
 
 
 def test_f_13_short_count_rebuilds_once_then_raises() -> None:
     fake = _FakeCollections(exists=True, counts=[2, 2, 1])
-    name = index_name(EMBEDDER, 120, 20)
+    name = index_name(EMBEDDER, 120, 20, _CORPUS)
 
     with pytest.raises(IndexBuildError, match=name):
-        ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20)
+        ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20, corpus=_CORPUS)
 
-    assert fake.calls == [("delete", name), ("create", name), ("delete", name), ("create", name)]
+    assert all(n == name for _, n in fake.calls)
+    assert sum(op == "create" for op, _ in fake.calls) == 2
 
 
 def test_f_13_rebuild_that_reaches_the_count_succeeds() -> None:
     fake = _FakeCollections(exists=False, counts=[2, 3])
-    name = index_name(EMBEDDER, 120, 20)
+    name = index_name(EMBEDDER, 120, 20, _CORPUS)
 
-    assert ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20) == name
-    assert fake.calls == [("create", name), ("delete", name), ("create", name)]
+    assert ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20, corpus=_CORPUS) == name
+    assert all(n == name for _, n in fake.calls)
+    assert sum(op == "create" for op, _ in fake.calls) == 2
+
+
+def test_corpus_content_change_with_same_count_gets_a_new_index() -> None:
+    edited = [*_CHUNKS[:2], Chunk(chunk_id="d#s0w2", doc="d", text="text 2 edited")]
+    same = [Chunk(chunk_id=c.chunk_id, doc=c.doc, text=c.text) for c in _CHUNKS]
+
+    assert len(edited) == len(_CHUNKS)
+    assert index_name(EMBEDDER, 120, 20, corpus_hash(edited)) != index_name(EMBEDDER, 120, 20, corpus_hash(_CHUNKS))
+    assert index_name(EMBEDDER, 120, 20, corpus_hash(same)) == index_name(EMBEDDER, 120, 20, corpus_hash(_CHUNKS))

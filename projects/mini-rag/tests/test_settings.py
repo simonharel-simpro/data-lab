@@ -29,3 +29,8 @@ def test_settings_read_only_the_mini_rag_prefix(
 
     assert pilot.dgx_base_url == "http://dgx.invalid:8000"
     assert pilot.gen_model == expected_model
+
+
+def test_scheme_less_dgx_url_fails_at_settings() -> None:
+    with pytest.raises(ValidationError, match="scheme"):
+        PilotSettings(_env_file=None, dgx_base_url="dgx.lan:8000")  # type: ignore[call-arg]

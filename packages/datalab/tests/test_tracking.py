@@ -1,3 +1,4 @@
+import os
 import re
 from pathlib import Path
 
@@ -81,3 +82,18 @@ def test_preflight_accepts_a_working_store(sqlite_uri: str, monkeypatch: pytest.
     preflight(sqlite_uri)  # raising here fails the test
 
     assert mlflow.get_tracking_uri() == sqlite_uri
+
+
+def test_tracking_bounds_mlflow_http_retries(sqlite_uri: str) -> None:
+    preflight(sqlite_uri)
+
+    assert os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] == "2"
+    assert os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] == "30"
+
+
+def test_tracking_keeps_a_user_retry_setting(sqlite_uri: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "5")
+
+    preflight(sqlite_uri)
+
+    assert os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] == "5"

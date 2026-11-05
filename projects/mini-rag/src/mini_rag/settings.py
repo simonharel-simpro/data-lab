@@ -1,5 +1,6 @@
 """Pilot-only settings (`MINI_RAG_*`); the shared infra settings come from `datalab.settings.Settings`."""
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,3 +12,11 @@ class PilotSettings(BaseSettings):
     gen_model: str = "deepseek-v4-flash"
     gen_timeout_s: float = 60
     max_tokens: int = 512
+
+    @field_validator("dgx_base_url")
+    @classmethod
+    def _needs_scheme(cls, v: str) -> str:
+        # `urlsplit("host:port").scheme == "host"`, so test for "://" instead.
+        if "://" not in v:
+            raise ValueError(f"dgx_base_url must be a URL with a scheme, e.g. http://host:port, got {v!r}")
+        return v

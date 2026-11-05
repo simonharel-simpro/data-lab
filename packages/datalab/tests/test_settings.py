@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from pydantic import ValidationError
 
 from datalab.settings import Settings
 from tests.conftest import REPO_ROOT
@@ -45,8 +46,8 @@ def test_f_5_settings_ignores_bare_mlflow_tracking_uri(monkeypatch: pytest.Monke
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     assert _settings().mlflow_tracking_uri == _env_example()["DATALAB_MLFLOW_TRACKING_URI"]
 
-    monkeypatch.setenv("DATALAB_MLFLOW_TRACKING_URI", "x")
-    assert _settings().mlflow_tracking_uri == "x"
+    monkeypatch.setenv("DATALAB_MLFLOW_TRACKING_URI", "http://x:1")
+    assert _settings().mlflow_tracking_uri == "http://x:1"
 
 
 def test_settings_reads_dotenv_from_cwd(tmp_path: Path) -> None:
@@ -77,3 +78,14 @@ def test_g_10_ports_agree_everywhere() -> None:
     assert ports[("weaviate", 8080)] == ("127.0.0.1", 8090)
     assert ports[("weaviate", 50051)] == ("127.0.0.1", 50052)
     assert ports[("mlflow", 5000)] == ("127.0.0.1", 5050)
+
+
+def test_scheme_less_tracking_uri_fails_at_settings() -> None:
+    with pytest.raises(ValidationError, match="scheme"):
+        Settings(_env_file=None, mlflow_tracking_uri="127.0.0.1:5050")  # type: ignore[call-arg]
+
+
+def test_sqlite_tracking_uri_still_validates(tmp_path: Path) -> None:
+    uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
+
+    assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]

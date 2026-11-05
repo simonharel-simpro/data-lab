@@ -1,4 +1,5 @@
 import itertools
+from pathlib import Path
 
 import pytest
 
@@ -50,3 +51,10 @@ def test_snapshot_corpus_loads_every_file_with_unique_ids() -> None:
 
     assert {c.doc for c in chunks} == {p.stem for p in CORPUS_DIR.glob("*.md")}
     assert len({c.chunk_id for c in chunks}) == len(chunks)
+
+
+def test_corpus_with_only_empty_files_raises(tmp_path: Path) -> None:
+    (tmp_path / "a.md").write_text("\n  \n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="no text to index"):
+        load_corpus(tmp_path)

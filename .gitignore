@@ -15,6 +15,9 @@ node_modules/
 
 *.log
 
+# Per-run crash copies of scored answers
+projects/*/results/
+
 # Throwaway Astro prototype: never committed (Phase 2B promotes it, then deletes it)
 spike-astro/
 

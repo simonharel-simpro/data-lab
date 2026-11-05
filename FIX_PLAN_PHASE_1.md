@@ -1,5 +1,6 @@
 # Fix Plan — Phase 1: Run integrity & resilience (pilot)
 
+**Status:** ✅ Complete — branch fix-phase-1-run-integrity, 2026-11-05
 **Severity:** 🔴 (1.1, 1.2 — the two halves of REVIEW §6's 🔴 row), 🟡 (1.3–1.5)
 **Agent:** python-fastapi. This is generic Python: ignore the router/service/repository rules. Follow the package's own style (pydantic-settings, frozen dataclasses, F-/U- ids in docstrings, tests named `test_<id>_<behaviour>`).
 **Depends on:** none

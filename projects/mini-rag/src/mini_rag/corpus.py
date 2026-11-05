@@ -53,6 +53,9 @@ def load_corpus(folder: Path, *, size: int = SIZE, overlap: int = OVERLAP) -> li
     files = sorted(folder.glob("*.md"))
     if not files:
         raise ValueError(f"no *.md file in corpus folder {folder}")
-    return [
+    chunks = [
         c for path in files for c in chunk_doc(path.stem, path.read_text(encoding="utf-8"), size=size, overlap=overlap)
     ]
+    if not chunks:
+        raise ValueError(f"corpus folder {folder} has *.md files but no text to index")
+    return chunks
