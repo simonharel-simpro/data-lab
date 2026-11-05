@@ -1,0 +1,78 @@
+{
+  "stacks": [
+    "python-fastapi"
+  ],
+  "root": "/home/simon/projects/data-science/data-lab/projects/mini-rag",
+  "head": "f357101e16d01a6e31e7eb97bc52edb6f32b1be8",
+  "review": true,
+  "security_base": null,
+  "ran_at": "2026-11-05T13:56:34+00:00",
+  "exit": 2,
+  "results": [
+    {
+      "stack": "project",
+      "name": "pre-commit pre-push",
+      "kind": "static",
+      "command": "pre-commit run --all-files --hook-stage pre-push",
+      "exit": 0,
+      "status": "pass",
+      "detail": "app astro check + unit tests + coverage floor.........................................Passed",
+      "config": "/home/simon/projects/data-science/data-lab/.pre-commit-config.yaml",
+      "cwd": "/home/simon/projects/data-science/data-lab"
+    },
+    {
+      "stack": "python-fastapi",
+      "name": "pyright",
+      "kind": "static",
+      "command": "uv run pyright",
+      "exit": 0,
+      "status": "pass",
+      "detail": "0 errors, 0 warnings, 0 informations"
+    },
+    {
+      "stack": "python-fastapi",
+      "name": "ruff",
+      "kind": "static",
+      "command": "uv run ruff check .",
+      "exit": 0,
+      "status": "pass",
+      "detail": "All checks passed!"
+    },
+    {
+      "stack": "python-fastapi",
+      "name": "lint-imports",
+      "kind": "static",
+      "command": "uv run lint-imports",
+      "exit": 0,
+      "status": "pass",
+      "detail": "Contracts: 1 kept, 0 broken."
+    },
+    {
+      "stack": "python-fastapi",
+      "name": "pytest",
+      "kind": "test",
+      "command": "uv run pytest",
+      "exit": 0,
+      "status": "pass",
+      "detail": "================ 132 passed, 2 deselected, 1 warning in 35.41s ================="
+    },
+    {
+      "stack": "python-fastapi",
+      "name": "bandit",
+      "kind": "security",
+      "command": "uv run bandit -r src/ -c pyproject.toml",
+      "exit": 2,
+      "status": "not-installed",
+      "detail": "Caused by: No such file or directory (os error 2)"
+    },
+    {
+      "stack": "python-fastapi",
+      "name": "radon",
+      "kind": "static",
+      "command": "uv run radon cc src/ -a -nc",
+      "exit": 2,
+      "status": "not-installed",
+      "detail": "Caused by: No such file or directory (os error 2)"
+    }
+  ]
+}
