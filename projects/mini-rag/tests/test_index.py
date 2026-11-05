@@ -94,8 +94,7 @@ def test_f_13_complete_collection_is_reused() -> None:
     name = ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20, corpus=_CORPUS)
 
     assert name == index_name(EMBEDDER, 120, 20, _CORPUS)
-    assert all(n == name for _, n in fake.calls)
-    assert sum(op == "create" for op, _ in fake.calls) == 0
+    assert fake.calls == []
 
 
 def test_f_13_short_count_rebuilds_once_then_raises() -> None:

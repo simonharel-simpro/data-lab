@@ -149,24 +149,33 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 `uv run python -m mini_rag.run --retrieval bm25 --k 3` in `projects/mini-rag`:
 
 1. `datalab.project.load()` reads `PROJECT.md` (name `mini-rag`); `PilotSettings` (`MINI_RAG_*`, the DGX URL is
-   required) and `Settings` (`DATALAB_*`) are validated before any I/O; `preflight` checks MLflow.
+   required) and `Settings` (`DATALAB_*`) are validated before any I/O; `preflight` checks MLflow. `preflight` and
+   `tracked_run` bound MLflow HTTP retries (`MLFLOW_HTTP_REQUEST_MAX_RETRIES=2`, `MLFLOW_HTTP_REQUEST_TIMEOUT=30`
+   via `setdefault`; a user value wins), so an outage fails fast instead of hanging.
 2. `corpus.load_corpus` chunks the frozen snapshot `data/corpus/*.md` (by `##` section, then 120 words with a
-   20-word overlap); `index.ensure_collection` reuses or builds `MiniRag_t2v_bge_small_en_v1_5_w120o20_<hash8>`
-   (vectorizer `text2vec-transformers`, embedder id in the hashed parts, U-13), count-checked with one rebuild (F-13).
-3. `run.run` opens `tracked_run(..., sub="retrieval")` → experiment `mini-rag/retrieval`, tags `project`,
-   `config_hash` (and `smoke=true` for `--n`); per question: `index.search` (`bm25` or `near_text`) →
-   `generate.DgxGenerator.answer` (Anthropic Messages API, text blocks only, `<think>` stripped, temperature 0) →
-   `scoring.outcome` (IDK → missing, token-boundary containment → correct, else hallucination).
-4. Only after every question is scored: `score = accuracy − hallucination` (or `smoke_*`) and `per_question.json`
-   are logged; a `GenerationError` leaves a FAILED run without metrics (F-13).
+   20-word overlap); `main()` computes `index.corpus_hash` once; `index.ensure_collection` reuses or builds
+   `MiniRag_t2v_bge_small_en_v1_5_w120o20_c<corpus_hash12>_<hash8>` (vectorizer `text2vec-transformers`, embedder
+   id and corpus hash in the hashed parts, U-13): reuse is keyed on corpus content, so a corpus edit gets a new
+   collection, never stale vectors; the count check stays a completeness check, with one rebuild (F-13).
+3. `run.run` takes a frozen `RunConfig` (retrieval, k, n, size, overlap, collection, corpus_hash), logged as params
+   and covered by `config_hash`; it opens `tracked_run(..., sub="retrieval")` → experiment `mini-rag/retrieval`,
+   tags `project`, `config_hash` (and `smoke=true` for `--n`); per question: `index.search` (`bm25` or
+   `near_text`) → `generate.DgxGenerator.answer` (Anthropic Messages API, text blocks only, `<think>` stripped,
+   temperature 0) → `scoring.outcome` (IDK → missing, token-boundary containment → correct, else hallucination).
+   Each scored answer is appended as it is produced to `projects/<project>/results/<run_id>.jsonl` (gitignored
+   crash copy), so a kill, a `GenerationError` or an MLflow outage keeps the answers computed so far.
+4. Metrics and the artifact are logged only after every question is scored: `score = accuracy − hallucination`
+   (or `smoke_*`) and `per_question.json` (the canonical artifact); a `GenerationError` leaves a FAILED run without
+   metrics (F-13).
 5. The app shows the card with the best FINISHED run by `score` (`max`).
 
 ```python
-    with tracked_run(project, settings, run_name=f"{retrieval}-k{k}", sub="retrieval", tags=tags) as run_id:
+    with tracked_run(project, settings, run_name=name, sub="retrieval", tags=tags) as run_id:
         mlflow.log_params(params)
-        results = _answer_all(selected, retrieval, k, answer, search)
+        sink = results_dir / f"{run_id}.jsonl"
+        results = _answer_all(selected, config.retrieval, config.k, answer, search, sink)
         mlflow.log_metrics(metrics([r.outcome for r in results]).as_dict(prefix="smoke_" if partial else ""))
-        mlflow.log_dict({"results": [r.__dict__ for r in results]}, "per_question.json")
+        mlflow.log_dict({"results": [asdict(r) for r in results]}, "per_question.json")
 ```
 
 ## Key Domain Concepts
