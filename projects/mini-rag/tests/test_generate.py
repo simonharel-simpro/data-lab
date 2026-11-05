@@ -32,6 +32,28 @@ def _generator(status: int, body: dict[str, object], seen: list[dict[str, object
     return DgxGenerator("http://dgx.invalid", "m", timeout_s=5, max_tokens=64, http_client=client)
 
 
+def _raw_generator(response: httpx2.Response) -> DgxGenerator:
+    client = httpx2.Client(transport=httpx2.MockTransport(lambda _request: response))
+    return DgxGenerator("http://dgx.invalid", "m", timeout_s=5, max_tokens=64, http_client=client)
+
+
+def test_f_13_html_200_raises_generation_error() -> None:
+    with pytest.raises(GenerationError):
+        _raw_generator(httpx2.Response(200, content=b"<html>")).answer("Which port?", _PASSAGES)
+
+
+def test_f_13_json_list_200_raises_generation_error() -> None:
+    with pytest.raises(GenerationError):
+        _raw_generator(httpx2.Response(200, json=[1, 2])).answer("Which port?", _PASSAGES)
+
+
+def test_f_13_answer_truncated_at_max_tokens_raises() -> None:
+    body = {**_message([{"type": "text", "text": "50"}]), "stop_reason": "max_tokens"}
+
+    with pytest.raises(GenerationError, match="truncated"):
+        _generator(200, body).answer("Which port?", _PASSAGES)
+
+
 def test_f_13_wrong_shape_200_raises_not_empty_answer() -> None:
     with pytest.raises(GenerationError):
         _generator(200, {"content": []}).answer("Which port?", _PASSAGES)

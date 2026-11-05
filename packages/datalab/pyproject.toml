@@ -4,11 +4,11 @@ version = "0.1.0"
 description = "Shared data-lab helpers: project identity, naming, settings, MLflow tracking, project scaffolding."
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic-settings>=2.6",
-    "pyyaml>=6.0",
+    "pydantic-settings~=2.16",
+    "pyyaml~=6.0",
     "weaviate-client==4.24.1", # same version as Demo-RAG's uv.lock
     "mlflow==3.17.2",          # same version as the compose server image
-    "httpx>=0.27",
+    "httpx~=0.28",
 ]
 
 [project.scripts]

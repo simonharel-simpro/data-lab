@@ -1,0 +1,32 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/simon/projects/data-science/data-lab/.claude/hooks/statusline-meter.sh"
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/simon/projects/data-science/data-lab/.claude/hooks/loop-compaction-flag.sh",
+            "timeout": 5000,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/simon/projects/data-science/data-lab/.claude/hooks/loop-git-guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

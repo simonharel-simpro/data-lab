@@ -15,8 +15,16 @@ node_modules/
 
 *.log
 
+# Per-run crash copies of scored answers
+projects/*/results/
+
 # Throwaway Astro prototype: never committed (Phase 2B promotes it, then deletes it)
 spike-astro/
 
 # Autonomous-loop bookkeeping
 .harness/
+.archview/
+.harness-archive/
+
+# ArchView usage-logging trail (per-user)
+**/.claude/archview/usage.jsonl

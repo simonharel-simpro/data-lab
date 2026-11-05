@@ -1,5 +1,7 @@
 """The pilot's Weaviate collection: vectors computed by the `text2vec-transformers` module (D-5), no embedding here."""
 
+import hashlib
+import json
 import logging
 from enum import StrEnum
 from typing import Final
@@ -33,9 +35,16 @@ class IndexBuildError(RuntimeError):
     """The collection's object count never matched the chunk count, even after one rebuild (F-13)."""
 
 
-def index_name(embedder: str, size: int, overlap: int) -> str:
-    """The embedder id is one of the hashed parts, so another model never reuses these vectors (U-13)."""
-    return collection_name("mini-rag", "t2v", embedder, f"w{size}o{overlap}")
+def corpus_hash(chunks: list[Chunk]) -> str:
+    return hashlib.sha256(json.dumps([[c.chunk_id, c.text] for c in chunks]).encode("utf-8")).hexdigest()[:12]
+
+
+def index_name(embedder: str, size: int, overlap: int, corpus: str) -> str:
+    """The embedder id is one of the hashed parts, so another model never reuses these vectors (U-13).
+
+    The corpus hash is another: a corpus edit gets a new collection, never stale vectors.
+    """
+    return collection_name("mini-rag", "t2v", embedder, f"w{size}o{overlap}", f"c{corpus}")
 
 
 def _count(client: WeaviateClient, name: str) -> int:
@@ -64,10 +73,10 @@ def _build(client: WeaviateClient, name: str, chunks: list[Chunk]) -> None:
 
 
 def ensure_collection(
-    client: WeaviateClient, chunks: list[Chunk], *, size: int, overlap: int, embedder: str = EMBEDDER
+    client: WeaviateClient, chunks: list[Chunk], *, size: int, overlap: int, corpus: str, embedder: str = EMBEDDER
 ) -> str:
     """Reuse a complete collection; else build it, and rebuild once if the count is short, then raise (F-13)."""
-    name = index_name(embedder, size, overlap)
+    name = index_name(embedder, size, overlap, corpus)
     if client.collections.exists(name) and _count(client, name) == len(chunks):
         logger.info("reusing complete collection %s (%d chunks)", name, len(chunks))
         return name

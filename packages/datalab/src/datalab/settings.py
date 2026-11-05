@@ -1,9 +1,11 @@
 """Connection settings for the shared stack; only `DATALAB_*` env vars are read (F-5)."""
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 import weaviate
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from weaviate.classes.init import AdditionalConfig, Timeout
 
@@ -16,6 +18,14 @@ class Settings(BaseSettings):
     weaviate_http_port: int = 8090
     weaviate_grpc_port: int = 50052
     mlflow_tracking_uri: str = "http://127.0.0.1:5050"
+
+    @field_validator("mlflow_tracking_uri")
+    @classmethod
+    def _needs_scheme(cls, v: str) -> str:
+        # RFC 3986 scheme + "://" + non-empty, whitespace-free remainder: sqlite:/// stays valid (remainder = path).
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*://\S+", v):
+            raise ValueError(f"mlflow_tracking_uri must be a URL with a scheme, e.g. http://host:port, got {v!r}")
+        return v
 
 
 @contextmanager

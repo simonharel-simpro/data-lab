@@ -67,6 +67,12 @@ class DgxGenerator:
             )
         except anthropic.APIError as err:
             raise GenerationError(f"dgx {self.model}: {err}") from err
+        if not isinstance(message, anthropic.types.Message):
+            raise GenerationError(f"dgx {self.model}: malformed response ({type(message).__name__})")
+        if message.stop_reason == "max_tokens":
+            raise GenerationError(
+                f"dgx {self.model}: answer truncated at max_tokens={self.max_tokens}; raise MINI_RAG_MAX_TOKENS"
+            )
         text = strip_thinking("".join(getattr(b, "text", "") for b in message.content or [] if b.type == "text"))
         if not text:
             raise GenerationError(f"dgx {self.model}: no text in response")

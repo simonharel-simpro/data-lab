@@ -7,7 +7,8 @@ import argparse
 import hashlib
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import mlflow
 
@@ -16,7 +17,7 @@ from datalab.settings import Settings, connect_weaviate
 from datalab.tracking import preflight, tracked_run
 from mini_rag.corpus import OVERLAP, SIZE, Chunk, load_corpus
 from mini_rag.generate import DgxGenerator
-from mini_rag.index import Retrieval, ensure_collection, search
+from mini_rag.index import Retrieval, corpus_hash, ensure_collection, search
 from mini_rag.questions import Question, load_questions
 from mini_rag.scoring import Outcome, metrics, outcome
 from mini_rag.settings import PilotSettings
@@ -34,6 +35,19 @@ class Result:
     chunk_ids: list[str]
 
 
+@dataclass(frozen=True)
+class RunConfig:
+    """What identifies a run's setup; logged as params and covered by config_hash."""
+
+    retrieval: Retrieval
+    k: int
+    n: int | None
+    size: int
+    overlap: int
+    collection: str
+    corpus_hash: str
+
+
 def _select(questions: list[Question], n: int | None) -> list[Question]:
     """The first `n` questions in file order; `n` outside 1..len is refused, never clamped."""
     if n is None:
@@ -47,13 +61,20 @@ def _sha256(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def _answer_all(selected: list[Question], retrieval: Retrieval, k: int, answer: Answer, find: Search) -> list[Result]:
+def _answer_all(
+    selected: list[Question], retrieval: Retrieval, k: int, answer: Answer, find: Search, sink: Path
+) -> list[Result]:
+    """Each scored answer is appended to `sink` at once: the crash copy survives a kill or an MLflow outage."""
+    sink.parent.mkdir(parents=True, exist_ok=True)
     results = []
     for q in selected:
         passages = find(q.question, retrieval, k)
         prediction = answer(q.question, passages)  # a GenerationError propagates: run FAILED, no metrics (F-13)
         ids = [p.chunk_id for p in passages]
-        results.append(Result(q.id, prediction, q.answer, outcome(prediction, q.answer), ids))
+        result = Result(q.id, prediction, q.answer, outcome(prediction, q.answer), ids)
+        with sink.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(asdict(result)) + "\n")
+        results.append(result)
     return results
 
 
@@ -63,34 +84,41 @@ def run(
     pilot: PilotSettings,
     questions: list[Question],
     *,
-    retrieval: Retrieval,
-    k: int,
-    n: int | None,
-    size: int,
-    overlap: int,
-    collection: str,
+    config: RunConfig,
     answer: Answer,
     search: Search,
+    results_dir: Path,
 ) -> str:
     """Returns the run id. Metrics are logged once, after every question is scored (F-13)."""
-    selected = _select(questions, n)
+    selected = _select(questions, config.n)
     partial = len(selected) < len(questions)  # D-15: a subset logs smoke_* only, never `score`
-    params = {"retrieval": str(retrieval), "k": k, "n": n, "questions_hash": _sha256([q.id for q in selected])}
-    params |= {"gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens, "size": size, "overlap": overlap}
-    params |= {"collection": collection}
+    params = {"retrieval": str(config.retrieval), "k": config.k, "n": config.n}
+    params |= {"questions_hash": _sha256([q.id for q in selected])}
+    params |= {"gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
+    params |= {"size": config.size, "overlap": config.overlap, "collection": config.collection}
+    params |= {"corpus_hash": config.corpus_hash}
     tags = {"config_hash": _sha256(params)} | ({"smoke": "true"} if partial else {})
-    with tracked_run(project, settings, run_name=f"{retrieval}-k{k}", sub="retrieval", tags=tags) as run_id:
+    name = f"{config.retrieval}-k{config.k}"
+    with tracked_run(project, settings, run_name=name, sub="retrieval", tags=tags) as run_id:
         mlflow.log_params(params)
-        results = _answer_all(selected, retrieval, k, answer, search)
+        sink = results_dir / f"{run_id}.jsonl"
+        results = _answer_all(selected, config.retrieval, config.k, answer, search, sink)
         mlflow.log_metrics(metrics([r.outcome for r in results]).as_dict(prefix="smoke_" if partial else ""))
-        mlflow.log_dict({"results": [r.__dict__ for r in results]}, "per_question.json")
+        mlflow.log_dict({"results": [asdict(r) for r in results]}, "per_question.json")
     return run_id
+
+
+def _positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be >= 1, got {value}")
+    return value
 
 
 def _args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="mini_rag.run", description="One mini-rag run, logged to MLflow.")
     parser.add_argument("--retrieval", type=Retrieval, choices=list(Retrieval), required=True)
-    parser.add_argument("--k", type=int, required=True, help="passages retrieved per question")
+    parser.add_argument("--k", type=_positive_int, required=True, help="passages retrieved per question")
     parser.add_argument("--n", type=int, help="first N questions only: a smoke run (smoke_* metrics, D-15)")
     return parser.parse_args(argv)
 
@@ -104,12 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     generator = DgxGenerator(
         pilot.dgx_base_url, pilot.gen_model, timeout_s=pilot.gen_timeout_s, max_tokens=pilot.max_tokens
     )
+    corpus = corpus_hash(chunks)
     with connect_weaviate(settings) as client:
-        name = ensure_collection(client, chunks, size=SIZE, overlap=OVERLAP)
+        name = ensure_collection(client, chunks, size=SIZE, overlap=OVERLAP, corpus=corpus)
+        config = RunConfig(args.retrieval, args.k, args.n, SIZE, OVERLAP, name, corpus)
         run_id = run(
-            project, settings, pilot, questions, retrieval=args.retrieval, k=args.k, n=args.n, size=SIZE,
-            overlap=OVERLAP, collection=name, answer=generator.answer,
+            project, settings, pilot, questions, config=config, answer=generator.answer,
             search=lambda query, mode, k: search(client, name, query, mode, k),
+            results_dir=project.root / "results",
         )  # fmt: skip
     print(f"run {run_id} ({args.retrieval}-k{args.k}) logged to {settings.mlflow_tracking_uri}")
     return 0

@@ -9,7 +9,8 @@ from typing import Final
 
 import yaml
 
-# Identical literal in app/src/lib/name.ts; vectors in contracts/name_vectors.json.
+# Identical literal in app/src/lib/name.ts; Python uses fullmatch (its "$" also matches before a final "\n").
+# Vectors in contracts/name_vectors.json.
 NAME_RE: Final = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 # Test/infra namespaces + the YAML 1.1 bool/null words PyYAML and the JS parser read differently (U-4, F-3).
 RESERVED: Final = frozenset(
@@ -32,7 +33,7 @@ class Project:
 def validate_name(name: object) -> str:
     if not isinstance(name, str):
         raise ProjectError(f"project name must be a string, got {type(name).__name__} {name!r}")
-    if not NAME_RE.match(name):
+    if not NAME_RE.fullmatch(name):
         raise ProjectError(f"invalid project name {name!r}: must match {NAME_RE.pattern}")
     if name in RESERVED:
         raise ProjectError(f"project name {name!r} is reserved")
@@ -98,7 +99,7 @@ def load(start: Path | None = None, *, root: Path | None = None) -> Project:
 
 def _check_name_shape(project: object) -> str:
     # Shape only, not RESERVED: integration tests own the reserved `datalab-test` namespace on purpose.
-    if not isinstance(project, str) or not NAME_RE.match(project):
+    if not isinstance(project, str) or not NAME_RE.fullmatch(project):
         raise ProjectError(f"invalid project name {project!r}: must match {NAME_RE.pattern}")
     return project
 
@@ -119,6 +120,6 @@ def experiment_name(project: str, sub: str | None = None) -> str:
     _check_name_shape(project)
     if sub is None:
         return project
-    if not isinstance(sub, str) or not NAME_RE.match(sub):
+    if not isinstance(sub, str) or not NAME_RE.fullmatch(sub):
         raise ProjectError(f"invalid experiment sub-name {sub!r}: must match {NAME_RE.pattern}")
     return f"{project}/{sub}"

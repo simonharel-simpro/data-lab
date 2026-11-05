@@ -5,7 +5,9 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from datalab.project import ProjectError, repo_root, validate_name
@@ -37,7 +39,21 @@ def _rewrite(tmp: Path, name: str, title: str) -> None:
         raise ProjectError(f"unreplaced {_PLACEHOLDER}* placeholder in {left}")
 
 
-def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
+def _uv_lock(project: Path) -> None:
+    uv = shutil.which("uv")
+    if uv is None:
+        raise ProjectError("uv not found on PATH; install uv to scaffold a locked project")
+    try:
+        done = subprocess.run(  # noqa: S603  # fixed argv from shutil.which, no shell, no user input
+            [uv, "lock"], cwd=project, check=False, capture_output=True, text=True, timeout=300
+        )
+    except subprocess.TimeoutExpired as err:
+        raise ProjectError("uv lock timed out after 300 s") from err
+    if done.returncode != 0:
+        raise ProjectError(f"uv lock failed (exit {done.returncode}): {done.stderr.strip() or done.stdout.strip()}")
+
+
+def main(argv: list[str] | None = None, *, root: Path | None = None, lock: Callable[[Path], None] = _uv_lock) -> int:
     parser = argparse.ArgumentParser(prog="datalab-new", description="Create projects/<name> from the template.")
     parser.add_argument("name", help="project name: lowercase letters/digits, single dashes, not reserved")
     parser.add_argument("--title", help="card title (default: the name)")
@@ -57,6 +73,7 @@ def main(argv: list[str] | None = None, *, root: Path | None = None) -> int:
     try:
         shutil.copytree(template, tmp, ignore=_IGNORE)
         _rewrite(tmp, name, args.title or name)
+        lock(tmp)
         os.rename(tmp, target)
     except (OSError, ProjectError) as err:
         shutil.rmtree(tmp, ignore_errors=True)

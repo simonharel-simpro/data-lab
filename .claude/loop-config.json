@@ -1,0 +1,4 @@
+{
+  "__comment": "Read by /loop-implement and /loop-fix at a fresh start; the value is only the recommended default of the start-up question. 'off' because no .github/workflows/gemini-review.yml reviewer is installed.",
+  "review_chain": "off"
+}

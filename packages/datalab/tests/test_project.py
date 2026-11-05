@@ -41,6 +41,27 @@ def test_u_2_collection_name_differs_for_names_with_same_pascal() -> None:
     assert collection_name("a-bc", "x") != collection_name("ab-c", "x")
 
 
+def test_collection_name_golden_value() -> None:
+    # Characterization (TQ8): pins the persisted key format; changing it orphans every Weaviate collection.
+    # Captured from v0.1.0.
+    assert (
+        collection_name("mini-rag", "t2v", "bge-small-en-v1.5", "w120o20")
+        == "MiniRag_t2v_bge_small_en_v1_5_w120o20_9e8526f5"
+    )
+
+
+@pytest.mark.parametrize("bad", ["", "A", "mini-rag\n", 3])
+def test_collection_name_rejects_bad_project(bad: object) -> None:
+    with pytest.raises(ProjectError):
+        collection_name(bad, "x")  # type: ignore[arg-type]  # a non-str project is one of the cases
+
+
+@pytest.mark.parametrize("bad", ["", "A", "mini-rag\n", 3])
+def test_experiment_name_rejects_bad_project(bad: object) -> None:
+    with pytest.raises(ProjectError):
+        experiment_name(bad)  # type: ignore[arg-type]  # a non-str project is one of the cases
+
+
 def test_u_3_hash_distinguishes_part_boundaries() -> None:
     assert collection_name("p", "a_b", "c") != collection_name("p", "a", "b_c")
 

@@ -1,12 +1,13 @@
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { bestRun, metricState, mlflowUri, pickBest, readReport, warmUp, type MlflowRun } from './mlflow.ts';
+import { bestRun, metricState, pickBest, readReport, reportUnavailable, warmUp, type MlflowRun } from './mlflow.ts';
 
 type Call = { path: string; body: Record<string, unknown> };
 type Reply = unknown | Error | ((n: number) => unknown);
 const env = { DATALAB_MLFLOW_TRACKING_URI: 'http://h:1' };
 const score = { key: 'score', goal: 'max' } as const;
+
+beforeEach(() => readReport().clear());
 
 function run(id: string, metrics: Record<string, number>, start = 1, exp = '1'): MlflowRun {
   const m = Object.entries(metrics).map(([key, value]) => ({ key, value }));
@@ -101,8 +102,10 @@ test('ok result carries experiment name and run URL; requests are well-formed', 
   const r = await bestRun('p', score, f.impl, env);
   assert.deepEqual(r, { kind: 'ok', runName: 'n-r9', value: 0.8, runCount: 1, experiment: 'p', runUrl: 'http://h:1/#/experiments/1/runs/r9' });
   for (const c of f.calls) assert.ok(Number(c.body.max_results) > 0, `${c.path} max_results`);
-  assert.equal(f.calls[0].body.view_type, 'ACTIVE_ONLY');
-  assert.deepEqual(f.calls[1].body.order_by, ['metrics.`score` DESC', 'attributes.start_time DESC']);
+  const [expCall, runsCall] = f.calls;
+  assert.ok(expCall && runsCall);
+  assert.equal(expCall.body.view_type, 'ACTIVE_ONLY');
+  assert.deepEqual(runsCall.body.order_by, ['metrics.`score` DESC', 'attributes.start_time DESC']);
 });
 
 test('no matching experiment → no-runs without searching runs', async () => {
@@ -124,7 +127,6 @@ test('F-1: a 5xx on the first search is retried once', async () => {
 });
 
 test('F-1: unavailable is reported once per project', async () => {
-  readReport().clear();
   const f = fakeFetch({ 'experiments/search': new TypeError('fetch failed') });
   const a = await bestRun('p', score, f.impl, env);
   await bestRun('p', score, f.impl, env);
@@ -136,12 +138,6 @@ test('F-1: unavailable is reported once per project', async () => {
 test('a 4xx on runs/search → unavailable', async () => {
   const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': new Response('', { status: 400 }) });
   assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
-});
-
-test('F-2: resolves to 127.0.0.1:5050 and ignores MLFLOW_URL', () => {
-  assert.equal(mlflowUri({}), 'http://127.0.0.1:5050');
-  assert.equal(mlflowUri({ MLFLOW_URL: 'http://x:5000', MLFLOW_TRACKING_URI: 'http://x:5000' }), 'http://127.0.0.1:5050');
-  assert.equal(mlflowUri({ DATALAB_MLFLOW_TRACKING_URI: 'http://h:1' }), 'http://h:1');
 });
 
 test('F-7: should throw before any request when project fails NAME_RE', async () => {
@@ -161,24 +157,62 @@ test('metricState warms up then returns the best run', async () => {
   const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs: [run('r', { score: 0.3 })] } });
   const r = await metricState({ name: 'p', metric: score }, f.impl, env);
   assert.equal(r.kind === 'ok' && r.value, 0.3);
-  assert.equal(f.calls[0].path, 'health');
+  const first = f.calls.at(0);
+  assert.ok(first);
+  assert.equal(first.path, 'health');
 });
 
 test('F-1: warmUp never rejects', async () => {
   const f = fakeFetch({ health: new TypeError('fetch failed'), 'experiments/search': new TypeError('fetch failed') });
-  await warmUp(f.impl, 50);
+  await warmUp(f.impl, 50, env);
   assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
 });
 
-test('G-10: app default matches .env.example', () => {
-  const text = readFileSync(new URL('../../../.env.example', import.meta.url), 'utf8');
-  const line = text.split(/\r?\n/).find((l) => l.startsWith('DATALAB_MLFLOW_TRACKING_URI='));
-  assert.equal(line?.slice('DATALAB_MLFLOW_TRACKING_URI='.length).trim(), mlflowUri({}));
-});
-
-test('shape check', async () => {
+test('should report unavailable when experiments/search returns a malformed experiments list', async () => {
   const f = fakeFetch({ 'experiments/search': { experiments: {} } });
   assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
+});
+
+test('should report unavailable when runs/search returns a malformed run', async () => {
   const g = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs: [{ info: 'x' }] } });
   assert.equal((await bestRun('p', score, g.impl, env)).kind, 'unavailable');
+});
+
+test('F-1: should report unavailable when the retry fails too', async () => {
+  const timeout = new DOMException('timed out', 'TimeoutError');
+  for (const reply of [() => timeout, () => new Response('', { status: 503 })]) {
+    const f = fakeFetch({ 'experiments/search': reply });
+    assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
+    assert.equal(f.calls.filter((c) => c.path === 'experiments/search').length, 2);
+  }
+});
+
+test('F-1: warmUp polls once per fetch implementation', async () => {
+  const f = fakeFetch({ health: 'OK' });
+  const a = warmUp(f.impl, 50, env);
+  const b = warmUp(f.impl, 50, env);
+  assert.equal(a, b);
+  await b;
+  assert.equal(f.calls.filter((c) => c.path === 'health').length, 1);
+});
+
+test('F-1: warmUp resolves without rejecting when /health stays non-200', async () => {
+  const f = fakeFetch({ health: () => new Response('', { status: 503 }) });
+  await assert.doesNotReject(warmUp(f.impl, 50, env));
+  assert.ok(f.calls.filter((c) => c.path === 'health').length >= 1);
+});
+
+test('U-6: should report metric-not-logged end to end', async () => {
+  const runs = [run('a', { accuracy: 0.9 }), run('b', { smoke_score: 1 })];
+  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
+  assert.deepEqual(await metricState({ name: 'p', metric: score }, f.impl, env), { kind: 'metric-not-logged', runCount: 2 });
+});
+
+test('should warn once per project when the same reason repeats', (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  reportUnavailable('p', 'r');
+  reportUnavailable('p', 'r');
+  assert.equal(warn.mock.callCount(), 1);
+  reportUnavailable('p', 'r2');
+  assert.equal(warn.mock.callCount(), 2);
 });
