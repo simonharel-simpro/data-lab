@@ -40,11 +40,11 @@ def _run(  # every knob a config-identity test varies is a keyword
     answer: Answer = _answer,
     k: int = 3,
     size: int = 120,
-    gen_model: str = "deepseek-v4-flash",
+    gen_model: str = "test-gen-model",
 ) -> str:
     settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
     pilot = PilotSettings(  # type: ignore[call-arg]
-        _env_file=None, dgx_base_url="http://dgx.invalid", gen_model=gen_model
+        _env_file=None, dgx_base_url="http://dgx.invalid", gen_model=gen_model, max_tokens=384
     )
     project = Project(name="mini-rag", root=tmp_path)
     config = RunConfig(
@@ -82,8 +82,8 @@ def test_run_logs_project_tag_and_experiment(tmp_path: Path, sqlite_uri: str) ->
         "k": "3",
         "n": "None",
         "questions_hash": "9201f68b69af8a419b78d4666e6a712712b6882ccb4d43baafe034e60e457d05",
-        "gen_model": "deepseek-v4-flash",
-        "max_tokens": "512",
+        "gen_model": "test-gen-model",
+        "max_tokens": "384",
         "size": "120",
         "overlap": "20",
         "collection": "MiniRag_x",
