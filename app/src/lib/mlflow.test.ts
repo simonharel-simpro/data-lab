@@ -168,11 +168,44 @@ test('F-1: warmUp never rejects', async () => {
   assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
 });
 
-test('shape check', async () => {
+test('should report unavailable when experiments/search returns a malformed experiments list', async () => {
   const f = fakeFetch({ 'experiments/search': { experiments: {} } });
   assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
+});
+
+test('should report unavailable when runs/search returns a malformed run', async () => {
   const g = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs: [{ info: 'x' }] } });
   assert.equal((await bestRun('p', score, g.impl, env)).kind, 'unavailable');
+});
+
+test('F-1: should report unavailable when the retry fails too', async () => {
+  const timeout = new DOMException('timed out', 'TimeoutError');
+  for (const reply of [() => timeout, () => new Response('', { status: 503 })]) {
+    const f = fakeFetch({ 'experiments/search': reply });
+    assert.equal((await bestRun('p', score, f.impl, env)).kind, 'unavailable');
+    assert.equal(f.calls.filter((c) => c.path === 'experiments/search').length, 2);
+  }
+});
+
+test('F-1: warmUp polls once per fetch implementation', async () => {
+  const f = fakeFetch({ health: 'OK' });
+  const a = warmUp(f.impl, 50, env);
+  const b = warmUp(f.impl, 50, env);
+  assert.equal(a, b);
+  await b;
+  assert.equal(f.calls.filter((c) => c.path === 'health').length, 1);
+});
+
+test('F-1: warmUp resolves without rejecting when /health stays non-200', async () => {
+  const f = fakeFetch({ health: () => new Response('', { status: 503 }) });
+  await assert.doesNotReject(warmUp(f.impl, 50, env));
+  assert.ok(f.calls.filter((c) => c.path === 'health').length >= 1);
+});
+
+test('U-6: should report metric-not-logged end to end', async () => {
+  const runs = [run('a', { accuracy: 0.9 }), run('b', { smoke_score: 1 })];
+  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
+  assert.deepEqual(await metricState({ name: 'p', metric: score }, f.impl, env), { kind: 'metric-not-logged', runCount: 2 });
 });
 
 test('should warn once per project when the same reason repeats', (t) => {

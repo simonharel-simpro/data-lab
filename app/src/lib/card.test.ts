@@ -9,6 +9,13 @@ test('F-7: should reject a metric key containing a backtick', () => {
   assert.equal(r.success, false);
 });
 
+test('F-7: should reject a metric key containing a quote, a space or a dollar sign', () => {
+  for (const key of ['a"b', "a'b", 'a b', 'a$b']) {
+    const r = cardSchema.safeParse({ ...base, metric: { key, goal: 'max' } });
+    assert.equal(r.success, false, key);
+  }
+});
+
 test('a plain metric key is accepted', () => {
   const r = cardSchema.safeParse({ ...base, metric: { key: 'eval/score_v1.2-x', goal: 'min' } });
   assert.equal(r.success, true);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { cardSchema } from './card.ts';
-import { missing } from './completeness.ts';
+import { missing, sections } from './completeness.ts';
 
 const metric = { key: 'score', goal: 'max' } as const;
 const full = '## Objectif\no\n## Approche\na\n';
@@ -23,6 +23,14 @@ test('status ladder: en cours without data/metric', () => {
   assert.deepEqual(gaps, ['Données', 'Métrique']);
 });
 
+test('should require the conclu sections when status is abandonné', () => {
+  assert.deepEqual(missing({ status: 'abandonné', data: 'd', metric }, full), ['Enseignements', 'Suite']);
+});
+
+test('should report Approche missing when status is en cours', () => {
+  assert.deepEqual(missing({ status: 'en cours', data: 'd', metric }, '## Objectif\no\n'), ['Approche']);
+});
+
 test('U-9a: duplicate heading is filled if any occurrence has content', () => {
   const gaps = missing({ status: 'en cours', data: 'd', metric }, '## Objectif\no\n## Approche\nx\n## Approche\n');
   assert.deepEqual(gaps, []);
@@ -38,6 +46,28 @@ test('U-9c: comment-only section counts as missing', () => {
 
 test('U-9d: heading inside a code fence is not a section', () => {
   assert.deepEqual(missing({ status: 'idée' }, '```md\n## Objectif\nx\n```\n'), ['Objectif']);
+});
+
+test('should ignore a heading inside a ~~~ fence', () => {
+  assert.deepEqual(missing({ status: 'idée' }, '~~~\n## Objectif\nx\n~~~\n'), ['Objectif']);
+});
+
+test('should keep a fence open until a closing fence at least as long', () => {
+  // The three-backtick line does not close the four-backtick fence, so the second heading is still code.
+  const body = '````\n## Objectif\nx\n```\n## Objectif\ny\n````\n';
+  assert.deepEqual(missing({ status: 'idée' }, body), ['Objectif']);
+});
+
+test('should blank only its own section when a <!-- is never closed', () => {
+  const body = '## Objectif\n<!-- never closed\n## Approche\na\n';
+  assert.deepEqual(missing({ status: 'en cours', data: 'd', metric }, body), ['Objectif']);
+});
+
+test('should match an NFD heading against the NFC section name', () => {
+  // No required section name has an accent, so this goes through sections() directly.
+  const found = sections('## Re\u0301sume\u0301\nx\n');
+  assert.equal(found.get('R\u00e9sum\u00e9'), true);
+  assert.equal(found.has('Re\u0301sume\u0301'), false);
 });
 
 test('CRLF body is parsed', () => {

@@ -90,3 +90,10 @@
 - Territory was: the old parser read a run whose `data` was present but not an object (`null`, a string) as "no metrics"; `.default({ metrics: [] })` only covers an absent `data`, so such a run now throws `unexpected response` and the card shows `unavailable`. Also ±Infinity `start_time` (old `Number(x) || 0` kept it) now becomes 0. No test pinned either; real MLflow omits empty `data` rather than nulling it.
 - I did: kept the spec's schema verbatim (fail-loud on a malformed run is the plan's stated direction); no test added for an unspecified behaviour.
 - One-off or pattern?: one-off — if `data: null` should stay tolerated, `z.preprocess((d) => d ?? undefined, …)` on `data` plus a test; orchestrator's call.
+
+## Fix Phase 5 (review-2026-11-04) — no section name has an accent, so `missing()` cannot observe NFC
+
+- Plan assumed: 5.1.5 "match an NFD heading against the NFC section name" is observable through a required section.
+- Territory was: `SECTIONS_BY_STATUS` names (Objectif, Approche, Enseignements, Suite) are pure ASCII; dropping `.normalize('NFC')` in `sections()` changes no `missing()` result.
+- I did: tested the exported `sections()` directly with an NFD heading built from `\u0301` escapes, looked up under its NFC form (`\u00e9` escapes); it goes red when `.normalize('NFC')` is removed.
+- One-off or pattern?: one-off.

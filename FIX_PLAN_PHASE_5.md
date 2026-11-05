@@ -1,5 +1,6 @@
 # Fix Plan — Phase 5: Test gaps — TS
 
+**Status:** ✅ Complete — branch fix-phase-5-ts-test-gaps, 2026-11-05
 **Severity:** 🟡
 **Agent:** general-purpose. Brief it on `app/` conventions:
 - tests are `src/**/*.test.ts` run by `node --test` with type stripping (`import { test } from 'node:test'`, `import assert from 'node:assert/strict'`);

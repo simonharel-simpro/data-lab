@@ -9,7 +9,7 @@ A phase is complete only when it is merged into `fix/review-2026-11-04` **and** 
 | 2 | Gates, input validation & dependency hygiene | ✅ complete | fix-phase-2-gates-validation-deps | clean @ da43950 (1 fix-check iter) | 2026-11-05 |
 | 3 | App boundaries (TS) | ✅ complete | fix-phase-3-app-boundaries | clean @ f47e288 (1 fix-check iter) | 2026-11-05 |
 | 4 | Test gaps — Python | ✅ complete | fix-phase-4-python-test-gaps | clean @ d0f4594 (1 fix-check iter) | 2026-11-05 |
-| 5 | Test gaps — TS | pending | — | — | — |
+| 5 | Test gaps — TS | implemented (awaiting /check) | fix-phase-5-ts-test-gaps | — | — |
 
 ## Phase 1 — Run integrity & resilience (pilot)
 
@@ -68,3 +68,13 @@ Cross-phase regressions: none.
 
 Each new test pins existing behaviour. Each was seen red under a targeted source mutation. No source bugs found, so no xfail tests.
 Gap: `corpus.py:21`'s `\r\n` replace is redundant, since `str.split()` already treats `\r` as whitespace. No test can kill that mutation.
+
+## Phase 5 — Test gaps (TS)
+
+**Implemented:** 2026-11-05 · **Branch:** fix-phase-5-ts-test-gaps · **Agent:** general-purpose (node 22)
+**Tooling:** `npm test` 65/65 pass, 100% line / 93.18% branch coverage · `astro check` 0 errors · `tsc` 0 errors · pre-push hooks pass · weak_tests 0. Tests only.
+
+- ✅ 5.1 `completeness.ts`: `abandonné`, `en cours`, `~~~` and long fences, an unterminated `<!--`, NFD→NFC headings (6 tests)
+- ✅ 5.2 MLflow client error paths (retry fails too, warmUp dedup and non-200), `'shape check'` split in two (grep 1→0), `metric-not-logged` end to end, metric-key rejection table
+
+Each new test pins existing behaviour and was seen red under a targeted source mutation. No `{ todo }` bugs.
