@@ -16,7 +16,8 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 - **Python:** 3.12, managed with uv; one env per project; ruff (single root `ruff.toml`), pytest.
 - **App:** Astro 7.4.1 on Node 22 (static output, no server adapter); zod via `astro/zod`; tests with `node --test`
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
-- **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile.
+- **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
+  web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
 - **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps.
   Pre-push stage: `gates-datalab`, `gates-mini-rag` (lint-imports + pyright + pytest with coverage per tree),
@@ -41,7 +42,8 @@ projects/<name>/        one project per folder: own env, PROJECT.md card (projec
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
-tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C patches it)
+tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
+tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,

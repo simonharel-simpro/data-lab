@@ -92,3 +92,23 @@ OpenAI-compatible API (a second SDK and a rewrite of the generator); `anthropic/
 **Consequences:** Questions and retrieved passages (a snapshot of this repo's public docs) leave the machine, and
 runs cost OpenRouter credits (a few cents per sweep). OpenRouter may route to different upstream providers, so
 determinism is weaker than on the DGX.
+
+## 2026-11-05 — Weavit UI in the browser: a web mode in the fork
+
+**Status:** accepted
+**Context:** The user wants the app to link straight to a project's Weaviate collection. Weavit UI is an Electron
+app, so it has no URL. No maintained self-hosted web UI for Weaviate fits: the closest (a Streamlit app) can only
+auto-connect to Weaviate Cloud, defaults to Demo-RAG's ports and ships delete buttons.
+**Decision:** Add a web mode to the fork. The renderer only reaches the backend through `window.api` and the main
+process touches Electron in three places, so `buildApi(invoke)`, `registerHandlers(register)` and a `StoreHost`
+let one `node:http` server (no new dependency) host the same handlers and renderer. It binds 127.0.0.1, checks
+`Host`/`Origin`, requires a custom header on every call, and keeps API keys in memory. `?collection=` opens a
+collection; the app links to it from the best run's `collection` param, in dev only (D-14). The RAG tab gets an
+OpenRouter preset (Weaviate's OpenAI module; the Anthropic module drops a reasoning model's answer), with the key
+injected by the server from `OPENROUTER_API_KEY`. The same session upgrades the fork's build to Vite 8.
+**Alternatives considered:** Rebuild a browser in the Astro app (a new product to maintain, read-only at first);
+the Streamlit app in compose (manual connection every session, third-party code, no deep link); a `weavit://`
+protocol handler (fragile under WSL, where the browser and the app run on different sides).
+**Consequences:** The fork drifts further from upstream (#5), in a few contained files. Anything on the machine can
+reach 127.0.0.1:3080; the header and host checks stop other web pages, not local processes. With the OpenRouter key
+loaded, every Weaviate call carries it, so a query using the plain OpenAI provider would send it to OpenAI.

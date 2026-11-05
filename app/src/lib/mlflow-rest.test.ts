@@ -32,3 +32,15 @@ test('should throw on a malformed run or experiment', () => {
   assert.throws(() => parseRuns({ runs: [{ info: { run_id: 1, experiment_id: '1' } }] }), /unexpected response/);
   assert.throws(() => parseExperiments({ experiments: [{ experiment_id: '1' }] }), /unexpected response/);
 });
+
+test('should keep string params and drop malformed ones', () => {
+  const params = [{ key: 'collection', value: 'MiniRag_x' }, { key: 'k', value: 3 }, { value: 'v' }, 'junk'];
+  const [run] = parseRuns({ runs: [{ info, data: { metrics: [], params } }] });
+  assert.ok(run);
+  assert.deepEqual(run.data.params, [{ key: 'collection', value: 'MiniRag_x' }]);
+});
+
+test('should read absent params as empty', () => {
+  const [run] = parseRuns({ runs: [{ info, data: { metrics: [] } }] });
+  assert.deepEqual(run?.data.params, []);
+});
