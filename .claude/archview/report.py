@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Summarise .claude/archview/usage.jsonl — ArchView adoption vs grep."""
-import json, sys, collections
+
+import collections
+import json
+import sys
 from pathlib import Path
 
 log = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).with_name("usage.jsonl"))
