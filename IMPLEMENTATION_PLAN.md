@@ -144,7 +144,7 @@ Trust boundaries crossed: network (OpenRouter, LiveKit), subprocess/concurrency 
 | F-13 | WSL2 browser media | cross-platform | smoke checks audio both ways, records UDP vs TCP | manual (README runbook) | 1 |
 | F-14 | Retries inflate latency | observability | log session error/retry counts as metrics | `test_f_14_session_errors_are_counted` | 3 |
 | F-15 | TaskGroup summarisation adds an LLM call | state | set `summarize_chat_ctx=False` explicitly, logged as param | `test_f_15_taskgroup_summarize_flag_is_off_and_logged` | 2 |
-| F-16 | Turn/interruption detection differs dev vs start, may call LiveKit Cloud | cross-platform | every session pins `turn_handling` VAD; worker `max_tool_steps=6`; both logged | `test_u_20_caller_llm_uses_configured_model_and_temperature` (params) | 2, 3 |
+| F-16 | Turn/interruption detection differs dev vs start, may call LiveKit Cloud | cross-platform | every session pins `turn_handling` VAD; worker `max_tool_steps=6`; both logged | `test_f_16_turn_handling_and_tool_steps_are_pinned` | 2, 3 |
 | F-17 | Caller session ignores AGENT-kind participants | external | caller `room_options.participant_kinds=[AGENT]` | `test_one_live_call_produces_a_row` (integration) | 3 |
 
 Each mode above is a phase acceptance criterion: its handling AND its test ship in the named phase.
@@ -175,7 +175,7 @@ Decision points: scoring, aggregation, winner selection, naturalness counters, c
 | U-18 | slot_change persona | changes the slot during the agent's read-back, before saying yes; the agent updates and re-reads; session ends after confirm | `test_u_18_slot_change_during_readback_reconfirms_new_slot` (integration) | 2, 3 |
 | U-19 | Cost per call | `cost_per_call_usd = cost_usd / (scored + timeout + agent_lost)`, caller spend included (D-16) | `test_u_19_cost_per_call_uses_exact_rate_denominator` | 3 |
 | U-20 | Caller variance | caller model + temperature from settings (D-17), logged | `test_u_20_caller_llm_uses_configured_model_and_temperature` | 3 |
-| U-21 | Budget before a sweep | refuse to start when `limit_remaining` < the previous sweep's `cost_usd` × 1.2 (no previous → warn only) | `test_u_21_sweep_refuses_to_start_when_remaining_credit_below_estimate` | 3 |
+| U-21 | Budget before a sweep | refuse to start when `limit_remaining` < the previous sweep's `cost_usd` × 1.2 (no previous, no limit or failed read → warn only) | `test_u_21_sweep_refuses_to_start_when_remaining_credit_below_estimate` | 3 |
 | U-22 | Stage-1 edge cases | no intelligible TTS → `NoEligibleCandidate`, defaults kept, run tagged; STT margin measured from the best | `test_u_22_pick_tts_with_no_intelligible_candidate_raises`, `test_u_22_stt_margin_is_measured_from_the_best` | 1 |
 | U-23 | Human ratings | mean per arch, ≥ 1 call per arch, not blind | `test_u_23_human_ratings_aggregate_by_mean_per_arch` | 3 |
 | U-24 | Spelled names | runs of single letters separated by `-`/spaces are joined before name normalisation | `test_u_24_spelled_letters_normalise_to_joined_name` | 1 |

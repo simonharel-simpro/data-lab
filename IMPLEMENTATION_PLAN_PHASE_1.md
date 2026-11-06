@@ -117,7 +117,8 @@ spaces ("S-M-Y-T-H" → "smyth", U-24), NFKC, casefold, drop `'` and `.`, collap
 `ToolArg(name: str, type: Literal["str","problem_type","slot_id"])`, `ToolSchema(name: str, description: str, args:
 tuple[ToolArg, ...])`; `TOOL_SCHEMAS: tuple[ToolSchema, ...]` = `record_name(name)`, `record_phone(phone)`,
 `record_address(address)`, `record_problem(problem_type)`, `choose_slot(slot_id)`. `to_openai_tools() -> list[dict]`
-(JSON-schema dicts; `problem_type` enum = plumbing/electrical/hvac/appliance/other) and `to_raw_tools() -> list[RawFunctionTool]`
+(FLAT dicts `{"name", "description", "parameters": <JSON schema>}` — `function_tool(raw_schema=…)` requires top-level
+`name` and `parameters`, not the `{"type": "function", "function": …}` wrapper; `problem_type` enum = plumbing/electrical/hvac/appliance/other) and `to_raw_tools() -> list[RawFunctionTool]`
 (`livekit.agents.function_tool(_noop, raw_schema=<that dict>)` per schema — `LLM.chat(tools=…)` takes tool objects, not dicts).
 (`tool_schemas.py` then imports livekit: it lives outside `booking`, so the purity contract is unaffected.) Phase 2's tools must use
 these names and arg names (U-26).
@@ -232,3 +233,5 @@ MLflow on a tmp sqlite URI as in mini-rag `tests/conftest.py`)
 
 **Done when:** hooks pass (incl. the new gates), the spike passes live, the three bench runs are in MLflow
 `voice-arch/bench`, `VoiceSettings` defaults = winners (reason in PROJECT.md), the browser smoke is in the README.
+
+<!-- plan-validate: READY 2026-11-05 sha256:4f1a67a0b20b -->

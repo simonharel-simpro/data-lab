@@ -42,7 +42,8 @@ AND is not booked (U-7, U-17); problem_type valid (U-5) — errors → `PersonaE
 `llm_factory(settings, model=settings.caller_llm_model, temperature=settings.caller_temperature)`, U-20;
 `turn_handling={"turn_detection": "vad", "interruption": {"mode": "vad"}}` as the worker). Started with
 `room_options=RoomOptions(participant_kinds=[rtc.ParticipantKind.PARTICIPANT_KIND_AGENT])` — the default kinds exclude
-agents, so without it the caller never hears the booking agent. The caller never ends the call: the
+agents, so without it the caller never hears the booking agent. Import: `from livekit.agents.voice.room_io import RoomOptions` (not exported
+at the top level). The caller never ends the call: the
 call ends when the agent's result arrives or a deadline hits (runner).
 
 #### `src/voice_arch/call_env.py`
@@ -74,7 +75,8 @@ then calls `async run_sweep(env, personas, arch, reps, settings, *, project, dl_
 last_full_cost=last_full_sweep_cost) -> str` (run id):
 1. Budget check (U-21): `key_reader(key).limit_remaining` < 1.2 × `last_full_cost()` → raise `BudgetTooLow` (no room
    created); `last_full_sweep_cost()` returns `cost_usd` of the newest FINISHED run tagged `full=true` in
-   `voice-arch/conversations`, or None → warning only.
+   `voice-arch/conversations`, or None → warning only. `limit_remaining is None` (key without a limit) or a failed
+   `key_reader` call → warning, check skipped, the sweep runs (the key's own limit, if any, still stops it with 402).
 2. `with tracked_run(project, dl_settings, run_name=f"arch-{arch}", sub="conversations") as run_id, SpendTracker(key)
    as spend:` loop persona × rep, append each `CallRow` to `results/<run_id>.jsonl` at once; `AgentNeverJoined` /
    `ProviderAuthStop` propagate → run FAILED (F-2, F-4).
@@ -140,6 +142,7 @@ time (one sweep per key at a time); browser call + `rate.py`; `decide`; ~30 call
 | test_runner · `test_f_6_more_than_10_percent_caller_faults_fails_the_run` | 2/10 caller_fault → FAILED, rows still in JSONL | F-6 |
 | test_runner · `test_u_21_sweep_refuses_to_start_when_remaining_credit_below_estimate` | remaining 5.0, last full sweep cost 10.0 → `BudgetTooLow`, no room | U-21 |
 | test_runner · `test_u_21_no_previous_sweep_warns_and_runs` | `last_full_cost` → None → warning logged, sweep runs | U-21 |
+| test_runner · `test_u_21_unlimited_key_or_failed_read_skips_the_check` | `limit_remaining=None`, or `key_reader` raises → warning, sweep runs | U-21 |
 | test_runner · `test_u_1_sweep_with_fewer_reps_than_full_logs_smoke_metrics_only` | 1 persona × 1 rep → metrics all `smoke_*`, tag `full=false` | U-1 |
 | test_runner · `test_f_12_cost_absent_when_key_read_fails` | 2nd key read fails → no `cost_usd`, run FINISHED | F-12 |
 | test_runner · `test_u_20_caller_llm_uses_configured_model_and_temperature` | `make_caller_session(settings, llm_factory=spy)` → spy called with `caller_llm_model`, `caller_temperature`; both logged as params | U-20 |
@@ -166,3 +169,5 @@ time (one sweep per key at a time); browser call + `rate.py`; `decide`; ~30 call
 
 **Done when:** unit tests + hooks pass, the live call passes, full sweeps a, b, c FINISHED in `voice-arch/conversations`,
 ≥ 1 human rating per arch, `decide` output in PROJECT.md, the app card shows `exact_rate`.
+
+<!-- plan-validate: READY 2026-11-05 sha256:5e5a0c660646 -->

@@ -73,8 +73,10 @@ value only; None, "", unknown, whitespace or uppercase ("A") → `UnknownArchErr
 #### `agents/tools.py`
 `@function_tool` wrappers named exactly as `TOOL_SCHEMAS` (+ `check_slots(day, part)`, `confirm_booking()`), each
 delegating to `booking.actions` with `ctx.userdata`. After a success reply ("Noted.", a chosen slot, "Confirmed."),
-`complete_current_task(ctx)`: `a = ctx.session.current_agent; if isinstance(a, AgentTask) and not a.done():
-a.complete(None)` (no-op under arch A; `complete` raises if called twice). `confirm_booking`, on "Confirmed.", says
+`complete_current_task(ctx, field)`: `a = ctx.session.current_agent; if isinstance(a, AgentTask) and not a.done() and
+getattr(a, "FIELD", None) == field: a.complete(None)` — a task completes only when ITS OWN field was written (each task
+class declares `FIELD`: "name", "phone", "address", "problem_type", "slot_id", "confirmed"); no-op under arch A;
+`complete` raises if called twice. Arch C's `update_record` never completes a task. `confirm_booking`, on "Confirmed.", says
 `GOODBYE` and schedules `ctx.session.shutdown(drain=True)` (F-1). `ALL_TOOLS` list. `check_slots` description states the
 ISO date format.
 
@@ -86,8 +88,8 @@ ISO date format.
 break the shared-instruction rule): `NameTask`, `PhoneTask`, `AddressTask`, `ProblemTask`, `SlotTask`, `ConfirmTask`,
 each `AgentTask[None]` with instructions = CONTEXT + its ASK_*/CONFIRM, its tool(s) from `agents/tools.py` (which complete
 the task, see above), and `on_enter` → `await self.session.generate_reply()` (an `AgentTask`'s default `on_enter` does
-nothing, so without it the task stays silent). Regression (U-18): TaskGroup adds an `out_of_scope` tool to each task
-that returns to an earlier task — the CONFIRM instruction relies on it to change the slot. `build_task_group() -> TaskGroup`:
+nothing, so without it the task stays silent). Regression (U-18): TaskGroup adds an `out_of_scope` tool to every task after
+the first, which returns to an earlier task — the CONFIRM instruction relies on it to change the slot. `build_task_group() -> TaskGroup`:
 `TaskGroup(summarize_chat_ctx=SUMMARIZE_CHAT_CTX)`, `.add(lambda: NameTask(), id="name", description="collect the
 caller's name")`, then phone, address, problem, slot, confirm. `BookingFlowAgent(Agent)`: greets, then `await
 build_task_group()`. The tools are the only write path (no write from task results).
@@ -113,8 +115,8 @@ async def entry(ctx: JobContext)`:
 1. `meta = parse_metadata(ctx.job.metadata)` → `(Arch, run_id or "manual")`; empty/invalid JSON or no `arch` →
    `UnknownArchError` (never `JSONDecodeError`) → send an error `CallResult` and return (F-9).
 2. `session = AgentSession(stt=make_stt(s), llm=make_llm(s, providers=s.provider_list), tts=make_tts(s),
-   vad=silero.VAD.load(), userdata=BookingState(), turn_handling={"turn_detection": "vad", "interruption":
-   {"mode": "vad"}}, max_tool_steps=MAX_TOOL_STEPS)` with `MAX_TOOL_STEPS: Final = 6` (pinned so dev and start modes
+   vad=silero.VAD.load(), userdata=BookingState(), turn_handling=TURN_HANDLING,
+   max_tool_steps=MAX_TOOL_STEPS)` with `TURN_HANDLING: Final = {"turn_detection": "vad", "interruption": {"mode": "vad"}}` with `MAX_TOOL_STEPS: Final = 6` (pinned so dev and start modes
    behave alike and nothing calls LiveKit Cloud inference); count `error` events; keep the last `CloseEvent`.
 3. `await session.start(agent=build_agent(arch), room=ctx.room)`; wait for the close event (asyncio.Event).
 4. `result = build_result(...)`: report via `ctx.make_session_report(session).to_dict()` (raises → `report=None`,
@@ -149,6 +151,8 @@ report_fn, *, summarize_chat_ctx: bool | None, max_tool_steps: int) -> CallResul
 | booking/test_actions · `test_check_slots_rejects_non_iso_day` | day "next tuesday" → "Use a date like 2026-11-10." | input |
 | test_arch · `test_f_9_unknown_arch_metadata_is_refused_not_defaulted` | None, "", "d", "B ", "A" → `UnknownArchError` | F-9 |
 | test_arch · `test_parse_arch_accepts_known_values` | "a","b","c" → A/B/C | F-9 |
+| agents/test_tools · `test_correction_of_another_field_does_not_complete_the_task` | current task `SlotTask` (fake `current_agent`), `record_phone` / C's `update_record("phone", …)` → `complete` not called; `choose_slot` → called once | arch B/C |
+| test_worker · `test_f_16_turn_handling_and_tool_steps_are_pinned` | `TURN_HANDLING == {"turn_detection": "vad", "interruption": {"mode": "vad"}}`, `MAX_TOOL_STEPS == 6`; `build_result(..., max_tool_steps=6)` round-trips it | F-16 |
 | agents/test_arch_b · `test_f_15_taskgroup_summarize_flag_is_off_and_logged` | `build_task_group()._summarize_chat_ctx is False`; `build_result(..., summarize_chat_ctx=False, ...)` carries it | F-15 |
 | agents/test_tools · `test_u_26_tool_names_and_args_match_schemas` | each `TOOL_SCHEMAS` name exists in `ALL_TOOLS` with the same arg names (inspect signatures) | U-26 |
 | test_result · `test_result_round_trips` | CallResult with record + report → `from_json(to_json())` equal | D-7 |
@@ -162,3 +166,5 @@ report_fn, *, summarize_chat_ctx: bool | None, max_tool_steps: int) -> CallResul
 **Done when:** unit tests + hooks pass (coverage ≥ 70 with the pure modules carrying it), the integration tests pass
 live, and a browser call (Phase 1 page, `python -m voice_arch.token --room t1` + `python -m voice_arch.dispatch --arch b
 --room t1`) completes a booking with each arch.
+
+<!-- plan-validate: READY 2026-11-05 sha256:c360484d348e -->
