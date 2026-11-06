@@ -11,7 +11,8 @@ from mlflow.entities import Run
 from datalab.project import Project
 from datalab.settings import Settings
 from tests.fakes import FakeLlm, FakeStt, FakeTts
-from voice_arch.bench import BenchEnv, bench_llm, bench_stt, bench_tts, select
+from voice_arch.bench import BenchEnv, bench_llm, bench_stt, bench_tts
+from voice_arch.bench_record import select
 from voice_arch.bench_runs import LlmCase
 from voice_arch.budget import BudgetExceeded
 from voice_arch.corpus import Utterance, build_corpus
@@ -145,3 +146,16 @@ def test_select_refuses_out_of_range_n() -> None:
     for bad in (0, 4):
         with pytest.raises(ValueError, match="n must be between 1 and 3"):
             select([1, 2, 3], bad)
+
+
+async def test_bench_crash_keeps_earlier_candidate_rows(env_for: Callable[..., BenchEnv], tmp_path: Path) -> None:
+    env = env_for()
+    stts = {"a/ok": FakeStt(), "b/402": FakeStt(error=APIStatusError("payment required", status_code=402))}
+
+    with pytest.raises(APIStatusError):
+        await bench_stt(env, stts, _UTTERANCES, _corpus(tmp_path))
+
+    (run,) = _runs(env)
+    assert run.info.status == "FAILED"
+    lines = (env.results_dir / f"{run.info.run_id}.jsonl").read_text().splitlines()
+    assert [json.loads(line)["model"] for line in lines] == ["a/ok"]

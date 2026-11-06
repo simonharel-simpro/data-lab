@@ -49,3 +49,15 @@ def test_check_budget_stops_when_reaching_the_budget() -> None:
 
     assert (err.value.spent, err.value.budget) == (48.0, 50.0)
     check_budget(47.9, 2.0, 50.0)
+
+
+def test_spent_so_far_counts_soft_deleted_runs(sqlite_uri: str) -> None:
+    client = MlflowClient(sqlite_uri)
+    bench = client.create_experiment("voice-arch/bench")
+    _run(client, bench, 2.0)
+    deleted = client.create_run(bench)
+    client.log_metric(deleted.info.run_id, "cost_usd", 1.0, 1000)
+    client.set_terminated(deleted.info.run_id, status="FINISHED")
+    client.delete_run(deleted.info.run_id)
+
+    assert spent_so_far(client) == pytest.approx(3.0)

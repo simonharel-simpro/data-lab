@@ -53,6 +53,11 @@
   Territory was: `test_settings`/`test_audio` assert the pre-bench defaults; the plan requires defaults = winners.
   I did: updated those expected values to the winners (spec-mandated; not a loosening). Needs a `Test-Change:` trailer at commit.
   One-off or pattern?: one-off.
+- Plan assumed: the stage-1 bench lives in `bench.py` (plus `corpus.py`, `winners.py`).
+  Territory was: constants and the three measurement loops pushed `bench.py` past the 200-line module limit.
+  I did: two unplanned splits — `candidates.py` (the bench candidate constants, keeps `bench.py` < 200 lines) and `bench_runs.py` (`run_stt` / `run_tts` / `run_llm` measurements).
+  One-off or pattern?: one-off.
+- Third unplanned split: `bench_record.py` (`select`, `slug`, `appender`, `record_outcome`, `Outcome`, `Row`/`Emit`) keeps `bench.py` under 200 lines; the unused `Outcome.rows` field was dropped. Tests import `select` from `bench_record`.
 
 ## Phase 1 — part C
 

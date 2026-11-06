@@ -45,14 +45,15 @@ class FakeTts:
         model: str = "fake/tts",
         first_delay_s: float = 0.0,
         say: Callable[[str], str] = lambda text: text,
+        silent: bool = False,
     ) -> None:
         self.model = model
         self.calls: list[str] = []
-        self._delay, self._say = first_delay_s, say
+        self._delay, self._say, self._silent = first_delay_s, say, silent
 
     def synthesize(self, text: str) -> FakeStream:
         self.calls.append(text)
-        return FakeStream([text_frame(self._say(text))], self._delay)
+        return FakeStream([] if self._silent else [text_frame(self._say(text))], self._delay)
 
 
 class FakeStt:

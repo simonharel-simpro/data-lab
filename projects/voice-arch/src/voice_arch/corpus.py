@@ -7,10 +7,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from livekit import rtc
+
 from voice_arch.fields import field_errors
 from voice_arch.seams import Synthesizer
 
 MANIFEST = "manifest.json"
+
+
+class EmptyAudioError(Exception):
+    """A TTS stream ended without yielding any audio."""
 
 
 @dataclass(frozen=True)
@@ -75,7 +81,10 @@ async def build_corpus(
     manifest = out_dir / MANIFEST
     if not _cached(manifest, out_dir, utterances, tts_model, voice):
         for utterance in utterances:
-            frame = await tts.synthesize(utterance.text).collect()
+            frames = [event.frame async for event in tts.synthesize(utterance.text)]
+            if not frames:
+                raise EmptyAudioError(f"{tts.model}: TTS returned no audio")
+            frame = rtc.combine_audio_frames(frames)
             _atomic_write(out_dir / f"{utterance.id}.wav", frame.to_wav_bytes())
         shas = {u.id: _sha256((out_dir / f"{u.id}.wav").read_bytes()) for u in utterances}
         body = json.dumps(_wanted(utterances, tts_model, voice, shas), sort_keys=True, indent=1)

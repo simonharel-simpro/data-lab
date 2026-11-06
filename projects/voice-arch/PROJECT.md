@@ -41,7 +41,8 @@ Winners (the `VoiceSettings` defaults) and why:
 - STT `assemblyai/universal-3-6-pro`: 4 errors, within the margin (1 error per 40) of `gpt-4o-mini-transcribe` (5), and faster
   (0.61 s vs 0.85 s). `nova-3` is fastest but 15 errors behind: it writes street numbers as words ("twelve Oak Road",
   "four fifty Maple Avenue"), which `normalize_address` does not map to digits. Without those address-number misses nova-3
-  would be level with the winner on errors and win on latency: provisional, see the escalation in the Phase 1B report.
+  would be level with the winner on errors and win on latency. ESC-1-1 is resolved: the plan's scoring is kept and
+  assemblyai stays the winner (no longer provisional).
 - TTS `deepgram/aura-2`: all three pass the round-trip gate, lowest TTFB.
 - LLM `google/gemini-3.5-flash-lite`: ties haiku on accuracy, lower TTFT. The simulated caller's model is
   `anthropic/claude-haiku-5.5` (`caller_llm_model`, also 20/20), because D-17 says the caller is distinct from the

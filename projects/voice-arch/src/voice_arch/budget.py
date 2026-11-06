@@ -3,6 +3,7 @@
 from typing import Final
 
 from mlflow import MlflowClient
+from mlflow.entities import ViewType
 
 from datalab.project import experiment_name
 
@@ -27,7 +28,10 @@ def spent_so_far(client: MlflowClient) -> float:
             continue
         token: str | None = None
         while True:
-            page = client.search_runs([experiment.experiment_id], max_results=1000, page_token=token)
+            # ALL: a soft-deleted run still spent its money.
+            page = client.search_runs(
+                [experiment.experiment_id], run_view_type=ViewType.ALL, max_results=1000, page_token=token
+            )
             total += sum(run.data.metrics.get("cost_usd", 0.0) for run in page if run.info.status in _COUNTED_STATUSES)
             token = page.token
             if not token:

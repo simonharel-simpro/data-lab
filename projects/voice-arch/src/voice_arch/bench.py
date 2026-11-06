@@ -5,10 +5,7 @@ Run stt, then tts (its judge is the STT default, i.e. the stt winner), then llm.
 
 import argparse
 import asyncio
-import dataclasses
-import json
-import re
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -21,6 +18,7 @@ from datalab.project import Project, load
 from datalab.settings import Settings
 from datalab.tracking import preflight, tracked_run
 from voice_arch import audio
+from voice_arch.bench_record import Emit, Outcome, appender, record_outcome, select, slug
 from voice_arch.bench_runs import LlmCase, load_llm_cases, run_llm, run_stt, run_tts
 from voice_arch.budget import check_budget, spent_so_far
 from voice_arch.candidates import (
@@ -35,11 +33,7 @@ from voice_arch.openrouter_key import SpendTracker
 from voice_arch.seams import ChatModel, Synthesizer, Transcriber
 from voice_arch.settings import VoiceSettings
 from voice_arch.winners import (
-    Choice,
-    LlmRow,
     NoEligibleCandidate,
-    SttRow,
-    TtsRow,
     pick_llm,
     pick_stt,
     pick_tts,
@@ -58,39 +52,8 @@ class BenchEnv:
     key_client: httpx.Client | None = None
 
 
-@dataclass(frozen=True)
-class Outcome:
-    rows: Sequence[SttRow | TtsRow | LlmRow]
-    metrics: Mapping[str, float]
-    choice: Choice | None
-    reason: str
-    params: Mapping[str, str | int]
-
-
-def select[T](items: list[T], n: int | None) -> list[T]:
-    """The first `n` items; `n` outside 1..len is refused, never clamped."""
-    if n is None:
-        return items
-    if not 1 <= n <= len(items):
-        raise ValueError(f"n must be between 1 and {len(items)}, got {n}")
-    return items[:n]
-
-
-def _slug(model: str) -> str:
-    return re.sub(r"[^0-9A-Za-z]", "_", model)
-
-
-def _record(outcome: Outcome, sink: Path) -> None:
-    mlflow.log_params(outcome.params)
-    mlflow.log_metrics(dict(outcome.metrics))
-    mlflow.set_tags({"winner": outcome.choice.model if outcome.choice else "none", "winner_reason": outcome.reason})
-    sink.parent.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(dataclasses.asdict(row)) for row in outcome.rows]
-    sink.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
 async def _logged_run(
-    env: BenchEnv, component: str, params: Mapping[str, str | int], measure: Callable[[], Awaitable[Outcome]]
+    env: BenchEnv, component: str, params: Mapping[str, str | int], measure: Callable[[Emit], Awaitable[Outcome]]
 ) -> str:
     """Budget gate, then one run with the spend tracker inside it; a 401/402 propagates: run FAILED (F-4, F-4b)."""
     client = MlflowClient(env.dl.mlflow_tracking_uri)
@@ -102,7 +65,7 @@ async def _logged_run(
         SpendTracker(key, client=env.key_client, on_exit=on_exit),
     ):
         mlflow.log_params(params)
-        _record(await measure(), env.results_dir / f"{run_id}.jsonl")
+        record_outcome(await measure(appender(env.results_dir / f"{run_id}.jsonl")))
     return run_id
 
 
@@ -112,22 +75,22 @@ async def bench_stt(
     utterances: list[Utterance],
     make_corpus: Callable[[], Awaitable[Corpus]],
 ) -> str:
-    async def measure() -> Outcome:
+    async def measure(emit: Emit) -> Outcome:
         corpus = await make_corpus()  # synthesised inside the run, so its cost is attributed
-        rows = await run_stt(stts, corpus, utterances)
-        metrics = {f"stt_{_slug(r.model)}_{k}": v for r in rows for k, v in (("errors", r.errors), ("p50_s", r.p50_s))}
+        rows = await run_stt(stts, corpus, utterances, emit)
+        metrics = {f"stt_{slug(r.model)}_{k}": v for r in rows for k, v in (("errors", r.errors), ("p50_s", r.p50_s))}
         choice = pick_stt(rows)
-        return Outcome(rows, metrics, choice, choice.reason, {"corpus_hash": corpus.hash})
+        return Outcome(metrics, choice, choice.reason, {"corpus_hash": corpus.hash})
 
     params = {"candidates": ",".join(stts), "n": len(utterances), "corpus_tts_model": CORPUS_TTS_MODEL}
     return await _logged_run(env, "stt", params, measure)
 
 
 async def bench_tts(env: BenchEnv, ttss: Mapping[str, Synthesizer], lines: list[str], judge: Transcriber) -> str:
-    async def measure() -> Outcome:
-        rows = await run_tts(ttss, lines, judge, TTS_REPS)
+    async def measure(emit: Emit) -> Outcome:
+        rows = await run_tts(ttss, lines, judge, TTS_REPS, emit)
         metrics = {
-            f"tts_{_slug(r.model)}_{k}": v
+            f"tts_{slug(r.model)}_{k}": v
             for r in rows
             for k, v in (("ttfb_p50_s", r.ttfb_p50_s), ("intelligible", r.intelligible))
         }
@@ -135,22 +98,22 @@ async def bench_tts(env: BenchEnv, ttss: Mapping[str, Synthesizer], lines: list[
             choice, reason = pick_tts(rows), ""
         except NoEligibleCandidate as err:
             choice, reason = None, str(err)
-        return Outcome(rows, metrics, choice, choice.reason if choice else reason, {})
+        return Outcome(metrics, choice, choice.reason if choice else reason, {})
 
     params = {"candidates": ",".join(ttss), "n": len(lines), "reps": TTS_REPS, "judge_stt": judge.model}
     return await _logged_run(env, "tts", params, measure)
 
 
 async def bench_llm(env: BenchEnv, llms: Mapping[str, ChatModel], cases: list[LlmCase]) -> str:
-    async def measure() -> Outcome:
-        rows = await run_llm(llms, cases)
+    async def measure(emit: Emit) -> Outcome:
+        rows = await run_llm(llms, cases, emit)
         metrics = {
-            f"llm_{_slug(r.model)}_{k}": v
+            f"llm_{slug(r.model)}_{k}": v
             for r in rows
             for k, v in (("correct", r.correct), ("ttft_p50_s", r.ttft_p50_s))
         }
         choice = pick_llm(rows)
-        return Outcome(rows, metrics, choice, choice.reason, {})
+        return Outcome(metrics, choice, choice.reason, {})
 
     params = {"candidates": ",".join(llms), "n": len(cases), "llm_providers": "none", "temperature": 0}
     return await _logged_run(env, "llm", params, measure)

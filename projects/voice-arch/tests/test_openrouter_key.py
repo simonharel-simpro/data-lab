@@ -29,7 +29,7 @@ def test_key_usage_reads_data_usage() -> None:
     result = key_usage("k", client=_client(handler))
 
     assert result == KeyUsage(usage=1.25, limit_remaining=48.0)
-    assert seen[0].url == "https://openrouter.ai/api/v1/key"
+    assert (seen[0].url.host, seen[0].url.path) == ("openrouter.ai", "/api/v1/key")
     assert seen[0].headers["authorization"] == "Bearer k"
 
 

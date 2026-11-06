@@ -23,8 +23,8 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   `silero` plugins, `livekit-api` 1.2.2; every STT / TTS / LLM call goes to OpenRouter (`/audio/transcriptions`,
   `/audio/speech`, `/chat/completions`). Browser smoke client: `livekit-client` 2.23.0 from jsDelivr.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
-- **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps.
-  Pre-push stage: `gates-datalab`, `gates-mini-rag` (lint-imports + pyright + pytest with coverage per tree),
+- **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps (`declared-deps-voice-arch` covers the voice-arch tree).
+  Pre-push stage: `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
   `gates-app` (`npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
@@ -55,7 +55,7 @@ tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 line
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
-                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); Python gates `--locked`
+                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); voice-arch gates + pip-audit (job `voice-arch`); Python gates `--locked`
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```

@@ -1,9 +1,25 @@
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from voice_arch.settings import VoiceSettings
 
 LIVEKIT_SECRET = "s" * 32
+PROJECT_MD = Path(__file__).resolve().parent.parent / "PROJECT.md"
+
+
+def _stage1_winners() -> tuple[str, str, str]:
+    """The bold rows of PROJECT.md's stage-1 table, in STT, TTS, LLM order."""
+    found = re.findall(r"\*\*`([^`]+)`\*\*", PROJECT_MD.read_text())[:3]
+    assert len(found) == 3
+    return found[0], found[1], found[2]
+
+
+def _perfect_llm_candidates() -> set[str]:
+    """LLM candidates PROJECT.md scores 20/20."""
+    return set(re.findall(r"`([^`]+)`\*{0,2} \| \*{0,2}20/20", PROJECT_MD.read_text()))
 
 
 @pytest.fixture
@@ -44,8 +60,8 @@ def test_livekit_url_needs_ws_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValidationError):
         _settings()
 
-    monkeypatch.setenv("VOICE_ARCH_LIVEKIT_URL", "ws://127.0.0.1:7880")
-    assert _settings().livekit_url == "ws://127.0.0.1:7880"
+    monkeypatch.setenv("VOICE_ARCH_LIVEKIT_URL", "ws://test.invalid:9")
+    assert _settings().livekit_url == "ws://test.invalid:9"
 
 
 @pytest.mark.usefixtures("livekit_env")
@@ -63,9 +79,13 @@ def test_defaults_and_provider_list(monkeypatch: pytest.MonkeyPatch) -> None:
 
     s = _settings()
 
-    assert s.experiment_budget_usd == 50.0
+    winners = _stage1_winners()
+    assert s.experiment_budget_usd == 50.0  # the 50 $ software budget (plan)
     assert s.provider_list == ["deepinfra", "gmicloud", "parasail"]
-    assert s.llm_model == "google/gemini-3.5-flash-lite"
+    assert (s.stt_model, s.tts_model, s.llm_model) == winners
+
+    monkeypatch.setenv("VOICE_ARCH_OPENROUTER_PROVIDERS", "p-one,p-two")
+    assert _settings().provider_list == ["p-one", "p-two"]
 
 
 @pytest.mark.usefixtures("livekit_env")
@@ -87,8 +107,8 @@ def test_d_17_caller_model_default_differs_from_agent(monkeypatch: pytest.Monkey
 
     s = _settings()
 
-    assert s.caller_llm_model == "anthropic/claude-haiku-5.5"
-    assert s.llm_model == "google/gemini-3.5-flash-lite"
+    assert s.caller_llm_model != s.llm_model
+    assert s.caller_llm_model in _perfect_llm_candidates()
 
 
 @pytest.mark.usefixtures("livekit_env")

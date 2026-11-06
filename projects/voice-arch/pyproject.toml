@@ -56,6 +56,9 @@ forbidden_modules = ["livekit", "mlflow", "datalab", "httpx"]
 [tool.ruff]
 extend = "../../ruff.toml"   # single source: the repo-root config
 
+[tool.ruff.lint]
+extend-select = ["S"]   # already selected by the root config; explicit so the gate runner sees the security rules
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

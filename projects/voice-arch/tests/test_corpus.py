@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from tests.fakes import FakeTts
-from voice_arch.corpus import Utterance, build_corpus, load_utterances
+from voice_arch.corpus import EmptyAudioError, Utterance, build_corpus, load_utterances
 
 UTTERANCES_FILE = Path(__file__).resolve().parents[1] / "data" / "utterances.jsonl"
 _UTTERANCES = [
@@ -98,3 +98,10 @@ def test_load_utterances_rejects_duplicate_ids(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="duplicate"):
         load_utterances(path)
+
+
+async def test_corpus_empty_tts_audio_names_the_model(tmp_path: Path) -> None:
+    tts = FakeTts(model="vendor/mute-tts", silent=True)
+
+    with pytest.raises(EmptyAudioError, match="vendor/mute-tts"):
+        await _build(tts, tmp_path)
