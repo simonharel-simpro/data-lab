@@ -28,12 +28,12 @@ non-streaming OpenRouter audio. Then latency is reported comparatively and #25 t
 
 | Phase | Title | Files (≈) | Depends on |
 |---|---|---|---|
-| 1 | Infra, gates, OpenRouter audio, stage-1 bench, browser smoke | 22 | — |
-| 2 | Booking domain + architectures A/B/C + worker | 16 | Phase 1 (settings, audio factories, chosen models) |
-| 3 | Simulated caller, sweep runner, scoring, human ratings, card | 12 | Phase 2 (worker, result protocol, record, calendar) |
+| 1 | Infra, gates, OpenRouter audio, normalisers + tool schemas, stage-1 bench, browser smoke | 26 | — |
+| 2 | Booking domain + architectures A/B/C + worker | 16 | Phase 1 (settings, audio, normalisers, tool schemas) |
+| 3 | Simulated caller, sweep runner, scoring, decision, human ratings, card | 14 | Phase 2 (worker, CallResult, record, calendar) |
 
-Cross-phase contracts: Phase 1 produces `VoiceSettings`, `make_stt/make_tts/make_llm`, `key_usage()`, `fields.py` and the
-chosen model defaults. Phase 2 produces `BookingRecord`, `normalize_*`, `CALENDAR`, `Arch`, the worker (`agent_name=
+Cross-phase contracts: Phase 1 produces `VoiceSettings`, `make_stt/make_tts/make_llm`, `key_usage()` / `SpendTracker`,
+`normalize.py` (pure normalisers), `tool_schemas.py` (`TOOL_SCHEMAS`) and the chosen model defaults. Phase 2 produces `BookingRecord`, `normalize_*`, `CALENDAR`, `Arch`, the worker (`agent_name=
 "booking-agent"`) and `CallResult` sent on text-stream topic `voice-arch.result`. Phase 3 consumes all of it.
 
 ## Scope Analysis
@@ -58,6 +58,11 @@ chosen model defaults. Phase 2 produces `BookingRecord`, `normalize_*`, `CALENDA
 | D-7 | decision | Worker → runner result over a LiveKit text stream (topic `voice-arch.result`), no shared files | — | — |
 | D-8 | decision | US phone/address formats; problem types plumbing / electrical / hvac / appliance / other | — | — |
 | D-9 | decision | One MLflow run per sweep (per arch, per bench component); only full arch sweeps log `exact_rate` | — | — |
+| D-15 | decision | Winner rule: `exact_rate` tie within 2 calls of 30 → latency p50 → cost; none ≥ 90 % → ranked and flagged "none production-ready"; human rating informative only | — | — |
+| D-16 | decision | One OpenRouter key: `cost_usd` and `cost_per_call_usd` include the simulated caller's spend (labelled as such) | — | — |
+| D-17 | decision | Simulated caller LLM fixed to `google/gemini-3.5-flash-lite` at temperature 0.7, distinct from the agent's model; both logged | — | — |
+| D-18 | decision | Static enumerated calendar (12 slots, booked flags in code); booked slots refused | — | — |
+| D-19 | decision | LiveKit service under compose profile `voice` (the default stack needs no LiveKit keys) | — | — |
 | D-10 | defer | Speech-to-speech architecture (phase 2 of the experiment) | #21 | — |
 | D-11 | defer | SIP / real telephony and 8 kHz audio realism | #22 | — |
 | D-12 | defer | French-language agent | #23 | — |
@@ -74,8 +79,8 @@ chosen model defaults. Phase 2 produces `BookingRecord`, `normalize_*`, `CALENDA
 | Project settings, SecretStr, startup validation, `hide_input_in_errors` | `projects/mini-rag/src/mini_rag/settings.py` | copy the pattern (`VOICE_ARCH_*`) |
 | OpenRouter provider allow-list | `projects/mini-rag/src/mini_rag/generate.py` | replaced by `openai.LLM.with_openrouter(provider=…)` |
 | Per-item JSONL crash copy, metrics once, `smoke_*` for subsets | `projects/mini-rag/src/mini_rag/run.py:64-110` | copy |
-| Normalised containment | `projects/mini-rag/src/mini_rag/scoring.py:56-69` | copy (~25 lines) into `fields.py` |
-| Calendar fake + scenario personas | livekit/agents examples `FakeCalendar`, `scenarios.yaml` (MIT) | copy ~80 lines, cite source |
+| Normalised containment | `projects/mini-rag/src/mini_rag/scoring.py:56-69` | copy (~25 lines) into `booking/normalize.py` |
+| Calendar fake + scenario personas | livekit/agents examples `FakeCalendar`, `scenarios.yaml` (MIT) | shape only: 12 slots enumerated in code (D-18), scenario-style personas |
 | 127.0.0.1-only pinned compose service | `compose.yaml` | add `livekit` |
 | App card metric | `app/src/lib/mlflow.ts:59-81` (max of `metric.key` over finished runs) | `metric: {key: exact_rate, goal: max}` |
 
@@ -91,7 +96,7 @@ Before → after: 5 phases → 3 · ~14 modules → ~9 · 91 MLflow runs → 3 +
 | S-4 | simplify | mechanism | One MLflow run per sweep; drop summary run and `report.py` | applied (D-9); naturalness counters kept by user |
 | S-5 | simplify | mechanism | B = `TaskGroup` built-ins, no hand-written FSM | applied (D-5) |
 | S-6 | simplify | mechanism | `with_openrouter(provider=…)` instead of copied routing | applied |
-| S-7 | simplify | mechanism | Static calendar + scenario personas from LiveKit examples | applied |
+| S-7 | simplify | mechanism | Static calendar + scenario personas from LiveKit examples | applied (D-18) |
 | S-8 | simplify | mechanism | One `bench.py`; constants for candidates; no JSON handoff | applied |
 | S-9 | simplify | mechanism | Caller hosted in the runner, not a 2nd worker | applied (D-3) |
 | S-10 | add | — | Windows-browser media smoke + rtc config | applied, Phase 1 |
@@ -127,7 +132,7 @@ Trust boundaries crossed: network (OpenRouter, LiveKit), subprocess/concurrency 
 | F-1 | Call never ends | concurrency | agent ends session after `confirm_booking`; caller stop rule; runner per-call deadline → delete room, `outcome=timeout` | `test_f_1_runner_times_out_a_call_whose_caller_never_hangs_up` | 3 |
 | F-2 | Booking agent never joins / dies | external | runner watches the caller's room: no agent within `agent_join_timeout_s` → abort sweep; disconnect mid-call → `outcome=agent_lost` | `test_f_2_sweep_aborts_when_no_agent_joins_within_deadline` | 3 |
 | F-3 | Result handoff lost | partial-failure | self-inflicted → design changed: text stream instead of files (D-7); worker sends an error `CallResult` when the report can't be built; no result before the deadline = failure | `test_f_3_missing_result_scores_as_failure` | 2, 3 |
-| F-4 | OpenRouter 401/402 mid-sweep | auth | any 401/402 close reason aborts the sweep and the bench, run FAILED, no further rooms | `test_f_4_402_aborts_sweep_and_creates_no_further_rooms` | 1, 3 |
+| F-4 | OpenRouter 401/402 mid-sweep | auth | `CallResult.http_status` 401/402 (either side) aborts the sweep and the bench, run FAILED, no further rooms; takes precedence over `caller_fault` | `test_f_4_402_aborts_sweep_and_creates_no_further_rooms` | 1, 3 |
 | F-5 | Failures dropped from the denominator | observability | every planned call yields a row with `outcome`; non-scored = not exact; counters per outcome | `test_f_5_timeouts_and_errors_count_as_misses_in_exact_rate` | 3 |
 | F-6 | Caller fault blamed on the arch | observability | `outcome=caller_fault` excluded from arch metrics, counted; > 10 % of calls → run FAILED | `test_f_6_caller_error_close_is_classified_caller_fault` | 3 |
 | F-7 | `e2e_latency` missing | state | `.get()`; count `latency_turns_missing`; empty → metric absent, never 0 | `test_f_7_latency_aggregation_tolerates_missing_and_all_missing_e2e` | 3 |
@@ -161,7 +166,19 @@ Decision points: scoring, aggregation, winner selection, naturalness counters, c
 | U-11 | Long silence | agent-owed gap (user stopped → agent started) strictly > 2.0 s; caller think-time excluded | `test_u_11_exactly_two_seconds_is_not_long` | 3 |
 | U-12 | Handled barge-in | interrupted agent message followed by an agent reply that is not a normalised near-duplicate of it | `test_u_12_verbatim_repeat_after_interrupt_is_not_handled` | 3 |
 | U-13 | Per-field denominator | missing field = wrong; denominator = all scored + agent-failed calls | `test_u_13_missing_field_counts_as_incorrect` | 3 |
-| U-14 | Card tie | keep the card's tie rule; the arch decision (success > latency > cost) goes in PROJECT.md Enseignements | none (docs) | 3 |
+| U-14 | Card tie | keep the card's tie rule; the arch decision comes from `pick_arch` (D-15), restated in PROJECT.md | none (docs) | 3 |
+| U-15 | LLM tool-arg accuracy (bench) | compare args per field after `normalize_phone/address/name`; problem/slot exact | `test_u_15_llm_arg_accuracy_compares_normalised_values` | 1 |
+| U-16 | Architecture decision | `pick_arch(metrics)` implements D-15 | `test_u_16_arch_within_exact_margin_falls_back_to_latency`, `test_u_16_no_arch_meets_bar_still_ranks_and_flags` | 3 |
+| U-17 | Booked slot | `choose_slot` on a booked slot → error string, record unchanged; personas must expect a free slot | `test_u_17_choose_booked_slot_returns_error_and_keeps_record`, `test_u_17_persona_expected_slot_is_free` | 2, 3 |
+| U-18 | slot_change persona | changes the slot during the agent's read-back, before saying yes; the agent updates and re-reads; session ends after confirm | `test_u_18_slot_change_during_readback_reconfirms_new_slot` (integration) | 2, 3 |
+| U-19 | Cost per call | `cost_per_call_usd = cost_usd / (scored + timeout + agent_lost)`, caller spend included (D-16) | `test_u_19_cost_per_call_uses_exact_rate_denominator` | 3 |
+| U-20 | Caller variance | caller model + temperature from settings (D-17), logged | `test_u_20_caller_llm_uses_configured_model_and_temperature` | 3 |
+| U-21 | Budget before a sweep | refuse to start when `limit_remaining` < the previous sweep's `cost_usd` × 1.2 (no previous → warn only) | `test_u_21_sweep_refuses_to_start_when_remaining_credit_below_estimate` | 3 |
+| U-22 | Stage-1 edge cases | no intelligible TTS → `NoEligibleCandidate`, defaults kept, run tagged; STT margin measured from the best | `test_u_22_pick_tts_with_no_intelligible_candidate_raises`, `test_u_22_stt_margin_is_measured_from_the_best` | 1 |
+| U-23 | Human ratings | mean per arch, ≥ 1 call per arch, not blind | `test_u_23_human_ratings_aggregate_by_mean_per_arch` | 3 |
+| U-24 | Spelled names | runs of single letters separated by `-`/spaces are joined before name normalisation | `test_u_24_spelled_letters_normalise_to_joined_name` | 1 |
+| U-25 | Scored fields drift | one `SCORED_FIELDS` constant; persona `expected_record` typed with `extra="forbid"` | `test_u_25_expected_record_keys_equal_scored_fields` | 2, 3 |
+| U-26 | Bench cases vs tools | `data/llm_cases.jsonl` tool names/arg keys = `TOOL_SCHEMAS` (Phase 1), reused by Phase 2 tools | `test_u_26_llm_cases_match_tool_schemas` | 1, 2 |
 
 Bench audio is synthesised with a TTS from a vendor that is not an STT candidate (google/gemini-3.8-flash-lite-tts),
 logged as a param, to avoid favouring one STT.
