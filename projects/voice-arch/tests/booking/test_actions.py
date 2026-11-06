@@ -1,4 +1,5 @@
 from voice_arch.booking.actions import (
+    WAIT_FOR_CALLER,
     apply_check_slots,
     apply_choose_slot,
     apply_confirm,
@@ -69,7 +70,7 @@ def test_choose_slot_taken_by_another_session_state_is_refused() -> None:
 def test_confirm_incomplete_lists_missing_fields() -> None:
     record = BookingRecord(name="Jon")
 
-    reply = apply_confirm(record)
+    reply = apply_confirm(record, caller_replied=True)
 
     assert reply == "Still missing: phone, address, problem_type, slot_id"
     assert record.confirmed is False
@@ -80,8 +81,17 @@ def test_confirm_complete_record_confirms() -> None:
         name="Jon", phone="1", address="2", problem_type=ProblemType.HVAC, slot_id="ST_20261110_1400"
     )
 
-    assert apply_confirm(record) == "Confirmed."
+    assert apply_confirm(record, caller_replied=True) == "Confirmed."
     assert record.confirmed is True
+
+
+def test_confirm_complete_record_waits_when_the_caller_has_not_replied() -> None:
+    record = BookingRecord(
+        name="Jon", phone="1", address="2", problem_type=ProblemType.HVAC, slot_id="ST_20261110_1400"
+    )
+
+    assert apply_confirm(record, caller_replied=False) == WAIT_FOR_CALLER
+    assert record.confirmed is False
 
 
 def test_render_call_record_lists_missing_and_corrections() -> None:

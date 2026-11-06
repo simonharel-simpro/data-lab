@@ -10,6 +10,10 @@ from voice_arch.booking.record import SCORED_FIELDS, BookingRecord, ProblemType,
 
 NOTED: Final = "Noted."
 CONFIRMED: Final = "Confirmed."
+WAIT_FOR_CALLER: Final = (
+    "Wait for the caller to confirm the read-back first. Read the booking back, ask whether it is correct, "
+    "then stop and wait for their answer. Call confirm_booking only after their reply."
+)
 _ISO_DAY: Final = re.compile(r"\d{4}-\d{2}-\d{2}")
 _MAX_OFFERED: Final = 2
 _PARTS: Final[dict[str, Part]] = {"morning": "morning", "afternoon": "afternoon"}
@@ -63,10 +67,13 @@ def apply_choose_slot(record: BookingRecord, slot_id: str, taken: set[str]) -> s
     return f"Chosen: {describe(slot)}."
 
 
-def apply_confirm(record: BookingRecord) -> str:
+def apply_confirm(record: BookingRecord, *, caller_replied: bool) -> str:
+    """`caller_replied`: the caller has spoken since the record last changed, so a yes can exist."""
     missing = record.missing()
     if missing:
         return f"Still missing: {', '.join(missing)}"
+    if not caller_replied:
+        return WAIT_FOR_CALLER
     record.confirm()
     return CONFIRMED
 

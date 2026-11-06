@@ -15,7 +15,7 @@ from voice_arch.agents.arch_b import SUMMARIZE_CHAT_CTX
 from voice_arch.agents.registry import build_agent
 from voice_arch.agents.state import BookingState
 from voice_arch.arch import Arch, UnknownArchError
-from voice_arch.audio import make_llm, make_stt, make_tts
+from voice_arch.audio import make_agent_llm, make_stt, make_tts
 from voice_arch.dispatch import AGENT_NAME
 from voice_arch.result import RESULT_TOPIC, CallResult
 from voice_arch.settings import VoiceSettings
@@ -51,7 +51,7 @@ async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingSta
         stt=make_stt(settings),
         # Pinned to Google's providers (ESC-2-1 option C). Only the agent is pinned: the simulated caller's LLM
         # (anthropic/claude-haiku-5.5, ESC-1-2) is deliberately unpinned.
-        llm=make_llm(settings, providers=settings.provider_list, retry_empty=True),
+        llm=make_agent_llm(settings),
         tts=make_tts(settings),
         vad=silero.VAD.load(),
         userdata=BookingState(),
@@ -85,6 +85,7 @@ async def entry(ctx: JobContext) -> None:
         lambda: ctx.make_session_report(session).to_dict(),
         summarize_chat_ctx=SUMMARIZE_CHAT_CTX if arch in _TASKGROUP_ARCHES else None,
         max_tool_steps=MAX_TOOL_STEPS,
+        fatal=watch.fatal,
     )
     await send_result(ctx.room, result)
 

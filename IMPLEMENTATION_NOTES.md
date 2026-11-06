@@ -138,6 +138,91 @@
   I did: ran the live checks with `VOICE_ARCH_CALL_TIMEOUT_S` raised (env only, default unchanged) and used `worker dev`, because the `start` worker marks itself unavailable above 0.7 CPU load and the host was busy.
   One-off or pattern?: likely recurs: the sweep's 240 s default may make many self_correction calls `timeout`; decide before the sweeps.
 
+## Sweep prerequisites (branch fix/voice-arch-sweep-prereqs)
+
+- Plan assumed: a retry of an empty completion could be the same request (LiveKit re-calls `_run`).
+  Territory was: LiveKit's `LLMStream._main_task` re-invokes `self._run()` up to `max_retry + 1` times; the OpenAI/OpenRouter stream sends `self._extra_kwargs` (a per-stream dict that holds `temperature`) on each attempt, so the request is identical at temperature 0.
+  I did: the guard wraps `_run` and, before each retry, sets `_extra_kwargs["temperature"]` to `min(base + 0.3 * retry, 1.0)` (first attempt keeps the base, so 0 -> 0.3 -> 0.6 -> 0.9; the caller's 0.7 -> 1.0). Each retry is logged at WARNING (`empty LLM completion, retry N at temperature T`, no text). `_extra_kwargs` is read without a fallback: a LiveKit upgrade that drops it fails on the first call, and a contract test builds the real OpenRouter stream. No system-nudge variant was needed.
+  One-off or pattern?: likely recurs: any guard on a LiveKit stream depends on these two private attributes (`_run`, `_extra_kwargs`).
+- Plan assumed: raising the temperature makes the retry succeed.
+  Territory was: live check, arch C, `self_correction` (2026-11-06): one turn came back empty on all 4 attempts (temperatures 0, 0.3, 0.6, 0.9), the same turn pattern as the pilot (after several phone corrections, the user turn ends with the caller repeating the number). So the empty answer is not (only) a temperature-0 artefact for that context. LiveKit then logged `failed to generate LLM completion after 4 attempts`, the agent session stayed open and silent, and the runner recorded a timeout at 420 s.
+  I did: nothing further (out of scope, budget). Open question for the user: what to do after the guard gives up (end the call with an error so it counts as agent failure at once, a different nudge on retry, or investigate the context that Gemini returns empty for).
+  One-off or pattern?: likely recurs: seen twice on C.
+- Plan assumed: the caller factory protocol had to be extended and its fakes in `tests/call_fakes.py` updated.
+  Territory was: `LlmFactory` gets a required keyword `retry_empty`; the only implementation outside `make_llm` is the spy in `tests/test_runner.py` (`call_fakes.py` has none). `make_caller_session` passes `retry_empty=True`.
+  I did: updated that spy's signature; new `tests/test_caller.py` shows the caller session's LLM fails loud (and is retried) on empty completions.
+  One-off or pattern?: one-off.
+- Plan assumed: `VOICE_ARCH_CALL_TIMEOUT_S` could be set for the integration test.
+  Territory was: `tests/conftest.py` strips `VOICE_ARCH_*` env vars, so it never had effect. `tests/integration/test_one_call.py` has no hard-coded limit: it passes `live.call_timeout_s` from `VoiceSettings`, so it follows the new default (420 s).
+  I did: raised the default `call_timeout_s` 240 -> 420 and added a settings test.
+  One-off or pattern?: one-off.
+- B's wrong phone number (read-only diagnosis of the live pilot log, `worker12.log`, room `va-live-fix-b-self_correction-0-3b877e`):
+  - 10:08:27 heard `Sure, my number is 512-550-147. Sorry, the last digit is 8, so it's 512-555-0148.` -> `record_phone("512-555-0148")` (correct).
+  - 10:11:07 read-back says `Phone Number: 512-555-0148` (correct).
+  - 10:11:29 heard `Not quite. The phone number should be 512-550-148, not 512-550-148. The rest sounds right, but I'm not sure about the year...` -> `out_of_scope(["phone"])` then `record_phone("512-550-0148")`.
+  - 10:11:55 the agent reads back `512-550-0148` and, in the same turn (10:11:56), calls `confirm_booking`; there is no user transcript between them. The call ends scored with `512-550-0148`.
+  - Conclusion: not a correction lost behind a closed step (the phone was right, and B's regression path works: `out_of_scope` re-opened the phone task). It is an STT mishearing of `555-0148` as `550-148` (same garble on A/C: `512-550-1488`, `512-550-148`; the first wrong number was heard as `512-550-147`); the persona text has no `550` anywhere, so the caller LLM did not invent it. Not separable from the logs: why the caller objected to a correct read-back (the caller's own text is not logged; only the agent-side transcript is).
+  - Mechanism in `agents/arch_b.py` / `agents/tools.py`: the confirm step's only escape is `out_of_scope`, which re-runs `PhoneTask`; `record_phone` normalises whatever the model passes and nothing compares it with the value already recorded. `ConfirmTask` ends in `confirm_booking`, whose `apply_confirm` checks only that the record is complete, so the model can confirm in the turn where it asked "does this look correct?". No behaviour changed; the user decides whether to add a wait for the caller's yes.
+  One-off or pattern?: likely recurs: caller number read-backs through this STT.
+
+## Empty completion root cause (branch fix/voice-arch-sweep-prereqs)
+
+- Plan assumed: the persistent empty turn (C, `self_correction`, right after the caller corrects a read-back) was an
+  empty stream that more temperature or another nudge would cure.
+  Territory was: the stream is not empty. OpenRouter answers HTTP 200 with `finish_reason: "error"`,
+  `native_finish_reason: "MALFORMED_FUNCTION_CALL"`, `content: null`, and a `reasoning` text that shows Gemini meant
+  to call `update_record(phone=512-555-0148)` but emitted a call its function-call parser rejected. LiveKit's
+  `_parse_choice` never reads `finish_reason`, so zero output looks like an empty completion. Found with the new
+  opt-in dump (`VOICE_ARCH_DUMP_EMPTY_DIR`, scratchpad dir outside the repo) on two live C calls (one on the
+  correction turn, one on the confirm task after `update_record(slot_id)`), then replays against OpenRouter
+  (`google/gemini-3.5-flash-lite`, pinned to google-vertex and google-ai-studio, temperature 0).
+  I did: the agent LLM sends `reasoning_effort="low"` (`VoiceSettings.agent_reasoning_effort`, `make_agent_llm`), for
+  A, B and C alike; the caller LLM and the bench do not (`make_llm(reasoning_effort=None)` sends nothing). The
+  guard, the temperature ramp and the dump stay.
+  One-off or pattern?: likely recurs: any Gemini 3.x flash-lite tool agent on OpenRouter with the default thinking.
+- Replay evidence (counts of malformed / calls; the unmodified context's rate drifted between 0/10 and 12/12 over an
+  hour, so only same-window comparisons count):
+  - Same-window interleaved A/B, 12 calls each: dump 1 (correction turn): default 10/12 malformed, `low` 0/12; dump 2
+    (confirm task): default 9/12, `low` 0/12. `low` answered in 0.9 s vs 1.7 s (a malformed call is slow).
+  - Same window, dump 2: default 7/10 and 6/10, `low` 0/10, `medium` 0/10, `minimal` 9/10 malformed. Dump 1:
+    `low`, `medium`, `high` 0/10 each. Top-level `reasoning_effort` and the `reasoning` object behave alike.
+  - Not the lever: temperature 0.3 (8/8 malformed) and 0.9 (7/8); `strict` schemas; `tool_choice` omitted;
+    `parallel_tool_calls=false`; unpinned routing (same rate); merging consecutive same-role messages; thought
+    signatures (replaying the history with the real `reasoning_details` echoed back: 10/12 vs 12/12 malformed).
+  - Context-sensitive: the same history with unrelated digits, or a correction without digits, went 10/10 fine; so did
+    dropping the update tool call from the history, the call-record block, or the stale first turns. The trigger is
+    a context where the same phone number is written twice with one digit changed (a hypothesis, not proven), and
+    `minimal`/default thinking fails to produce a decodable call there. Why exactly the parser rejects it cannot be seen: the raw model output is not returned.
+  - Not specific to C: A's pilot stall (ESC-3-2) also hit a turn after a correction (not replayed, so not proven to be the same failure), and `reasoning_effort` is sent
+    identically to all three, so the comparison stays fair.
+  One-off or pattern?: likely recurs.
+- Plan assumed: after the guard gives up, the session closes (`max_unrecoverable_errors`).
+  Territory was: LiveKit tolerates 3 unrecoverable errors per component (`AgentSession._on_error`) and the guard's
+  "failed to generate LLM completion after 4 attempts" is ONE unrecoverable `LLMError`, so the session stayed open.
+  `SessionConnectOptions(max_unrecoverable_errors=0)` would also end it, but for STT and TTS too.
+  I did: `SessionWatch.on_error` shuts the session down (`drain=False`) on an `ErrorEvent` carrying an unrecoverable
+  `LLMError` and keeps it as `watch.fatal`; `build_result(..., fatal=...)` reports it in `error`, takes the HTTP status
+  from it and sets `close_reason="error"` (the shutdown itself reads as user-initiated). The call is then scored by
+  its record (ESC-3-1). STT and TTS errors stay with LiveKit's own count.
+  One-off or pattern?: one-off.
+- Plan assumed: a `RunContext` / `SpeechHandle` hook says whether a user turn happened since the read-back.
+  Territory was: in 1.8.8 `SpeechHandle` has no user-turn id (only `input_details.modality`), and the read-back is
+  spoken text, not a tool call, so it is not observable; the assistant text item is also added to the history only
+  after playout, not before the tool runs.
+  I did: `BookingState.last_write_at` is set by every successful write (`record_*`, `choose_slot`, C's
+  `update_record`); `confirm_booking` returns "Wait for the caller to confirm the read-back first..." unless a user
+  message in `session.history` was committed after it (`created_at`). A confirm with no write pending is allowed
+  (the record is then complete from earlier writes the caller already answered). Limit: it cannot tell a read-back
+  that came later than the write; a turn in which the caller chats and the agent reads back and confirms without a
+  new write would pass. `apply_confirm` takes a required `caller_replied` flag (no default: a gate must not open
+  by omission).
+  One-off or pattern?: one-off.
+- Test changes: `tests/booking/test_actions.py` two confirm tests gain `caller_replied=True` (the signature changed,
+  not the behaviour) and one test is added. No test was renamed, removed or loosened.
+- Open: B said "I've confirmed your appointment" in text without calling `confirm_booking` (live check), and both B
+  and C ended `timeout` in a loop where the caller's STT garbles the agent's read-back (`512-550-148`); the 420 s
+  limit and the long Markdown read-backs decide the sweep, not the architecture.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [resolved] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller. => User 2026-11-06: caller = anthropic/claude-haiku-5.5 @ temperature 0.7 (agent = google/gemini-3.5-flash-lite).

@@ -132,8 +132,19 @@ timeout.
 | Arch | Outcome | Duration | Cost | What happened |
 |---|---|---|---|---|
 | **A** orchestrator | ✅ exact booking | 296 s | 0.079 $ | The caller's phone correction was applied. The retry absorbed several empty responses. |
-| **B** TaskGroup | ⚠️ scored, not exact | 265 s | 0.107 $ | Every field right except the phone (`512-550-0148`). Reported as an STT mishearing of the digits; not yet checked against the log. |
+| **B** TaskGroup | ⚠️ scored, not exact | 265 s | 0.107 $ | Every field right except the phone (`512-550-0148`). The log shows an STT mishearing of the digits, after the number had been recorded correctly (see "Suite", point 2). |
 | **C** B + call record | ❌ timeout | 663 s | 0.137 $ | The conversation went off course and never converged. The last turn was empty on all 4 tries, and the agent fell silent. |
+
+**After the three fixes** (reasoning effort, fail fast, confirm wait), one `self_correction` call each:
+
+| Arch | Outcome | Duration | Cost | Empty retries | Ended | What happened |
+|---|---|---|---|---|---|---|
+| **A** orchestrator | ✅ exact booking | about 400 s | 0.111 $ | 0 | on its own (the agent confirmed and hung up) | The phone correction was applied; the confirm came after the caller's yes. |
+| **B** TaskGroup | ❌ timeout | 420 s | 0.187 $ | 0 | timeout | The caller's STT heard `555-0148` as `550-148` and the zip as `78738`, and rejected the read-backs again and again; the agent said "I've confirmed" in text without calling the tool. |
+| **C** B + call record | ❌ timeout | 420 s | 0.159 $ | 0 | timeout | Same loop (`512-550-1488`); five read-backs of 30 to 40 s each. No empty completion, no error. |
+
+A call that reproduced the empty turn before the fix (C, `1e3d8571…`, 0.059 $) retried it once and booked exactly:
+the failure is intermittent, which is why the root cause needed replays rather than one more call.
 
 **What this does and does not say.** One call per architecture does not measure an architecture effect. It shows
 where each one is likely to break:
@@ -152,15 +163,37 @@ from `python -m voice_arch.decide` here. `cost_per_call_usd` is the cost over th
 
 ## Suite
 
-1. **Before the sweeps (fixes, cents):**
-   - Retry an empty response at a higher temperature. At temperature 0, an identical request can come back empty
-     every time, as on C's last turn.
-   - Guard the simulated caller's LLM the same way.
-   - Raise `call_timeout_s` from 240 s to about 400 s. A `self_correction` call takes 265 to 300 s.
-2. **Check B's phone error:** read the call log to tell an STT mishearing from a correction that was lost after its
-   step closed.
-3. **Smoke run:** `runner --arch a --personas self_correction --reps 1`.
-4. **Full sweeps:** `a`, `b`, `c` one at a time (about 30 calls each, 25 to 40 $ in total), then `decide`, and the
+1. **Before the sweeps (fixes, cents) — done on branch `fix/voice-arch-sweep-prereqs`:**
+   - An empty response is retried at a higher temperature (+0.3 per retry, cap 1.0; the first attempt keeps the
+     configured one). It turned out not to be the lever for the persistent empty turn (point 3).
+   - The simulated caller's LLM has the same guard.
+   - `call_timeout_s` default raised from 240 s to 420 s (a `self_correction` call takes 265 to 300 s).
+2. **B's phone error — diagnosed from the log:** the correct number (`512-555-0148`) was recorded first and read back
+   correctly; then the agent's STT heard the caller's objection as `512-550-148`, and B's confirm step re-opened the
+   phone step and overwrote the good value with `512-550-0148`. The same garble appeared on C's last turns
+   (`512-550-1488`). B also called `confirm_booking` in the same turn as the read-back: now fixed for A, B and C
+   (point 4). Still open: nothing checks a re-recorded value against the earlier one.
+3. **The persistent empty completion — root cause found and fixed:**
+   - The "empty" turn is a Gemini `MALFORMED_FUNCTION_CALL`: OpenRouter answers HTTP 200 with `finish_reason: error`
+     and no text, and LiveKit reads zero output as an empty completion. The reasoning text shows the model meant to
+     call `update_record(phone=512-555-0148)`.
+   - Replaying the dumped request 24 times: 19 malformed with the default reasoning, 0 with `reasoning_effort=low`
+     (same window, interleaved; the low calls also answered faster, 0.9 s vs 1.7 s). `medium` and `high` behave like
+     `low`; `minimal` behaves like the default. Temperature, strict schemas, `tool_choice` and the missing thought
+     signatures are not the lever.
+   - **Fix:** the agent LLM is sent `reasoning_effort=low` (setting `agent_reasoning_effort`), for A, B and C alike;
+     the caller LLM is untouched. Details and the evidence table are in `IMPLEMENTATION_NOTES.md`.
+4. **After the guard gives up, and the confirm wait — done:**
+   - An unrecoverable LLM error now ends the call at once, with the error in the `CallResult`; it counts against the
+     architecture (ESC-3-1).
+   - `confirm_booking` is refused until the caller has spoken after the last write to the record (all three
+     architectures share it).
+5. **Live check after the fixes** (`self_correction`, one call per architecture, 2026-11-06): no empty completion in
+   any of the three calls, and A booked exactly. B and C ended `timeout` at 420 s: the caller kept rejecting a
+   correct phone number that the agent's STT garbled (`512-550-148`, `512-550-1488`) and the 30 to 40 s read-backs
+   (spoken Markdown) never converged. See the table above. The sweep will measure this loop, not an architecture
+   effect, unless the call length is decided first.
+6. **Full sweeps:** `a`, `b`, `c` one at a time (about 30 calls each, 25 to 40 $ in total), then `decide`, and the
    table above.
-5. **Manual:** one browser call per architecture, rated with `rate`, plus the browser smoke (UDP vs TCP, hand-timed
+7. **Manual:** one browser call per architecture, rated with `rate`, plus the browser smoke (UDP vs TCP, hand-timed
    turns against `e2e_latency`).

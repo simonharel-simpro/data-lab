@@ -127,6 +127,10 @@ def collection_name(project: str, *parts: str) -> str:
   quantization filter: their endpoints report "unknown"; ESC-2-1) and wrapped by `llm_guard.retry_on_empty_completion`
   (Gemini sometimes ends a stream with zero tokens, which LiveKit treats as a finished, silent turn; ESC-3-2).
   The simulated caller's LLM is unpinned. Preemptive generation is explicitly off in `TURN_HANDLING`.
+  The agent LLM (`audio.make_agent_llm`) also sends `reasoning_effort=low`: without it Gemini answers most tool turns
+  with `MALFORMED_FUNCTION_CALL`, the "empty completion" above. `SessionWatch` ends the call on the first
+  unrecoverable LLM error (the `CallResult` carries it), and `confirm_booking` refuses until the caller has spoken
+  after the last record write (`BookingState.caller_replied_since_write`).
 - **Must NOT:** let `booking/` import LiveKit; write the record anywhere but `booking.actions`; default an unknown
   `arch` (F-9); write files from the worker (the result goes to the room).
 - **Pattern (a tool completes the step that owns the written field):**

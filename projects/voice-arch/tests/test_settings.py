@@ -122,3 +122,21 @@ def test_d_17_same_caller_and_agent_model_refused(monkeypatch: pytest.MonkeyPatc
         _settings()
 
     assert "D-17" in str(err.value)
+
+
+@pytest.mark.usefixtures("livekit_env")
+def test_call_timeout_default_covers_a_self_correction_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k1")
+
+    assert _settings().call_timeout_s == 420  # a self_correction call takes 265 to 300 s
+
+
+def test_agent_reasoning_effort_defaults_to_low_and_rejects_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k1")
+    monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_KEY", "devkey")
+    monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_SECRET", "s" * 32)
+    assert VoiceSettings(_env_file=None).agent_reasoning_effort == "low"  # pyright: ignore[reportCallIssue]
+
+    monkeypatch.setenv("VOICE_ARCH_AGENT_REASONING_EFFORT", "minimal")  # the value that reproduced the failure
+    with pytest.raises(ValidationError):
+        VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]

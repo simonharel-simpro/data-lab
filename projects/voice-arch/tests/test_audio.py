@@ -1,6 +1,7 @@
 import pytest
+from livekit.agents import llm
 
-from voice_arch.audio import make_llm, make_stt, make_tts
+from voice_arch.audio import make_agent_llm, make_llm, make_stt, make_tts
 from voice_arch.settings import VoiceSettings
 
 
@@ -64,3 +65,26 @@ def test_make_stt_model_override_and_openrouter_endpoint(settings: VoiceSettings
     base = stt._client.base_url  # pyright: ignore[reportAttributeAccessIssue]
     assert (base.scheme, base.host, base.path.rstrip("/")) == ("https", "openrouter.ai", "/api/v1")
     assert make_stt(settings).model == "test/stt-x"  # pyright: ignore[reportAttributeAccessIssue]
+
+
+async def test_make_llm_sends_reasoning_effort_only_when_asked(settings: VoiceSettings) -> None:
+    plain = make_llm(settings).chat(chat_ctx=llm.ChatContext())
+    asked = make_llm(settings, reasoning_effort="low").chat(chat_ctx=llm.ChatContext())
+    await plain.aclose()
+    await asked.aclose()  # both cancelled before their first await: nothing is sent
+
+    assert "reasoning_effort" not in plain._extra_kwargs  # pyright: ignore[reportAttributeAccessIssue]
+    assert asked._extra_kwargs["reasoning_effort"] == "low"  # pyright: ignore[reportAttributeAccessIssue]
+
+
+async def test_agent_llm_is_pinned_retried_and_at_low_reasoning(settings: VoiceSettings) -> None:
+    """The ESC-3-2 root cause: with no reasoning effort Gemini emits MALFORMED_FUNCTION_CALL on tool turns."""
+    model = make_agent_llm(settings)
+
+    stream = model.chat(chat_ctx=llm.ChatContext())
+    await stream.aclose()
+
+    extra = stream._extra_kwargs  # pyright: ignore[reportAttributeAccessIssue]
+    assert extra["reasoning_effort"] == "low"
+    assert extra["extra_body"]["provider"]["order"] == ["google-vertex", "google-ai-studio"]
+    assert model.chat.__name__ == "guarded_chat"
