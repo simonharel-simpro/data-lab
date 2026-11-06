@@ -9,7 +9,8 @@ error, http_status, session_errors; `RESULT_TOPIC = "voice-arch.result"`), the w
 (dispatch metadata `{"arch": "a|b|c", "run_id": …}`; it greets first, ends the session after confirmation, then sends
 one `CallResult` on the text stream and leaves). **Phase 1:** `VoiceSettings` (incl. `caller_llm_model`,
 `caller_temperature`, `call_timeout_s`, `agent_join_timeout_s`), `make_stt/make_tts/make_llm`, `SpendTracker` /
-`key_usage` (`limit_remaining`), `dispatch.py`, `token.py` (`make_token`), datalab `load`, `Settings`, `preflight`,
+`key_usage`, `budget.py` (`spent_so_far(client)`, `check_budget(spent, estimate, budget)`,
+`BudgetExceeded`), `experiment_budget_usd` in settings, `dispatch.py`, `token.py` (`make_token`), datalab `load`, `Settings`, `preflight`,
 `tracked_run`. **Agent:** `python-fastapi`.
 
 Context: a sweep = one arch × 6 personas × reps, one MLflow run (D-9). The caller is an `AgentSession` hosted in the
@@ -71,15 +72,18 @@ without result → `agent_lost` (F-3); no result by `call_timeout_s` → `timeou
 
 #### `src/voice_arch/runner.py` (CLI `python -m voice_arch.runner --arch a|b|c [--personas id,…] [--reps N]`)
 `main()` does, before any LiveKit I/O: `VoiceSettings()`, `load()`, `Settings()`, `preflight()`, `load_personas()`,
-then calls `async run_sweep(env, personas, arch, reps, settings, *, project, dl_settings, key_reader=key_usage,
-last_full_cost=last_full_sweep_cost) -> str` (run id):
-1. Budget check (U-21): `key_reader(key).limit_remaining` < 1.2 × `last_full_cost()` → raise `BudgetTooLow` (no room
-   created); `last_full_sweep_cost()` returns `cost_usd` of the newest FINISHED run tagged `full=true` in
-   `voice-arch/conversations`, or None → warning only. `limit_remaining is None` (key without a limit) or a failed
-   `key_reader` call → warning, check skipped, the sweep runs (the key's own limit, if any, still stops it with 402).
+then calls `async run_sweep(env, personas, arch, reps, settings, *, project, dl_settings, spent=spent_so_far_value,
+last_full_cost=last_full_sweep_cost, spend_tracker=SpendTracker) -> str` (run id), where `spent: float` is
+`spent_so_far(MlflowClient(dl_settings.mlflow_tracking_uri))` computed in `main()` and `last_full_sweep_cost() -> float |
+None` returns `cost_usd` of the newest FINISHED run tagged `full=true` in `voice-arch/conversations`:
+1. Budget pre-check (F-4b; U-21 superseded): `check_budget(spent, estimate=last_full_cost() or 15.0,
+   budget=settings.experiment_budget_usd)` → `BudgetExceeded`, no room created.
 2. `with tracked_run(project, dl_settings, run_name=f"arch-{arch}", sub="conversations") as run_id, SpendTracker(key)
    as spend:` loop persona × rep, append each `CallRow` to `results/<run_id>.jsonl` at once; `AgentNeverJoined` /
-   `ProviderAuthStop` propagate → run FAILED (F-2, F-4).
+   `ProviderAuthStop` propagate → run FAILED (F-2, F-4). The tracker is `spend_tracker(key, on_exit=lambda c:
+   mlflow.log_metric("cost_usd", c))`, so `cost_usd` is logged even when the run fails. After each call,
+   `spent + spend.spent_now() >= budget` → raise `BudgetExceeded` (rows already written stay; run FAILED);
+   `spent_now()` None → warning, continue.
 3. Log params (arch, stt/tts/llm/voice, caller model + temperature, providers, reps, personas, FULL_REPS, timeouts,
    summarize flag and max_tool_steps from the first result, turn handling), tag `full=true|false`, metrics `scoring.aggregate(rows, full=…)` + `cost_usd` and
    `cost_per_call_usd` (if known), artifact `per_conversation.json`. `full` = all 6 personas × `FULL_REPS`.
@@ -115,7 +119,8 @@ Validates 1 ≤ rating ≤ 5 before MLflow; `tracked_run(sub="human", run_name=f
 `source=human`, notes as a tag. Never logs `exact_rate` (U-6).
 
 ## Docs
-`README.md` runbook: dedicated OpenRouter key with a 50 $ limit; `docker compose --profile voice up -d livekit`;
+`README.md` runbook: uses the root `OPENROUTER_API_KEY` with a 50 $ software budget (don't use the key elsewhere during a
+sweep); `docker compose --profile voice up -d livekit`;
 `.env`; `python -m voice_arch.worker start`; smoke (`--personas self_correction --reps 1`); full sweeps a, b, c one at a
 time (one sweep per key at a time); browser call + `rate.py`; `decide`; ~30 calls ≈ 1–1.5 h per sweep.
 `PROJECT.md` `## Enseignements`: the decide table + decision + note that cost includes the simulated caller; `## Suite`.
@@ -140,9 +145,8 @@ time (one sweep per key at a time); browser call + `rate.py`; `decide`; ~30 call
 | test_runner · `test_f_2_sweep_aborts_when_no_agent_joins_within_deadline` | env whose agent never joins → run FAILED, 1 room created | F-2 |
 | test_runner · `test_f_4_402_aborts_sweep_and_creates_no_further_rooms` | first result 402 → run FAILED, 1 room | F-4 |
 | test_runner · `test_f_6_more_than_10_percent_caller_faults_fails_the_run` | 2/10 caller_fault → FAILED, rows still in JSONL | F-6 |
-| test_runner · `test_u_21_sweep_refuses_to_start_when_remaining_credit_below_estimate` | remaining 5.0, last full sweep cost 10.0 → `BudgetTooLow`, no room | U-21 |
-| test_runner · `test_u_21_no_previous_sweep_warns_and_runs` | `last_full_cost` → None → warning logged, sweep runs | U-21 |
-| test_runner · `test_u_21_unlimited_key_or_failed_read_skips_the_check` | `limit_remaining=None`, or `key_reader` raises → warning, sweep runs | U-21 |
+| test_runner · `test_budget_exceeded_mid_sweep_stops_before_next_call` | budget 50, `spent=45`, `last_full_cost` → 4.0 (pre-check 49 < 50 passes), fake tracker `spent_now` 5.5 after call 1 → `BudgetExceeded`, 1 room, row kept, `cost_usd` logged on the FAILED run | F-4b |
+| test_runner · `test_sweep_refused_when_estimate_reaches_budget` | `spent=45`, `last_full_cost` → None (15.0) → `BudgetExceeded` before any room | F-4b |
 | test_runner · `test_u_1_sweep_with_fewer_reps_than_full_logs_smoke_metrics_only` | 1 persona × 1 rep → metrics all `smoke_*`, tag `full=false` | U-1 |
 | test_runner · `test_f_12_cost_absent_when_key_read_fails` | 2nd key read fails → no `cost_usd`, run FINISHED | F-12 |
 | test_runner · `test_u_20_caller_llm_uses_configured_model_and_temperature` | `make_caller_session(settings, llm_factory=spy)` → spy called with `caller_llm_model`, `caller_temperature`; both logged as params | U-20 |
@@ -170,4 +174,4 @@ time (one sweep per key at a time); browser call + `rate.py`; `decide`; ~30 call
 **Done when:** unit tests + hooks pass, the live call passes, full sweeps a, b, c FINISHED in `voice-arch/conversations`,
 ≥ 1 human rating per arch, `decide` output in PROJECT.md, the app card shows `exact_rate`.
 
-<!-- plan-validate: READY 2026-11-05 sha256:5e5a0c660646 -->
+<!-- plan-validate: READY 2026-11-05 sha256:5fc5bafe2903 -->

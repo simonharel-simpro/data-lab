@@ -41,7 +41,7 @@ Cross-phase contracts: Phase 1 produces `VoiceSettings`, `make_stt/make_tts/make
 | Feature | Layers / area | New | Modified |
 |---|---|---|---|
 | Infra + gates | compose, root env, hooks, CI | `infra/livekit.yaml`, project scaffold | `compose.yaml`, `.env.example`, `tests/test_compose.py`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `packages/datalab/tests/test_settings.py`, `ARCHITECTURE.md`, `decisions.md` |
-| Stage-1 bench | settings, audio, bench, data | `settings.py`, `audio.py`, `openrouter_key.py`, `booking/normalize.py`, `tool_schemas.py`, `fields.py`, `corpus.py`, `bench.py`, `winners.py`, `token.py`, `dispatch.py`, `smoke_agent.py`, `web/index.html`, `data/*` | `PROJECT.md` |
+| Stage-1 bench | settings, audio, bench, data | `settings.py`, `audio.py`, `openrouter_key.py`, `budget.py`, `booking/normalize.py`, `tool_schemas.py`, `fields.py`, `corpus.py`, `bench.py`, `winners.py`, `token.py`, `dispatch.py`, `smoke_agent.py`, `web/index.html`, `data/*` | `PROJECT.md` |
 | Architectures | domain, agents, worker | `booking/{record,calendar,actions,instructions}.py`, `arch.py`, `agents/*`, `result.py`, `worker.py` | — |
 | Experiment | caller, runner, scoring | `personas.py`, `caller.py`, `call_env.py`, `call.py`, `runner.py`, `scoring.py`, `naturalness.py`, `decide.py`, `rate.py`, `data/personas.jsonl` | `README.md`, `PROJECT.md` |
 
@@ -49,7 +49,7 @@ Cross-phase contracts: Phase 1 produces `VoiceSettings`, `make_stt/make_tts/make
 
 | # | Type | What | Tracker | Approved |
 |---|------|------|---------|----------|
-| D-1 | decision | All STT/TTS/LLM calls through OpenRouter, one dedicated key with a 50 $ credit limit (server-side hard stop) | — | — |
+| D-1 | decision | All STT/TTS/LLM calls through OpenRouter with the existing root key `OPENROUTER_API_KEY` (shared, 500 $ limit); a software experiment budget of 50 $ (`experiment_budget_usd`) stops the bench and sweeps; cost attribution assumes the key is not used elsewhere during a sweep (user choice 2026-11-06) | — | — |
 | D-2 | decision | LiveKit server self-hosted in the data-lab compose, WebRTC only, every port on 127.0.0.1 | — | — |
 | D-3 | decision | Booking agent = LiveKit worker on the host; simulated caller = AgentSession hosted in the runner on a self-connected room | — | — |
 | D-4 | decision | Audio via LiveKit `openai` plugins with `base_url` = OpenRouter; one thin adapter only if the phase-1 spike fails | — | — |
@@ -92,7 +92,7 @@ Before → after: 5 phases → 3 · ~14 modules → ~9 · 91 MLflow runs → 3 +
 |---|--------|-------|------|-------------|
 | S-1 | simplify | mechanism | One audio client: LiveKit openai plugins for bench and stage 2 | applied (D-4) |
 | S-2 | simplify | mechanism | `e2e_latency` from the session report, no caller instrumentation | applied (D-6) |
-| S-3 | simplify | mechanism | Cost from `/api/v1/key` + key credit limit, no `cost.py` | applied (D-1, D-6) |
+| S-3 | simplify | mechanism | Cost from `/api/v1/key` usage delta, no `cost.py`; budget enforced in software over the shared key (`budget.py`) | applied (D-1, D-6) |
 | S-4 | simplify | mechanism | One MLflow run per sweep; drop summary run and `report.py` | applied (D-9); naturalness counters kept by user |
 | S-5 | simplify | mechanism | B = `TaskGroup` built-ins, no hand-written FSM | applied (D-5) |
 | S-6 | simplify | mechanism | `with_openrouter(provider=…)` instead of copied routing | applied |
@@ -132,6 +132,7 @@ Trust boundaries crossed: network (OpenRouter, LiveKit), subprocess/concurrency 
 | F-1 | Call never ends | concurrency | agent ends session after `confirm_booking`; caller stop rule; runner per-call deadline → delete room, `outcome=timeout` | `test_f_1_runner_times_out_a_call_whose_caller_never_hangs_up` | 3 |
 | F-2 | Booking agent never joins / dies | external | runner watches the caller's room: no agent within `agent_join_timeout_s` → abort sweep; disconnect mid-call → `outcome=agent_lost` | `test_f_2_sweep_aborts_when_no_agent_joins_within_deadline` | 3 |
 | F-3 | Result handoff lost | partial-failure | self-inflicted → design changed: text stream instead of files (D-7); worker sends an error `CallResult` when the report can't be built; no result before the deadline = failure | `test_f_3_missing_result_scores_as_failure` | 2, 3 |
+| F-4b | Experiment budget reached | money | bench and sweep refuse to start when `spent_so_far + estimate >= experiment_budget_usd`; a sweep re-reads key usage after each call and stops (`BudgetExceeded`, run FAILED, rows kept) once spent reaches the budget; `cost_usd` is logged on every run, failed ones included | `test_budget_exceeded_mid_sweep_stops_before_next_call`, `test_bench_refuses_when_budget_spent`, `test_spend_tracker_reports_cost_on_exception` | 1, 3 |
 | F-4 | OpenRouter 401/402 mid-sweep | auth | `CallResult.http_status` 401/402 (either side) aborts the sweep and the bench, run FAILED, no further rooms; takes precedence over `caller_fault` | `test_f_4_402_aborts_sweep_and_creates_no_further_rooms` | 1, 3 |
 | F-5 | Failures dropped from the denominator | observability | every planned call yields a row with `outcome`; non-scored = not exact; counters per outcome | `test_f_5_timeouts_and_errors_count_as_misses_in_exact_rate` | 3 |
 | F-6 | Caller fault blamed on the arch | observability | `outcome=caller_fault` excluded from arch metrics, counted; > 10 % of calls → run FAILED | `test_f_6_caller_error_close_is_classified_caller_fault` | 3 |
@@ -175,7 +176,7 @@ Decision points: scoring, aggregation, winner selection, naturalness counters, c
 | U-18 | slot_change persona | changes the slot during the agent's read-back, before saying yes; the agent updates and re-reads; session ends after confirm | `test_u_18_slot_change_during_readback_reconfirms_new_slot` (integration) | 2, 3 |
 | U-19 | Cost per call | `cost_per_call_usd = cost_usd / (scored + timeout + agent_lost)`, caller spend included (D-16) | `test_u_19_cost_per_call_uses_exact_rate_denominator` | 3 |
 | U-20 | Caller variance | caller model + temperature from settings (D-17), logged | `test_u_20_caller_llm_uses_configured_model_and_temperature` | 3 |
-| U-21 | Budget before a sweep | refuse to start when `limit_remaining` < the previous sweep's `cost_usd` × 1.2 (no previous, no limit or failed read → warn only) | `test_u_21_sweep_refuses_to_start_when_remaining_credit_below_estimate` | 3 |
+| U-21 | Budget before a sweep | superseded by F-4b (the shared key's `limit_remaining` says nothing about the 50 $ experiment budget) | — (see F-4b tests) | 3 |
 | U-22 | Stage-1 edge cases | no intelligible TTS → `NoEligibleCandidate`, defaults kept, run tagged; STT margin measured from the best | `test_u_22_pick_tts_with_no_intelligible_candidate_raises`, `test_u_22_stt_margin_is_measured_from_the_best` | 1 |
 | U-23 | Human ratings | mean per arch, ≥ 1 call per arch, not blind | `test_u_23_human_ratings_aggregate_by_mean_per_arch` | 3 |
 | U-24 | Spelled names | runs of single letters separated by `-`/spaces are joined before name normalisation | `test_u_24_spelled_letters_normalise_to_joined_name` | 1 |

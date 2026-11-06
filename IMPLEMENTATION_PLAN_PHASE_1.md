@@ -71,14 +71,22 @@ In `test_g_10_env_examples_agree`, add `REPO_ROOT / "projects" / "voice-arch" / 
 `assert shared[3] == shared[0]` next to the existing asserts.
 
 #### `projects/voice-arch/.env.example` (NEW)
-The root `DATALAB_*` lines (G-10), then blank `VOICE_ARCH_OPENROUTER_API_KEY=`, `VOICE_ARCH_LIVEKIT_API_KEY=`,
-`VOICE_ARCH_LIVEKIT_API_SECRET=`; comment: a dedicated OpenRouter key with a 50 $ credit limit; LiveKit keys = the root ones.
+The root `DATALAB_*` lines (G-10), then blank `VOICE_ARCH_OPENROUTER_API_KEY=` (optional: when blank, the root `OPENROUTER_API_KEY` is used),
+`VOICE_ARCH_LIVEKIT_API_KEY=`, `VOICE_ARCH_LIVEKIT_API_SECRET=`; comment: the experiment budget is enforced in software
+(`VOICE_ARCH_EXPERIMENT_BUDGET_USD`, default 50); don't use the OpenRouter key elsewhere during a sweep (cost = key
+usage delta); LiveKit keys = the root ones.
 
 ## 4. Source
 
 #### `src/voice_arch/settings.py`
-`VoiceSettings(BaseSettings)`, prefix `VOICE_ARCH_`, `env_file=".env"`, `extra="ignore"`, `env_ignore_empty=True`,
-`hide_input_in_errors=True` (as mini-rag). Fields: `openrouter_api_key: SecretStr` (required); `livekit_url: str =
+`VoiceSettings(BaseSettings)`, prefix `VOICE_ARCH_`, `env_file=(<repo root>/.env, ".env")` (repo root via
+`datalab.project.repo_root()`; the project file wins), `extra="ignore"`, `env_ignore_empty=True`,
+`hide_input_in_errors=True` (as mini-rag). Fields: `openrouter_api_key: SecretStr` (required;
+`validation_alias=AliasChoices("VOICE_ARCH_OPENROUTER_API_KEY", "OPENROUTER_API_KEY")`, the prefixed one first);
+`experiment_budget_usd: float = 50.0` (> 0); note: the source priority of pydantic-settings beats the alias order (an
+exported shell `OPENROUTER_API_KEY` overrides a project-file `VOICE_ARCH_OPENROUTER_API_KEY`), and the root `.env` is an
+absolute path — every settings test passes `_env_file=None` and deletes both key names; `repo_root()` raises on a
+non-editable install, acceptable under the editable template; `livekit_url: str =
 "ws://127.0.0.1:7880"` (validator: scheme `ws`/`wss`); `livekit_api_key: SecretStr`, `livekit_api_secret: SecretStr`
 (required); `stt_model`, `tts_model`, `tts_voice`, `llm_model: str` (defaults until the bench decides:
 `deepgram/nova-3`, `elevenlabs/eleven-flash-v2.5`, `21m00Tcm4TlvDq8ikWAM`, `deepseek/deepseek-v4-flash`);
@@ -99,9 +107,22 @@ list is given, else no `provider`. `OPENROUTER = "https://openrouter.ai/api/v1"`
 `KeyUsage(usage: float, limit_remaining: float | None)` (frozen dataclass). `key_usage(api_key: str, *, client:
 httpx.Client | None = None) -> KeyUsage` = `GET https://openrouter.ai/api/v1/key`, `Authorization: Bearer`; non-200 →
 `OpenRouterKeyError(f"HTTP {status}")`; missing `data.usage` → `OpenRouterKeyError` (never 0). `SpendTracker(api_key, *,
-client=None)` context manager: reads `key_usage()` in `__enter__` and `__exit__`; a failed read (either side) logs a
+client=None, on_exit: Callable[[float], None] | None = None)` context manager: reads `key_usage()` in `__enter__` and
+`__exit__`; in `__exit__` (also on an exception) it calls `on_exit(cost_usd)` when the cost is known — callers enter it
+INSIDE `tracked_run` and pass `lambda c: mlflow.log_metric("cost_usd", c)`, so a FAILED run still records what it spent; a failed read (either side) logs a
 warning and makes `cost_usd = None` — never raises, never fails the run (F-12); else `cost_usd = after - before`;
-exposes `remaining_before: float | None`.
+exposes `remaining_before: float | None` and `spent_now() -> float | None` (`key_usage().usage − before`; None on a
+failed read).
+
+#### `src/voice_arch/budget.py`
+**Purpose:** the software experiment budget (D-1, F-4b) over the shared key. Imports mlflow (outside `booking`, no
+contract applies). `class BudgetExceeded(Exception)` with attributes `spent: float`, `budget: float`.
+`spent_so_far(client: MlflowClient) -> float`: sum of the latest `cost_usd` metric over every run (statuses FINISHED,
+FAILED, KILLED — money was spent either way) of the experiments `voice-arch/bench` and `voice-arch/conversations`
+(names from datalab `experiment_name("voice-arch", sub)`); a missing experiment counts 0; a run without `cost_usd`
+counts 0. Callers pass `MlflowClient(dl_settings.mlflow_tracking_uri)`. `check_budget(spent: float, estimate: float,
+budget: float) -> None` raises `BudgetExceeded(spent, budget)` when `spent + estimate >= budget` (one rule everywhere:
+reaching the budget stops).
 
 #### `src/voice_arch/booking/normalize.py` (pure)
 `spoken_digits(text) -> str`: split on non-alphanumerics ("five," → "five"); tokens "oh"/"zero"→0, "one"…"nine", "double X"→XX, "triple X"→XXX, digit characters kept,
@@ -157,7 +178,9 @@ list[LlmRow]` (`llm.chat(chat_ctx=…, tools=to_raw_tools())`; iterate the strea
 sub="bench")` with `SpendTracker` inside it; params (candidates, corpus hash, n); metrics `stt_<slug>_errors`,
 `stt_<slug>_p50_s`, `tts_<slug>_ttfb_p50_s`, `llm_<slug>_correct`, `llm_<slug>_ttft_p50_s` (slug = model id with
 non-alnum → `_`), `cost_usd` when known; rows to `results/<run_id>.jsonl`; tags `winner`, `winner_reason`. Never logs
-`exact_rate` (U-6). An `APIStatusError` with status 401/402 aborts, run FAILED (F-4).
+`exact_rate` (U-6). An `APIStatusError` with status 401/402 aborts, run FAILED (F-4). Before the run:
+`check_budget(spent_so_far(client), estimate=2.0, budget=settings.experiment_budget_usd)` (F-4b), with `SpendTracker(...,
+on_exit=log cost)`; the STT/TTS/LLM benches together cost a few dollars.
 
 #### `src/voice_arch/token.py` and `dispatch.py` (CLIs, for the smoke and manual calls)
 `token.py --room R [--identity me] [--agent NAME]` prints a join token (`livekit.api.AccessToken(key, secret)
@@ -201,7 +224,7 @@ MLflow on a tmp sqlite URI as in mini-rag `tests/conftest.py`)
 
 | File · test | Given → expected | Source |
 |---|---|---|
-| test_settings · `test_missing_openrouter_key_fails_at_settings` | no key → ValidationError naming `openrouter_api_key` | startup validation |
+| test_settings · `test_missing_openrouter_key_fails_at_settings` | `_env_file=None`, both `VOICE_ARCH_OPENROUTER_API_KEY` and `OPENROUTER_API_KEY` deleted from env → ValidationError naming `openrouter_api_key` | startup validation |
 | test_settings · `test_validation_error_never_echoes_secrets` | bad livekit_url + key `sk-or-v1-x` → message without `sk-or` | security |
 | test_settings · `test_livekit_url_needs_ws_scheme` | `http://x` → error; `ws://127.0.0.1:7880` ok | D-2 |
 | test_normalize · `test_spoken_digits_maps_oh_double_triple` | "oh four one two double five triple nine" → "041255999" | U-4 |
@@ -223,6 +246,11 @@ MLflow on a tmp sqlite URI as in mini-rag `tests/conftest.py`)
 | test_corpus · `test_utterance_truth_must_appear_in_text` | truth phone absent from text → error naming the id | data |
 | test_bench · `test_f_4_402_aborts_the_bench` | fake STT raises `APIStatusError(402)` → run FAILED, next candidate not called | F-4 |
 | test_bench · `test_u_6_bench_never_logs_exact_rate` | stt bench with fakes → no `exact_rate` metric | U-6 |
+| test_settings · `test_root_openrouter_key_is_used_when_project_key_blank` | only `OPENROUTER_API_KEY=k1` in env → `openrouter_api_key == k1`; with `VOICE_ARCH_OPENROUTER_API_KEY=k2` too → k2 | D-1 |
+| test_budget · `test_spent_so_far_sums_cost_over_finished_and_failed_runs` | runs cost 1.5 (FINISHED), 2.0 (FAILED), none (no metric) → 3.5; no experiment yet → 0.0 | F-4b |
+| test_budget · `test_check_budget_stops_when_reaching_the_budget` | 48 + 2 vs 50 → `BudgetExceeded`; 47.9 + 2 → passes | F-4b |
+| test_openrouter_key · `test_spend_tracker_reports_cost_on_exception` | body raises inside the tracker, usage 1.0 → 1.4 → `on_exit(0.4)` called, exception propagates | F-4b |
+| test_bench · `test_bench_refuses_when_budget_spent` | spent 49.0, estimate 2.0, budget 50 → `BudgetExceeded`, no candidate called | F-4b |
 | test_openrouter_key · `test_key_usage_reads_data_usage` | MockTransport `{"data":{"usage":1.25,"limit_remaining":48.0}}` → (1.25, 48.0) | D-6 |
 | test_openrouter_key · `test_key_usage_wrong_shape_or_401_raises` | `{"data":{}}` / HTTP 401 → `OpenRouterKeyError` | F-12 |
 | test_openrouter_key · `test_f_12_key_usage_read_failure_omits_cost_without_failing_run` | 1st or 2nd read 500 → `cost_usd is None`, no exception | F-12 |
@@ -234,4 +262,4 @@ MLflow on a tmp sqlite URI as in mini-rag `tests/conftest.py`)
 **Done when:** hooks pass (incl. the new gates), the spike passes live, the three bench runs are in MLflow
 `voice-arch/bench`, `VoiceSettings` defaults = winners (reason in PROJECT.md), the browser smoke is in the README.
 
-<!-- plan-validate: READY 2026-11-05 sha256:4f1a67a0b20b -->
+<!-- plan-validate: READY 2026-11-05 sha256:375877df3027 -->
