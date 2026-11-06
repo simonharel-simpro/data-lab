@@ -53,3 +53,14 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
   smoke run `--n 1` was green on 2026-11-05; the full bm25/vector × k 3/5 sweep runs on OpenRouter.
 - **Review cycle:** the validation reads GAPS FOUND only because bandit and radon are not installed (a decision
   still open); the deferred items are tracked in #12, #13 and #14.
+
+# voice-arch — LiveKit voice-agent architecture experiment
+
+Integration branch: `feat/voice-arch` (base `main`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
+Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY stamps).
+
+| Phase | Title | Status | Branch |
+|-------|-------|--------|--------|
+| 1 | Infra, gates, OpenRouter audio, stage-1 bench | ⏳ pending | — |
+| 2 | Booking domain + architectures A/B/C + worker | ⏳ pending | — |
+| 3 | Simulated caller, sweep runner, scoring, decision | ⏳ pending | — |
