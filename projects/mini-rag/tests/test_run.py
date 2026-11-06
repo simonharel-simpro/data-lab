@@ -41,10 +41,12 @@ def _run(  # every knob a config-identity test varies is a keyword
     k: int = 3,
     size: int = 120,
     gen_model: str = "test-gen-model",
+    base_url: str = "http://llm.invalid",
+    served_by: dict[str, int] | None = None,
 ) -> str:
     settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
     pilot = PilotSettings(  # type: ignore[call-arg]
-        _env_file=None, llm_base_url="http://llm.invalid", llm_api_key="sk-or-test", gen_model=gen_model, max_tokens=384
+        _env_file=None, llm_base_url=base_url, llm_api_key="sk-or-test", gen_model=gen_model, max_tokens=384
     )
     project = Project(name="mini-rag", root=tmp_path)
     config = RunConfig(
@@ -52,7 +54,7 @@ def _run(  # every knob a config-identity test varies is a keyword
     )
     return run(
         project, settings, pilot, _QUESTIONS, config=config, answer=answer, search=_search,
-        results_dir=tmp_path / "results",
+        results_dir=tmp_path / "results", served_by=None if served_by is None else lambda: served_by,
     )  # fmt: skip
 
 
@@ -83,6 +85,7 @@ def test_run_logs_project_tag_and_experiment(tmp_path: Path, sqlite_uri: str) ->
         "n": "None",
         "questions_hash": "9201f68b69af8a419b78d4666e6a712712b6882ccb4d43baafe034e60e457d05",
         "llm_base_url": "http://llm.invalid",
+        "llm_providers": "none",
         "gen_model": "test-gen-model",
         "max_tokens": "384",
         "size": "120",
@@ -200,3 +203,24 @@ def test_f_13_generation_error_keeps_earlier_answers(tmp_path: Path, sqlite_uri:
         _run(tmp_path, sqlite_uri, answer=failing_on_q3)
 
     assert [r["id"] for r in _jsonl_rows(tmp_path)] == ["q1", "q2"]
+
+
+def test_openrouter_run_logs_the_pinned_provider_and_a_credential_free_url(tmp_path: Path, sqlite_uri: str) -> None:
+    _run(tmp_path, sqlite_uri, base_url="https://u:tok@openrouter.ai/api?key=s3cret")
+
+    params = _only_run(sqlite_uri).data.params
+    assert params["llm_base_url"] == "https://openrouter.ai/api"
+    assert params["llm_providers"] == "deepinfra,gmicloud,parasail@fp8"
+    assert "s3cret" not in str(params) and "tok" not in params["llm_base_url"]
+
+
+def test_run_tags_which_providers_served_the_answers(tmp_path: Path, sqlite_uri: str) -> None:
+    _run(tmp_path, sqlite_uri, served_by={"Parasail": 3, "DeepInfra": 1})
+
+    assert _only_run(sqlite_uri).data.tags["llm_served_by"] == '{"DeepInfra": 1, "Parasail": 3}'
+
+
+def test_run_without_served_providers_sets_no_tag(tmp_path: Path, sqlite_uri: str) -> None:
+    _run(tmp_path, sqlite_uri, served_by={})
+
+    assert "llm_served_by" not in _only_run(sqlite_uri).data.tags

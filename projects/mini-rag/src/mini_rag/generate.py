@@ -6,6 +6,7 @@ models return a `thinking` block before the text and may inline `<think>...</thi
 """
 
 import re
+from collections import Counter
 from typing import Final
 
 import anthropic
@@ -43,17 +44,30 @@ class LlmGenerator:
         base_url: str,
         model: str,
         *,
-        api_key: str,
+        api_key: str | None,
         timeout_s: float,
         max_tokens: int,
+        providers: list[str] | None = None,
+        quantization: str | None = None,
+        max_retries: int = 2,
         http_client: httpx2.Client | None = None,
     ) -> None:
         self.model, self.max_tokens = model, max_tokens
+        # anthropic>=2 dropped `temperature` from the signature; both endpoints honour it.
+        self.extra_body: dict[str, object] = {"temperature": 0}
+        if providers:
+            # OpenRouter routing: only these upstreams, in order, never outside the list or the quantization.
+            routing: dict[str, object] = {"order": providers, "allow_fallbacks": False}
+            if quantization:
+                routing["quantizations"] = [quantization]
+            self.extra_body["provider"] = routing
+        # Which upstream served each answer (OpenRouter's `provider` response field); empty elsewhere.
+        self.served: Counter[str] = Counter()
         self.sdk = anthropic.Anthropic(
             base_url=base_url,
-            api_key=api_key,
+            api_key=api_key or "not-needed",  # placeholder: the LAN DGX is unauthenticated and ignores it
             timeout=timeout_s,
-            max_retries=2,
+            max_retries=max_retries,
             http_client=http_client,
         )
 
@@ -64,8 +78,7 @@ class LlmGenerator:
                 max_tokens=self.max_tokens,
                 system=SYSTEM,
                 messages=[{"role": "user", "content": _prompt(question, passages)}],
-                # anthropic>=2 dropped `temperature` from the signature; both endpoints honour it: deterministic runs.
-                extra_body={"temperature": 0},
+                extra_body=self.extra_body,
             )
         except anthropic.APIError as err:
             raise GenerationError(f"llm {self.model}: {err}") from err
@@ -75,6 +88,9 @@ class LlmGenerator:
             raise GenerationError(
                 f"llm {self.model}: answer truncated at max_tokens={self.max_tokens}; raise MINI_RAG_MAX_TOKENS"
             )
+        served = (message.model_extra or {}).get("provider")
+        if isinstance(served, str):
+            self.served[served] += 1
         text = strip_thinking("".join(getattr(b, "text", "") for b in message.content or [] if b.type == "text"))
         if not text:
             raise GenerationError(f"llm {self.model}: no text in response")
