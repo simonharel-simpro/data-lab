@@ -26,7 +26,11 @@ def _report() -> dict[str, object]:
 
 
 def test_f_16_turn_handling_and_tool_steps_are_pinned() -> None:
-    assert TURN_HANDLING == {"turn_detection": "vad", "interruption": {"mode": "vad"}}
+    assert TURN_HANDLING == {
+        "turn_detection": "vad",
+        "interruption": {"mode": "vad"},
+        "preemptive_generation": {"enabled": False},  # ESC-3-2: the live-call stall
+    }
     assert MAX_TOOL_STEPS == 6
 
     result = build_result("r", Arch.A, "x", BookingState(), None, 0, _report, summarize_chat_ctx=None, max_tool_steps=6)

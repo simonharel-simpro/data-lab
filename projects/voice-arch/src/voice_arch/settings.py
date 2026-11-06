@@ -41,9 +41,11 @@ class VoiceSettings(BaseSettings):
     caller_llm_model: str = "anthropic/claude-haiku-5.5"
     caller_temperature: float = 0.7
 
-    # Same pinning rationale as mini-rag: unrestricted OpenRouter routing makes runs non-reproducible.
-    openrouter_providers: str = "deepinfra,gmicloud,parasail"
-    openrouter_quantization: str = "fp8"
+    # Same pinning rationale as mini-rag: unrestricted OpenRouter routing makes runs non-reproducible. The agent
+    # LLM is pinned to Google's own endpoints (ESC-2-1 option C); they report quantization "unknown", so no
+    # quantization filter by default (it would exclude them). The caller LLM stays unpinned (ESC-1-2).
+    openrouter_providers: str = "google-vertex,google-ai-studio"
+    openrouter_quantization: str | None = None
 
     call_timeout_s: float = 240
     agent_join_timeout_s: float = 20

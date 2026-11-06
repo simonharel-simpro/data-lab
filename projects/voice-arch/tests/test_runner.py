@@ -233,4 +233,5 @@ async def test_params_record_the_worker_config_from_the_first_result(sweep: Swee
     assert params["arch"] == Arch.A.value
     assert params["max_tool_steps"] == "6"
     assert params["reps"] == "1"
+    assert (params["llm_providers"], params["caller_llm_providers"]) == ("google-vertex,google-ai-studio", "none")
     assert params["personas"] == "self_correction"

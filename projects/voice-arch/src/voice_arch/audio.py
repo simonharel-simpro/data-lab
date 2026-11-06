@@ -3,6 +3,7 @@
 from livekit.agents import llm, stt, tts
 from livekit.plugins import openai
 
+from voice_arch.llm_guard import retry_on_empty_completion
 from voice_arch.settings import VoiceSettings
 
 OPENROUTER = "https://openrouter.ai/api/v1"
@@ -33,18 +34,18 @@ def make_llm(
     model: str | None = None,
     temperature: float = 0.0,
     providers: list[str] | None = None,
+    retry_empty: bool = False,
 ) -> llm.LLM:
-    """With `providers`, only those upstreams may serve it, at one quantization and without fallback."""
+    """With `providers`, only those upstreams may serve it, without fallback (and at the quantization, if set)."""
     provider: openai.llm.OpenRouterProviderPreferences | None = None
     if providers:
-        provider = {
-            "order": providers,
-            "quantizations": [settings.openrouter_quantization],
-            "allow_fallbacks": False,
-        }
-    return openai.LLM.with_openrouter(
+        provider = {"order": providers, "allow_fallbacks": False}
+        if settings.openrouter_quantization is not None:
+            provider["quantizations"] = [settings.openrouter_quantization]
+    model_llm = openai.LLM.with_openrouter(
         model=model or settings.llm_model,
         api_key=settings.openrouter_api_key.get_secret_value(),
         temperature=temperature,
         provider=provider,
     )
+    return retry_on_empty_completion(model_llm) if retry_empty else model_llm

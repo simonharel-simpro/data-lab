@@ -60,7 +60,9 @@ async def _until_first_question(session: AgentSession[BookingState], arch: Arch)
 
 async def _book(live: VoiceSettings, arch: Arch, turns: list[str]) -> BookingState:
     state = BookingState()
-    session = AgentSession[BookingState](llm=make_llm(live), userdata=state, max_tool_steps=MAX_TOOL_STEPS)
+    session = AgentSession[BookingState](
+        llm=make_llm(live, providers=live.provider_list), userdata=state, max_tool_steps=MAX_TOOL_STEPS
+    )
     try:
         await session.start(build_agent(arch))
         await _until_first_question(session, arch)
