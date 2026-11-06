@@ -134,3 +134,27 @@ filter alone (any fp8 provider, unbounded).
 share a hash with later ones, even on the same endpoint. "Comparable with DGX runs" means the same model, not the
 same config hash. Answers in one run can come from different listed providers; `llm_served_by` shows it, and
 a strict comparison filters on it. If all three providers are down, OpenRouter runs fail.
+
+## 2026-11-05 — voice-arch: self-hosted LiveKit + OpenRouter audio
+
+**Status:** accepted
+**Context:** `projects/voice-arch` compares three control architectures for an English phone booking agent. It needs
+a realtime media server, STT, TTS and an LLM, a budget of 50 $, and it must not disturb the default stack (which
+has no LiveKit keys).
+**Decision:** (D-1) Every model call goes through OpenRouter with the existing root key `OPENROUTER_API_KEY`,
+shared with other tools (500 $ limit); the 50 $ experiment budget is enforced in software (`budget.py`: the sum of
+`cost_usd` over the bench and conversation runs in MLflow, a run refuses to start when `spent + estimate >= budget`),
+and cost attribution is the key's usage delta around a run, so the key must not be used elsewhere during a run.
+(D-2) LiveKit runs self-hosted in the data-lab compose, WebRTC only, every port on 127.0.0.1. (D-19) The service is
+under compose profile `voice`: the default `docker compose up -d` is unchanged and needs no LiveKit keys (the key
+interpolation uses `:-`, so a missing key never breaks another compose command; the server refuses empty keys at start).
+(D-4) Audio goes through the LiveKit `openai` plugins with `base_url` = OpenRouter. The phase-1 spike passed live, so
+the planned fallback adapter (`openrouter_adapters.py`) was not written. Per-turn estimate: end-of-turn 0.5 s + STT
+0.6 s + LLM 0.45 s + TTS 0.7 s, about 2.2 s, so the 1.2 s latency bar is expected to fail on non-streaming OpenRouter
+audio; latency is then reported comparatively, and (#25) tracks a direct streaming STT.
+**Alternatives considered:** a dedicated OpenRouter key with a hard limit (cleaner cost attribution, one more secret
+to manage; the user chose the shared key); LiveKit Cloud (needs an account and breaks the 127.0.0.1 rule); a custom
+httpx adapter for audio from the start (more code than the plugins' `base_url`).
+**Consequences:** Cost figures include any concurrent use of the shared key, so they are upper bounds. The
+software budget only counts MLflow runs that logged `cost_usd`; a crashed process that never logged is invisible to
+it. Stage-2 latency is the sum of four network round trips per turn.

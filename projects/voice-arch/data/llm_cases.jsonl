@@ -1,0 +1,20 @@
+{"id": "n01", "caller": "My name is John Miller.", "expected_tool": "record_name", "expected_args": {"name": "John Miller"}}
+{"id": "n02", "caller": "It's Maria Garcia, G-A-R-C-I-A.", "expected_tool": "record_name", "expected_args": {"name": "Maria Garcia"}}
+{"id": "n03", "caller": "Last name Smyth, that's S-M-Y-T-H, first name Dana.", "expected_tool": "record_name", "expected_args": {"name": "Dana Smyth"}}
+{"id": "n04", "caller": "Sorry, not Brian, it's Ryan O'Neil.", "expected_tool": "record_name", "expected_args": {"name": "Ryan O'Neil"}}
+{"id": "p01", "caller": "My number is four one five, five five five, zero one three four.", "expected_tool": "record_phone", "expected_args": {"phone": "4155550134"}}
+{"id": "p02", "caller": "You can reach me at 212-555-0198.", "expected_tool": "record_phone", "expected_args": {"phone": "2125550198"}}
+{"id": "p03", "caller": "It's oh seven double five, triple two, one four eight.", "expected_tool": "record_phone", "expected_args": {"phone": "0755222148"}}
+{"id": "p04", "caller": "Phone is 1 617 555 0102.", "expected_tool": "record_phone", "expected_args": {"phone": "6175550102"}}
+{"id": "a01", "caller": "I'm at 12 Oak Road, Springfield, Illinois.", "expected_tool": "record_address", "expected_args": {"address": "12 Oak Road, Springfield, IL"}}
+{"id": "a02", "caller": "The address is 5 Elm Street, New York, New York 10001.", "expected_tool": "record_address", "expected_args": {"address": "5 Elm St, New York, NY"}}
+{"id": "a03", "caller": "Apartment 4B, 221 Baker Avenue, Austin, Texas.", "expected_tool": "record_address", "expected_args": {"address": "Unit 4B, 221 Baker Ave, Austin, TX"}}
+{"id": "a04", "caller": "Make that 88 Lakeview Drive, not Lane, Portland, Oregon.", "expected_tool": "record_address", "expected_args": {"address": "88 Lakeview Dr, Portland, OR"}}
+{"id": "g01", "caller": "My kitchen sink is leaking everywhere.", "expected_tool": "record_problem", "expected_args": {"problem_type": "plumbing"}}
+{"id": "g02", "caller": "Half the outlets in the house stopped working.", "expected_tool": "record_problem", "expected_args": {"problem_type": "electrical"}}
+{"id": "g03", "caller": "The air conditioner is blowing warm air.", "expected_tool": "record_problem", "expected_args": {"problem_type": "hvac"}}
+{"id": "g04", "caller": "My dishwasher won't drain.", "expected_tool": "record_problem", "expected_args": {"problem_type": "appliance"}}
+{"id": "g05", "caller": "I need someone to look at a squeaky garage door.", "expected_tool": "record_problem", "expected_args": {"problem_type": "other"}}
+{"id": "s01", "caller": "Free slots: ST_20261110_0900 (Tuesday 9 am), ST_20261110_1400 (Tuesday 2 pm), ST_20261111_1000 (Wednesday 10 am). The Tuesday afternoon one works.", "expected_tool": "choose_slot", "expected_args": {"slot_id": "ST_20261110_1400"}}
+{"id": "s02", "caller": "Free slots: ST_20261110_0900 (Tuesday 9 am), ST_20261110_1400 (Tuesday 2 pm), ST_20261111_1000 (Wednesday 10 am). I'll take Wednesday morning.", "expected_tool": "choose_slot", "expected_args": {"slot_id": "ST_20261111_1000"}}
+{"id": "s03", "caller": "Free slots: ST_20261110_0900 (Tuesday 9 am), ST_20261110_1400 (Tuesday 2 pm), ST_20261111_1000 (Wednesday 10 am). Actually, make it the earliest one on Tuesday.", "expected_tool": "choose_slot", "expected_args": {"slot_id": "ST_20261110_0900"}}

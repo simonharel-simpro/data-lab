@@ -1,0 +1,88 @@
+[project]
+# "proj-" prefix: a project named like a dependency (e.g. mlflow) must not shadow it in `uv sync` (G-12).
+name = "proj-voice-arch"
+version = "0.1.0"
+requires-python = ">=3.12"
+# Every package the project imports directly (declared-deps hook).
+dependencies = [
+    "datalab",
+    "livekit-agents==1.8.8",
+    "livekit-plugins-openai==1.8.8",
+    "livekit-plugins-silero==1.8.8",
+    "livekit-api==1.2.2",
+    "httpx~=0.28",
+    "mlflow==3.17.2",
+    "pydantic-settings~=2.16",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+    "pyright==1.1.414",
+    "ruff==0.17.3",
+    "pip-audit==2.10.1",
+    "import-linter>=2.15",
+    "pytest-asyncio==1.4.0",
+]
+
+# A build system makes src/<pkg> importable (without one uv treats the project as virtual).
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# dev-mode-dirs: the editable .pth points at src/ even while it only holds .gitkeep, so a package added after
+# the first `uv sync` is importable without a reinstall.
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+sources = ["src"]
+
+[tool.uv.sources]
+datalab = { path = "../../packages/datalab", editable = true }
+
+[tool.importlinter]
+root_package = "voice_arch"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "booking stays pure"
+type = "forbidden"
+source_modules = ["voice_arch.booking"]
+forbidden_modules = ["livekit", "mlflow", "datalab", "httpx"]
+
+[[tool.importlinter.contracts]]
+name = "scoring and decision stay LiveKit-free"
+type = "forbidden"
+source_modules = [
+    "voice_arch.scoring", "voice_arch.naturalness", "voice_arch.decide", "voice_arch.personas",
+    "voice_arch.call", "voice_arch.call_env", "voice_arch.sweep_query",
+]
+forbidden_modules = ["livekit"]
+
+[tool.ruff]
+extend = "../../ruff.toml"   # single source: the repo-root config
+
+[tool.ruff.lint]
+extend-select = ["S"]   # already selected by the root config; explicit so the gate runner sees the security rules
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["integration: needs the live data-lab stack (docker compose up -d)"]
+addopts = "-ra --strict-markers -m 'not integration'"
+
+[tool.coverage.run]
+branch = true
+source = ["voice_arch"]
+
+[tool.coverage.report]
+fail_under = 70
+
+[tool.pyright]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"

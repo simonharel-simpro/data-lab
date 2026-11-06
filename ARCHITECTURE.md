@@ -18,9 +18,13 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
   web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
+- **Voice stack (`projects/voice-arch`, own env):** self-hosted LiveKit server `livekit/livekit-server:v1.13.10`
+  (compose profile `voice`, 127.0.0.1 only: 7880, 7881/tcp, 7882/udp), `livekit-agents` 1.8.8 with the `openai` and
+  `silero` plugins, `livekit-api` 1.2.2; every STT / TTS / LLM call goes to OpenRouter (`/audio/transcriptions`,
+  `/audio/speech`, `/chat/completions`). Browser smoke client: `livekit-client` 2.23.0 from jsDelivr.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
-- **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps.
-  Pre-push stage: `gates-datalab`, `gates-mini-rag` (lint-imports + pyright + pytest with coverage per tree),
+- **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps (`declared-deps-voice-arch` covers the voice-arch tree).
+  Pre-push stage: `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
   `gates-app` (`npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
@@ -33,13 +37,18 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 ## Project Structure
 
 ```
-compose.yaml            shared infra: weaviate, t2v-transformers, mlflow (127.0.0.1 only)
+compose.yaml            shared infra: weaviate, t2v-transformers, mlflow, livekit (profile `voice`; 127.0.0.1 only)
+infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys: `LIVEKIT_KEYS` from the env)
 .env.example            DATALAB_* connection settings (ports, tracking URI)
 contracts/              cross-side contracts (name_vectors.json) read by the Python and app test suites
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A)
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
+projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
+                        booking/ pure domain, agents/ LiveKit layer for archs A/B/C, worker, result, simulated
+                        caller + sweep runner + scoring + decide), web/ (smoke client), data/ (incl. personas),
+                        tests/ (+ tests/integration, live)
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
@@ -48,7 +57,7 @@ tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 line
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
-                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); Python gates `--locked`
+                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); voice-arch gates + pip-audit (job `voice-arch`); Python gates `--locked`
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
@@ -101,6 +110,67 @@ def collection_name(project: str, *parts: str) -> str:
 ### Project (`projects/<name>/`)
 - **Does:** owns its data, code, env and `PROJECT.md` card; talks to the infra only through `datalab`.
 - **Must NOT:** hardcode ports or URIs; write into another project's collections or experiments.
+
+### Voice architectures (`projects/voice-arch`, Phase 2)
+- **Does:** books a US service appointment by voice (name, phone, address, problem type, slot, read-back) in three
+  control structures that share the same LLM, audio, instructions and tools: **A** one `Agent` with every tool,
+  **B** a `TaskGroup` of one `AgentTask` per step (regression allowed), **C** B plus the call record rendered into
+  each task's instructions.
+- **Layers:** `booking/` is pure (import-linter contract "booking stays pure": no livekit, mlflow, datalab, httpx):
+  `record` (`BookingRecord`, `ExpectedRecord`, `is_exact`), `calendar` (the fixed 12 slots, never `today`),
+  `actions` (the only code writing the record; returns the reply the LLM sees), `instructions` (shared strings).
+  `arch.py` (`Arch`, `parse_arch`) and `result.py` (`CallResult`, `RESULT_TOPIC`) are LiveKit-free too. `agents/`
+  holds `state` (`BookingState`), `tools` (`@function_tool` wrappers over `booking.actions`), `arch_a/b/c`,
+  `registry.build_agent`. `worker_logic.py` is the testable half of the worker (metadata, pinned
+  `TURN_HANDLING` / `MAX_TOOL_STEPS`, `build_result`); `worker.py` builds the `AgentServer` from the settings.
+  The agent LLM is pinned to Google's OpenRouter providers (`google-vertex,google-ai-studio`, no fallback, no
+  quantization filter: their endpoints report "unknown"; ESC-2-1) and wrapped by `llm_guard.retry_on_empty_completion`
+  (Gemini sometimes ends a stream with zero tokens, which LiveKit treats as a finished, silent turn; ESC-3-2).
+  The simulated caller's LLM is unpinned. Preemptive generation is explicitly off in `TURN_HANDLING`.
+- **Must NOT:** let `booking/` import LiveKit; write the record anywhere but `booking.actions`; default an unknown
+  `arch` (F-9); write files from the worker (the result goes to the room).
+- **Pattern (a tool completes the step that owns the written field):**
+```python
+def complete_current_task(ctx: Ctx, field: str) -> None:
+    agent = ctx.session.current_agent
+    if isinstance(agent, AgentTask) and not agent.done() and getattr(agent, "FIELD", None) == field:
+        agent.complete(None)
+```
+- **Data flow:** `python -m voice_arch.dispatch --arch b --room R` creates an agent dispatch with metadata
+  `{"arch": "b"}` -> the worker (`agent_name="booking-agent"`) parses it (`UnknownArchError` -> error `CallResult`),
+  builds the session (STT/LLM/TTS via OpenRouter, Silero VAD, `userdata=BookingState`), starts `build_agent(arch)`
+  in the room, waits for the session `close`, then sends one `CallResult` (record + session report + close reason +
+  error counts) on the room text topic `voice-arch.result` before returning.
+- **State:** the booking record is the only stateful entity; its `confirmed` flag resets on any write (U-2), so it
+  has no FSM beyond that flag. The TaskGroup walks name -> phone -> address -> problem -> slot -> confirm, and
+  `out_of_scope` (added by LiveKit to every task after the first) regresses to an earlier step.
+
+### Voice sweeps (`projects/voice-arch`, Phase 3)
+- **Does:** measures each architecture against a simulated caller: one sweep = one arch x 6 personas x N reps = one
+  MLflow run in `voice-arch/conversations` (metric `exact_rate`), then `decide` picks the architecture (D-15) and
+  `rate` logs human ratings (reported, never ranking).
+- **Layers:** pure and LiveKit-free (import-linter contract "scoring and decision stay LiveKit-free"): `personas`
+  (`load_personas`, `PersonaError`), `naturalness` (counters from `SessionReport.to_dict()`), `scoring`
+  (`aggregate`, `cost_per_call`), `decide` (`pick_arch` on integers), `call` (`run_one_call` -> `CallRow`, the F-*
+  classification), `call_env` (the `CallEnv` / `CallerHandle` protocols the tests fake), `sweep_log`, `sweep_query`.
+  LiveKit side: `caller` (`CallerAgent`, `make_caller_session`), `live_caller` (the live `CallerHandle`),
+  `livekit_env` (`LiveKitCallEnv`). `runner` wires settings, budget gate, MLflow run and spend tracker; `rate` is a
+  small CLI.
+- **Must NOT:** let `call.py` or the scoring modules import LiveKit; start a sweep without the budget gate (F-4b);
+  count a `caller_fault` in `exact_rate` (F-6); let a smoke run log unprefixed metrics (U-1).
+- **Pattern (a call is classified in a fixed order; auth failures stop the sweep before anything else):**
+```python
+_stop_on_auth(handle, result)                       # 401/402 on either side -> ProviderAuthStop
+return _row(persona, rep, room, _classify(handle, result), result)
+```
+- **Data flow:** `runner.main()` loads settings/personas, then `run_sweep` checks the budget, opens the run and the
+  spend tracker, and for each persona x rep calls `run_one_call`: dispatch the booking agent, connect the caller
+  (it joins the room and starts listening; B and C only after the agent's greeting, see `LiveCaller`), wait for the
+  agent's `CallResult` on `voice-arch.result` (firing the persona's interjections while the agent talks), classify,
+  delete the room. Rows are appended to `results/<run_id>.jsonl`; metrics, params and `per_conversation.json` are
+  logged at the end; `cost_usd` (caller included) is logged when the tracker exits, even for a FAILED run.
+- **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
+  transition model, each call is classified once from what the handle reports.
 
 ### App (`app/`, Phase 2B)
 - **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`) and MLflow runs

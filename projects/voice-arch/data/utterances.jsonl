@@ -1,0 +1,40 @@
+{"id": "u01", "text": "Hi, my name is John Miller and my number is 415 555 0134.", "truth": {"name": "John Miller", "phone": "4155550134"}}
+{"id": "u02", "text": "This is Maria Garcia, that's G-A-R-C-I-A, calling about a leaking pipe.", "truth": {"name": "Maria Garcia"}}
+{"id": "u03", "text": "My name is Dana Smyth, that is S-M-Y-T-H for the last name.", "truth": {"name": "Dana Smyth"}}
+{"id": "u04", "text": "You can reach me at four one five, five five five, oh one three four.", "truth": {"phone": "4155550134"}}
+{"id": "u05", "text": "My number is four one five five double five oh double one two.", "truth": {"phone": "4155550112"}}
+{"id": "u06", "text": "Call me back on 2 1 2 triple five 0 1 9 8.", "truth": {"phone": "2125550198"}}
+{"id": "u07", "text": "The address is 12 Oak Road, Springfield, Illinois.", "truth": {"address": "12 Oak Road Springfield IL"}}
+{"id": "u08", "text": "I'm at 450 Maple Avenue, Apartment 3B, Portland, Oregon.", "truth": {"address": "450 Maple Avenue"}}
+{"id": "u09", "text": "It's 7 Elm Street, New York, New York.", "truth": {"address": "7 Elm Street New York NY"}}
+{"id": "u10", "text": "We live at 2280 Peachtree Lane, Atlanta, Georgia.", "truth": {"address": "2280 Peachtree Lane Atlanta GA"}}
+{"id": "u11", "text": "Please come to 9 Sycamore Court, Raleigh, North Carolina.", "truth": {"address": "9 Sycamore Court Raleigh NC"}}
+{"id": "u12", "text": "The house is at 1600 Wisteria Boulevard in Austin, Texas.", "truth": {"address": "1600 Wisteria Boulevard"}}
+{"id": "u13", "text": "I'd like Tuesday afternoon if you have it.", "truth": {"slot": "Tuesday afternoon"}}
+{"id": "u14", "text": "Is next Tuesday afternoon available?", "truth": {"slot": "next Tuesday afternoon"}}
+{"id": "u15", "text": "Thursday morning works best for me.", "truth": {"slot": "Thursday morning"}}
+{"id": "u16", "text": "Can you do Friday at nine in the morning?", "truth": {"slot": "Friday at nine"}}
+{"id": "u17", "text": "My name is Priya Raghavan, R-A-G-H-A-V-A-N, and my number is 646 555 0172.", "truth": {"name": "Priya Raghavan", "phone": "6465550172"}}
+{"id": "u18", "text": "It's Thomas O'Brien, and the address is 88 Birch Drive, Denver, Colorado.", "truth": {"name": "Thomas O'Brien", "address": "88 Birch Drive Denver CO"}}
+{"id": "u19", "text": "Sorry, my number is 415 555 0134, no wait, it's 415 555 0143.", "truth": {"phone": "4155550143"}}
+{"id": "u20", "text": "I'm at 14 Cedar Road, no sorry, 41 Cedar Road, Madison, Wisconsin.", "truth": {"address": "41 Cedar Road Madison WI"}}
+{"id": "u21", "text": "My name is Lucas Fernandez and I'd like Wednesday afternoon.", "truth": {"name": "Lucas Fernandez", "slot": "Wednesday afternoon"}}
+{"id": "u22", "text": "This is Aisha Khan, K-H-A-N, at 305 555 0166.", "truth": {"name": "Aisha Khan", "phone": "3055550166"}}
+{"id": "u23", "text": "My phone is one, six one seven, five five five, oh one eight nine.", "truth": {"phone": "6175550189"}}
+{"id": "u24", "text": "Come to 3300 Lakeshore Drive, Chicago, Illinois, 60611.", "truth": {"address": "3300 Lakeshore Drive Chicago IL"}}
+{"id": "u25", "text": "I'm Beverly Washington and the number is 202 555 0121.", "truth": {"name": "Beverly Washington", "phone": "2025550121"}}
+{"id": "u26", "text": "The place is 27 Juniper Lane, Boulder, Colorado.", "truth": {"address": "27 Juniper Lane Boulder CO"}}
+{"id": "u27", "text": "Name's Kowalski, K-O-W-A-L-S-K-I, Jan Kowalski.", "truth": {"name": "Jan Kowalski"}}
+{"id": "u28", "text": "Number is six oh two, five five five, double oh seven seven.", "truth": {"phone": "6025550077"}}
+{"id": "u29", "text": "We are at 501 Magnolia Avenue, Nashville, Tennessee.", "truth": {"address": "501 Magnolia Avenue Nashville TN"}}
+{"id": "u30", "text": "Could you do Monday morning, say around ten?", "truth": {"slot": "Monday morning"}}
+{"id": "u31", "text": "I'm Emily Nguyen, that's N-G-U-Y-E-N, and I'm at 19 Harbor Road, Seattle, Washington.", "truth": {"name": "Emily Nguyen", "address": "19 Harbor Road Seattle WA"}}
+{"id": "u32", "text": "My number is 720 555 0150 and Thursday morning is good.", "truth": {"phone": "7205550150", "slot": "Thursday morning"}}
+{"id": "u33", "text": "It's Robert Chen, call 503 555 0188.", "truth": {"name": "Robert Chen", "phone": "5035550188"}}
+{"id": "u34", "text": "Address is 62 Willow Street, Burlington, Vermont.", "truth": {"address": "62 Willow Street Burlington VT"}}
+{"id": "u35", "text": "Phone number: nine one seven, triple five, oh one oh one.", "truth": {"phone": "9175550101"}}
+{"id": "u36", "text": "This is Sofia Rossi at 800 Pine Avenue, San Diego, California.", "truth": {"name": "Sofia Rossi", "address": "800 Pine Avenue San Diego CA"}}
+{"id": "u37", "text": "Friday afternoon would be perfect.", "truth": {"slot": "Friday afternoon"}}
+{"id": "u38", "text": "Dwayne Mitchell here, 404 555 0139.", "truth": {"name": "Dwayne Mitchell", "phone": "4045550139"}}
+{"id": "u39", "text": "I'm at 15 Aspen Court, Salt Lake City, Utah.", "truth": {"address": "15 Aspen Court Salt Lake City UT"}}
+{"id": "u40", "text": "Hello, Hannah Lee speaking, L-E-E, and the number is 818 555 0145.", "truth": {"name": "Hannah Lee", "phone": "8185550145"}}

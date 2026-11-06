@@ -28,6 +28,14 @@ const renderedAt = new Date().toLocaleString('fr-FR');
       .badge { display:inline-block; background:var(--warn-bg); color:var(--warn); border-radius:999px; padding:2px 10px; font-size:.8rem; }
       .status { font-size:.8rem; border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
       .metric { font-variant-numeric:tabular-nums; font-size:1.5rem; color:var(--ok); }
+      /* Card bodies are Markdown: tables and code need a base style to read as a report. */
+      table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:.9rem; display:block; overflow-x:auto; }
+      th, td { border-bottom:1px solid var(--line); padding:6px 10px; text-align:left; vertical-align:top; }
+      th { background:var(--card); font-weight:600; }
+      tbody tr:nth-child(even) { background:color-mix(in srgb, var(--card) 60%, transparent); }
+      code { font-size:.85em; background:var(--card); border:1px solid var(--line); border-radius:4px; padding:0 4px; overflow-wrap:anywhere; }
+      h2 { margin-top:32px; border-bottom:1px solid var(--line); padding-bottom:4px; }
+      .grid + h2 { margin-top:24px; }
     </style>
   </head>
   <body>

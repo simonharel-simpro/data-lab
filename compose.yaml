@@ -5,6 +5,9 @@
 #
 # Ports 8090 / 50052 / 5050 (not 8080 / 50051 / 5000) so Demo-RAG's stack keeps running side by side (D-4).
 #
+# LiveKit (voice-arch) is opt-in: ports 7880 (HTTP/WS) / 7881 (TCP) / 7882 (UDP), started with
+# `docker compose --profile voice up -d` (a plain `docker compose up -d` does not start it).
+#
 # WARNING: `docker compose down -v` deletes the named volumes, i.e. the Weaviate collections and MLflow runs of
 # EVERY project. Use plain `docker compose down` to stop the stack.
 name: data-lab
@@ -74,6 +77,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    restart: unless-stopped
+
+  livekit:
+    # Profile `voice`: not started by the default `docker compose up -d` (D-19).
+    image: livekit/livekit-server:v1.13.10
+    profiles: [voice]
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      # `:-`, never `:?`: interpolation runs for every service, so `:?` would break every compose command without
+      # the keys. The server itself refuses empty keys at start.
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-}: ${LIVEKIT_API_SECRET:-}"
+    volumes:
+      - ./infra/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+    healthcheck:
+      # The image ships busybox (wget applet, no curl); the server answers 200 "OK" on its HTTP port.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7880"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     restart: unless-stopped
 
 volumes:

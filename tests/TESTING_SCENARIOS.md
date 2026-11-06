@@ -65,3 +65,36 @@
 | PIL-08 | Reproducible routing | OpenRouter run | request allows only `provider.order=[deepinfra,gmicloud,parasail]`, `quantizations=[fp8]`, `allow_fallbacks=false`; params `llm_providers`, credential-free `llm_base_url`; tag `llm_served_by` counts the provider of each answer | 🆕 New | 2026-11-06 |
 | PIL-04 | Smoke run | `--n 1` | `smoke_*` metrics + tag `smoke=true`, never counted as best | 🆕 New | Phase 3 |
 | PIL-05 | Unanswerable question | answer `null` | IDK counts correct; any answer = hallucination | 🆕 New | Phase 3 |
+
+## voice-arch — stage-1 bench (Phase 1), booking archs + worker (Phase 2)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| VA-01 | STT bench | `python -m voice_arch.bench --component stt` | run FINISHED in `voice-arch/bench`, per-model errors + p50, tag `winner`, `cost_usd` | 🆕 New | voice-arch P1 |
+| VA-02 | Budget reached | spent ≥ 50 $ in voice-arch runs | bench refuses before any model call | 🆕 New | voice-arch P1 |
+| VA-03 | OpenRouter 402/401 | key out of credit / revoked | bench run FAILED, later candidates not called, cost still logged | 🆕 New | voice-arch P1 |
+| VA-04 | Stale corpus cache | other TTS voice / edited text | wavs re-synthesised | 🆕 New | voice-arch P1 |
+| VA-05 | Browser smoke | Windows browser on `web/index.html` + token | audio both ways, UDP/TCP noted, e2e offset logged | 🆕 New (user) | voice-arch P1 |
+| VA-06 | Default stack untouched | `docker compose up -d` without LiveKit keys | starts, no `livekit` service | 🆕 New | voice-arch P1 |
+| VA-07 | Booked slot offered | caller picks `ST_20261109_0900` (booked) | reply "taken", record unchanged, agent offers another | 🆕 New | voice-arch P2 |
+| VA-08 | Non-ISO day in `check_slots` | day "next tuesday" | reply "Use a date like 2026-11-10." | 🆕 New | voice-arch P2 |
+| VA-09 | Record edited after confirm | `set_field` on a confirmed record | `confirmed` back to False, field logged in `corrections` | 🆕 New | voice-arch P2 |
+| VA-10 | Unknown dispatch arch | metadata `""`, `{x`, no `arch`, `"A"` | error `CallResult` on `voice-arch.result`, no session started | 🆕 New | voice-arch P2 |
+| VA-11 | Clean caller, text mode | `pytest -m integration tests/integration/test_arch_text.py` | each of A, B, C ends with an exact, confirmed record | 🆕 New | voice-arch P2 |
+| VA-12 | Slot change during read-back | "actually Thursday at 2 PM" before the yes | final slot `ST_20261112_1400`, confirmed, old slot released (A, B, C) | 🆕 New | voice-arch P2 |
+| VA-13 | Correction of another field | task = slot, caller fixes the phone | phone updated, the slot task stays open | 🆕 New | voice-arch P2 |
+| VA-14 | Session report fails | `make_session_report` raises | `CallResult.report` None, `error` carries the message, record kept | 🆕 New | voice-arch P2 |
+| VA-15 | Result send after room deleted | `send_text` raises | logged, the job still returns | 🆕 New | voice-arch P2 |
+| VA-16 | Browser call per arch | `voice_arch.worker dev`, token with `--agent booking-agent`, `dispatch --arch a/b/c` | a booking completes by voice, the agent hangs up after the goodbye | 🆕 New (user) | voice-arch P2 |
+| VA-17 | Persona data validated | personas.jsonl with an unknown/booked slot, a bad problem type, an extra key, a duplicate id | `PersonaError` naming the line and the cause | 🆕 New | voice-arch P3 |
+| VA-18 | Agent never joins | dispatch accepted, no worker | `AgentNeverJoined` after `agent_join_timeout_s`, sweep run FAILED, one room | 🆕 New | voice-arch P3 |
+| VA-19 | OpenRouter 401/402 on either side | agent result or caller session reports 402 | `ProviderAuthStop`, run FAILED, no further room, `cost_usd` still logged | 🆕 New | voice-arch P3 |
+| VA-20 | Caller fails | caller TTS/LLM error closes its session, result arrives | row `caller_fault`, excluded from `exact_rate`; > 10 % of rows -> run FAILED after logging | 🆕 New | voice-arch P3 |
+| VA-21 | Call never ends / agent leaves without result | no result by `call_timeout_s` / participant left | `timeout` / `agent_lost`, counted as a miss in `exact_rate` | 🆕 New | voice-arch P3 |
+| VA-22 | Budget | `spent` + estimate >= 50 $ / key usage reaches the budget mid-sweep | refused before any room / stopped before the next call, FAILED run keeps rows and `cost_usd` | 🆕 New | voice-arch P3 |
+| VA-23 | Smoke sweep | 1 persona x 1 rep | every metric `smoke_*`, tag `full=false`, run not used by `decide` | 🆕 New | voice-arch P3 |
+| VA-24 | Naturalness counters | gap 2.0 s vs 2.01 s; interrupted reply repeated vs new | not long vs long; barge-in unhandled vs handled | 🆕 New | voice-arch P3 |
+| VA-25 | Decision rule | archs 1 or 2 exact calls apart vs 3 | tie -> lowest latency p50; beyond the margin -> most exact; flag `production_ready` only at >= 90 % and p50 < 1.2 s | 🆕 New | voice-arch P3 |
+| VA-26 | Human rating | `rate --rating 0` / `6`; `--rating 4` | refused before MLflow; run `voice-arch/human` with `human_rating`, never `exact_rate` | 🆕 New | voice-arch P3 |
+| VA-27 | One live call | worker + LiveKit up, `self_correction`, arch A | one `CallRow` (scored or timeout); the report holds the keys `naturalness` reads | 🆕 New | voice-arch P3 |
+| VA-28 | Full sweeps (user) | `runner --arch` a, b, c | three FINISHED full runs, `decide` table in PROJECT.md, app card shows `exact_rate` | 🆕 New (user) | voice-arch P3 |

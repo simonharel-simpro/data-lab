@@ -53,3 +53,46 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
   smoke run `--n 1` was green on 2026-11-05; the full bm25/vector × k 3/5 sweep runs on OpenRouter.
 - **Review cycle:** the validation reads GAPS FOUND only because bandit and radon are not installed (a decision
   still open); the deferred items are tracked in #12, #13 and #14.
+
+# voice-arch — LiveKit voice-agent architecture experiment
+
+Integration branch: `feat/voice-arch` (base `main`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
+Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY stamps).
+
+| Phase | Title | Status | Branch |
+|-------|-------|--------|--------|
+| 1 | Infra, gates, OpenRouter audio, stage-1 bench | ✅ landed on feat/voice-arch @ fd114c3 (/check clean, fix-check 2 iter) | `phase-1-infra-bench` |
+| 2 | Booking domain + architectures A/B/C + worker | ✅ landed on feat/voice-arch @ 7fbfe3b (/check clean, fix-check 1 iter) | `phase-2-booking-archs` |
+| 3 | Simulated caller, sweep runner, scoring, decision | ✅ landed on feat/voice-arch @ 0e69038 (/check clean; live call ESC-3-2; sweeps await user) | `phase-3-caller-runner` |
+
+## voice-arch Phase 1 — Infra, gates, OpenRouter audio, stage-1 bench
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi (3 dispatches: A scaffold/infra/core, B bench/tools/docs, C D-17 caller default)
+**Tooling:** ruff ✅ · pyright 0 · lint-imports 1/1 kept · pytest 82 passed (3 integration deselected), coverage 88.3 % (floor 70) · pre-push hooks all pass · live spike 3/3
+- Stage-1 bench (MLflow `voice-arch/bench`, 0.17 $): STT `assemblyai/universal-3-6-pro` (4/40 errors, p50 0.61 s), TTS `deepgram/aura-2` (TTFB p50 0.38 s), LLM `google/gemini-3.5-flash-lite` (20/20, TTFT 0.82 s); per-turn sum ≈ 2.3 s (> 1.2 s bar, as planned, #25)
+- Escalations: ESC-1-1 resolved (plan scoring kept); ESC-1-2 open, reversible: caller model provisionally `anthropic/claude-haiku-5.5` (user to confirm)
+- Deferred to the user (approved deviation): browser smoke (README runbook); LiveKit healthcheck unverified until first `--profile voice up`
+- Deviations logged in IMPLEMENTATION_NOTES.md (fields punctuation fix, extra modules seams/candidates/bench_runs, direct mlflow/pydantic-settings pins)
+
+## voice-arch Phase 2 — Booking domain + architectures A/B/C + worker
+
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ ruff, pyright, lint-imports, pytest 185 passed, pre-push hooks
+
+- ✅ Pure domain `booking/` (record, calendar, actions, instructions); `arch.py`, `result.py`
+- ✅ `agents/` (state, tools, arch_a orchestrator, arch_b TaskGroup, arch_c + call record, registry)
+- ✅ `worker.py` (AgentServer, agent_name booking-agent) + pure `worker_logic.py`
+- ✅ Live text-mode integration: A, B, C each pass the clean caller and U-18 slot change (6/6)
+- ⏳ Browser call per arch — deferred to the user (recorded deviation, VA-16)
+
+Open escalations: ESC-1-2 (caller model), ESC-2-1 (provider pin vs gemini-3.5-flash-lite; worker unpinned provisionally).
+Deviations in IMPLEMENTATION_NOTES.md: worker_logic split, unpinned LLM, non-awaited step-task reply on a user-ended
+context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller must wait for the first task question.
+
+## voice-arch Phase 3 — Simulated caller, sweep runner, scoring, decision, human ratings
+
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ pyright, ruff, lint-imports (2 contracts), pytest 272 passed, pre-push hooks, weak_tests 0
+
+- ✅ personas (6, validated at load), caller (LiveKit AgentSession on a self-connected room), call + runner (one MLflow run per sweep, budget check, crash-copy JSONL), naturalness, scoring, decide (D-15 rule), rate
+- ❌ Live call: 2 runs (arch A, self_correction) timed out after the address turn — the agent never replied (ESC-3-2); text-mode replay of the same turns works
+- ⏳ Full sweeps, `decide` into PROJECT.md, human ratings — deferred to the user (approved)
+
+Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall; likely coupled with ESC-2-1 unpinned route).
