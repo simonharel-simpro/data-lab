@@ -1,0 +1,10 @@
+# LiveKit server config for the voice-arch project (compose profile `voice`). No keys here: they come from the
+# LIVEKIT_KEYS environment variable (see compose.yaml). Loopback only: the browser smoke runs on the same host.
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  node_ip: 127.0.0.1
+logging:
+  level: info

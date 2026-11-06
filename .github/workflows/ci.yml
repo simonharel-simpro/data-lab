@@ -92,3 +92,25 @@ jobs:
           uv run --locked pyright
           uv run --locked pip-audit
           uv run --locked pytest --cov
+
+  voice-arch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/voice-arch
+    # Unit tests only: no LiveKit, MLflow (sqlite in tmp) or OpenRouter in CI; integration tests are marked and deselected.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: voice-arch gates (contracts, types, deps) + unit tests + coverage floor
+        run: |
+          uv sync --locked
+          uv run --locked lint-imports
+          uv run --locked pyright
+          uv run --locked pip-audit
+          uv run --locked pytest --cov

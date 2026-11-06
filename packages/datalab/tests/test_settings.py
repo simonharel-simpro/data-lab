@@ -84,6 +84,7 @@ def test_g_10_env_examples_agree() -> None:
         REPO_ROOT / ".env.example",
         REPO_ROOT / "templates" / "project" / ".env.example",
         REPO_ROOT / "projects" / "mini-rag" / ".env.example",
+        REPO_ROOT / "projects" / "voice-arch" / ".env.example",
     ]
 
     shared = [{k: v for k, v in _parse_env(path).items() if k.startswith("DATALAB_")} for path in copies]
@@ -91,6 +92,7 @@ def test_g_10_env_examples_agree() -> None:
     assert shared[0], "the root .env.example defines no DATALAB_* key"
     assert shared[1] == shared[0]
     assert shared[2] == shared[0]
+    assert shared[3] == shared[0]
 
 
 def test_g_10_ports_agree_with_compose() -> None:

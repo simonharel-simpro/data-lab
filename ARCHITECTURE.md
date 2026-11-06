@@ -18,6 +18,10 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
   web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
+- **Voice stack (`projects/voice-arch`, own env):** self-hosted LiveKit server `livekit/livekit-server:v1.13.10`
+  (compose profile `voice`, 127.0.0.1 only: 7880, 7881/tcp, 7882/udp), `livekit-agents` 1.8.8 with the `openai` and
+  `silero` plugins, `livekit-api` 1.2.2; every STT / TTS / LLM call goes to OpenRouter (`/audio/transcriptions`,
+  `/audio/speech`, `/chat/completions`). Browser smoke client: `livekit-client` 2.23.0 from jsDelivr.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
 - **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps.
   Pre-push stage: `gates-datalab`, `gates-mini-rag` (lint-imports + pyright + pytest with coverage per tree),
@@ -33,13 +37,16 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 ## Project Structure
 
 ```
-compose.yaml            shared infra: weaviate, t2v-transformers, mlflow (127.0.0.1 only)
+compose.yaml            shared infra: weaviate, t2v-transformers, mlflow, livekit (profile `voice`; 127.0.0.1 only)
+infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys: `LIVEKIT_KEYS` from the env)
 .env.example            DATALAB_* connection settings (ports, tracking URI)
 contracts/              cross-side contracts (name_vectors.json) read by the Python and app test suites
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A)
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
+projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
+                        booking/ pure normalisers), web/ (smoke client), data/, tests/ (+ tests/integration, live)
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)

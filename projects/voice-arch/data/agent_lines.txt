@@ -1,0 +1,6 @@
+Hello, thanks for calling. How can I help you today?
+Could I have your name, please?
+Can you confirm your phone number?
+What is the address of the property?
+We have Tuesday morning or Thursday afternoon available.
+Perfect, your appointment is booked. Is there anything else?

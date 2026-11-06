@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>voice-arch smoke client</title>
+<style>
+  body { font: 15px system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
+  input { width: 100%; box-sizing: border-box; margin: .25rem 0 .75rem; font: inherit; }
+  pre { background: #f4f4f4; padding: .75rem; min-height: 6rem; white-space: pre-wrap; }
+</style>
+<h1>voice-arch smoke client</h1>
+<label>LiveKit URL <input id="url" value="ws://127.0.0.1:7880"></label>
+<label>Token (python -m voice_arch.token --room smoke --agent smoke) <input id="token"></label>
+<button id="join">Join</button> <button id="leave" disabled>Leave</button>
+<h2>Log</h2>
+<pre id="log"></pre>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.23.0/dist/livekit-client.umd.js"></script>
+<script>
+  const { Room, RoomEvent, Track } = LivekitClient;
+  const $ = (id) => document.getElementById(id);
+  const log = (msg) => { $("log").textContent += new Date().toISOString().slice(11, 23) + "  " + msg + "\n"; };
+  let room = null;
+
+  // The selected ICE candidate pair tells UDP (media on 7882/udp) from the TCP fallback (7881/tcp).
+  async function logTransport() {
+    const pc = room.engine.pcManager?.subscriber?.pc;
+    if (!pc) return log("no peer connection yet");
+    const stats = await pc.getStats();
+    stats.forEach((report) => {
+      if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded") {
+        const local = stats.get(report.localCandidateId);
+        log("selected candidate: " + local.candidateType + " " + (local.protocol || "?").toUpperCase());
+      }
+    });
+  }
+
+  $("join").onclick = async () => {
+    room = new Room();
+    room.on(RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind === Track.Kind.Audio) { document.body.appendChild(track.attach()); log("agent audio attached"); }
+    });
+    room.on(RoomEvent.ParticipantConnected, (p) => log("joined: " + p.identity));
+    room.on(RoomEvent.Disconnected, () => { log("disconnected"); $("join").disabled = false; $("leave").disabled = true; });
+    try {
+      await room.connect($("url").value, $("token").value.trim());
+      await room.localParticipant.setMicrophoneEnabled(true);
+    } catch (err) { return log("error: " + err.message); }
+    log("connected, microphone on");
+    $("join").disabled = true; $("leave").disabled = false;
+    setTimeout(logTransport, 3000);
+  };
+  $("leave").onclick = () => room && room.disconnect();
+</script>

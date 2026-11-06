@@ -38,6 +38,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^(projects/mini-rag/|tools/pre_commit_checks/)
+      - id: declared-deps-voice-arch
+        name: voice-arch imports are declared dependencies
+        entry: uv run --locked --directory projects/voice-arch python ../../tools/pre_commit_checks/check_declared_dependencies.py
+        language: system
+        pass_filenames: false
+        files: ^(projects/voice-arch/|tools/pre_commit_checks/)
       # Pre-push parity with ci.yml's gates + tests. pip-audit, npm audit and the gitleaks history scan stay CI-only
       # because they need the network.
       - id: gates-datalab
@@ -54,6 +60,13 @@ repos:
         pass_filenames: false
         stages: [pre-push]
         files: ^(projects/mini-rag/|packages/datalab/src/)
+      - id: gates-voice-arch
+        name: voice-arch gates (contracts, types) + unit tests + coverage floor
+        entry: bash -c 'cd projects/voice-arch && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(projects/voice-arch/|packages/datalab/src/)
       - id: gates-app
         name: app astro check + unit tests + coverage floor
         # Needs node >=22.22 on PATH (see .nvmrc); node 20 rejects --test-coverage-lines.

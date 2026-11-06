@@ -65,3 +65,14 @@
 | PIL-08 | Reproducible routing | OpenRouter run | request allows only `provider.order=[deepinfra,gmicloud,parasail]`, `quantizations=[fp8]`, `allow_fallbacks=false`; params `llm_providers`, credential-free `llm_base_url`; tag `llm_served_by` counts the provider of each answer | 🆕 New | 2026-11-06 |
 | PIL-04 | Smoke run | `--n 1` | `smoke_*` metrics + tag `smoke=true`, never counted as best | 🆕 New | Phase 3 |
 | PIL-05 | Unanswerable question | answer `null` | IDK counts correct; any answer = hallucination | 🆕 New | Phase 3 |
+
+## voice-arch — stage-1 bench (Phase 1)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| VA-01 | STT bench | `python -m voice_arch.bench --component stt` | run FINISHED in `voice-arch/bench`, per-model errors + p50, tag `winner`, `cost_usd` | 🆕 New | voice-arch P1 |
+| VA-02 | Budget reached | spent ≥ 50 $ in voice-arch runs | bench refuses before any model call | 🆕 New | voice-arch P1 |
+| VA-03 | OpenRouter 402/401 | key out of credit / revoked | bench run FAILED, later candidates not called, cost still logged | 🆕 New | voice-arch P1 |
+| VA-04 | Stale corpus cache | other TTS voice / edited text | wavs re-synthesised | 🆕 New | voice-arch P1 |
+| VA-05 | Browser smoke | Windows browser on `web/index.html` + token | audio both ways, UDP/TCP noted, e2e offset logged | 🆕 New (user) | voice-arch P1 |
+| VA-06 | Default stack untouched | `docker compose up -d` without LiveKit keys | starts, no `livekit` service | 🆕 New | voice-arch P1 |

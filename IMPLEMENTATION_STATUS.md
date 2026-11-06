@@ -61,6 +61,14 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
-| 1 | Infra, gates, OpenRouter audio, stage-1 bench | ⏳ pending | — |
+| 1 | Infra, gates, OpenRouter audio, stage-1 bench | 🔄 implemented, /check pending | `phase-1-infra-bench` |
 | 2 | Booking domain + architectures A/B/C + worker | ⏳ pending | — |
 | 3 | Simulated caller, sweep runner, scoring, decision | ⏳ pending | — |
+
+## voice-arch Phase 1 — Infra, gates, OpenRouter audio, stage-1 bench
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi (3 dispatches: A scaffold/infra/core, B bench/tools/docs, C D-17 caller default)
+**Tooling:** ruff ✅ · pyright 0 · lint-imports 1/1 kept · pytest 82 passed (3 integration deselected), coverage 88.3 % (floor 70) · pre-push hooks all pass · live spike 3/3
+- Stage-1 bench (MLflow `voice-arch/bench`, 0.17 $): STT `assemblyai/universal-3-6-pro` (4/40 errors, p50 0.61 s), TTS `deepgram/aura-2` (TTFB p50 0.38 s), LLM `google/gemini-3.5-flash-lite` (20/20, TTFT 0.82 s); per-turn sum ≈ 2.3 s (> 1.2 s bar, as planned, #25)
+- Escalations: ESC-1-1 resolved (plan scoring kept); ESC-1-2 open, reversible: caller model provisionally `anthropic/claude-haiku-5.5` (user to confirm)
+- Deferred to the user (approved deviation): browser smoke (README runbook); LiveKit healthcheck unverified until first `--profile voice up`
+- Deviations logged in IMPLEMENTATION_NOTES.md (fields punctuation fix, extra modules seams/candidates/bench_runs, direct mlflow/pydantic-settings pins)
