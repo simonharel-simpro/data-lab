@@ -52,3 +52,24 @@ allow the microphone. Then:
 3. Say three sentences and hand-time each (end of your speech to first agent sound); compare with the
    `e2e_latency=` lines the agent logs. Write the three offsets, the UDP/TCP result and any audio problem in
    `PROJECT.md` (no MLflow run). If the browser cannot reach the WSL2 ports, note it there before Phase 2.
+
+## Booking agent worker (Phase 2)
+
+```bash
+# 1. LiveKit up (see "Browser smoke"), then the worker (dev mode: auto-reload, one job per call)
+uv run python -m voice_arch.worker dev            # production-like: `... worker start`
+# 2. a join token that does NOT auto-dispatch, then dispatch the architecture you want into the room
+uv run python -m voice_arch.token --room t1
+uv run python -m voice_arch.dispatch --arch b --room t1     # --arch a | b | c
+```
+
+Join from `web/index.html` as in the smoke run. The agent greets, books name, phone, address, problem type and slot,
+reads the booking back and hangs up after the caller confirms. When the call ends the worker sends one
+`CallResult` JSON on the room text topic `voice-arch.result` (record, session report, close reason, error counts);
+it writes no file. An unknown `--arch` is refused with an error result, never defaulted to A.
+
+Live text-mode check of the three architectures (OpenRouter LLM only, a few cents):
+
+```bash
+uv run pytest -m integration tests/integration/test_arch_text.py
+```

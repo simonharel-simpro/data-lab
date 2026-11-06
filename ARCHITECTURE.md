@@ -46,7 +46,8 @@ templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
-                        booking/ pure normalisers), web/ (smoke client), data/, tests/ (+ tests/integration, live)
+                        booking/ pure domain, agents/ LiveKit layer for archs A/B/C, worker, result), web/ (smoke
+                        client), data/, tests/ (+ tests/integration, live)
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
@@ -108,6 +109,36 @@ def collection_name(project: str, *parts: str) -> str:
 ### Project (`projects/<name>/`)
 - **Does:** owns its data, code, env and `PROJECT.md` card; talks to the infra only through `datalab`.
 - **Must NOT:** hardcode ports or URIs; write into another project's collections or experiments.
+
+### Voice architectures (`projects/voice-arch`, Phase 2)
+- **Does:** books a US service appointment by voice (name, phone, address, problem type, slot, read-back) in three
+  control structures that share the same LLM, audio, instructions and tools: **A** one `Agent` with every tool,
+  **B** a `TaskGroup` of one `AgentTask` per step (regression allowed), **C** B plus the call record rendered into
+  each task's instructions.
+- **Layers:** `booking/` is pure (import-linter contract "booking stays pure": no livekit, mlflow, datalab, httpx):
+  `record` (`BookingRecord`, `ExpectedRecord`, `is_exact`), `calendar` (the fixed 12 slots, never `today`),
+  `actions` (the only code writing the record; returns the reply the LLM sees), `instructions` (shared strings).
+  `arch.py` (`Arch`, `parse_arch`) and `result.py` (`CallResult`, `RESULT_TOPIC`) are LiveKit-free too. `agents/`
+  holds `state` (`BookingState`), `tools` (`@function_tool` wrappers over `booking.actions`), `arch_a/b/c`,
+  `registry.build_agent`. `worker_logic.py` is the testable half of the worker (metadata, pinned
+  `TURN_HANDLING` / `MAX_TOOL_STEPS`, `build_result`); `worker.py` builds the `AgentServer` from the settings.
+- **Must NOT:** let `booking/` import LiveKit; write the record anywhere but `booking.actions`; default an unknown
+  `arch` (F-9); write files from the worker (the result goes to the room).
+- **Pattern (a tool completes the step that owns the written field):**
+```python
+def complete_current_task(ctx: Ctx, field: str) -> None:
+    agent = ctx.session.current_agent
+    if isinstance(agent, AgentTask) and not agent.done() and getattr(agent, "FIELD", None) == field:
+        agent.complete(None)
+```
+- **Data flow:** `python -m voice_arch.dispatch --arch b --room R` creates an agent dispatch with metadata
+  `{"arch": "b"}` -> the worker (`agent_name="booking-agent"`) parses it (`UnknownArchError` -> error `CallResult`),
+  builds the session (STT/LLM/TTS via OpenRouter, Silero VAD, `userdata=BookingState`), starts `build_agent(arch)`
+  in the room, waits for the session `close`, then sends one `CallResult` (record + session report + close reason +
+  error counts) on the room text topic `voice-arch.result` before returning.
+- **State:** the booking record is the only stateful entity; its `confirmed` flag resets on any write (U-2), so it
+  has no FSM beyond that flag. The TaskGroup walks name -> phone -> address -> problem -> slot -> confirm, and
+  `out_of_scope` (added by LiveKit to every task after the first) regresses to an earlier step.
 
 ### App (`app/`, Phase 2B)
 - **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`) and MLflow runs

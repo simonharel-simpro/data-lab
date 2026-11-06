@@ -66,7 +66,33 @@
   I did: provisional `caller_llm_model = "anthropic/claude-haiku-5.5"` (20/20 in the LLM bench), temperature 0.7, plus a settings validator refusing caller == agent (ESC-1-2, user confirms later).
   One-off or pattern?: one-off.
 
+## Phase 2
+
+- Plan assumed: `parse_metadata`, `build_result` and the pinned `TURN_HANDLING` / `MAX_TOOL_STEPS` live in `worker.py`, unit-tested without LiveKit.
+  Territory was: the plan also builds `AgentServer(ws_url=settings...)` at module level (job processes pickle `entry` by module reference), so importing `worker.py` needs a full `VoiceSettings` (keys from the env or `.env`).
+  I did: put those pure parts (+ `SessionWatch`, `error_result`) in `worker_logic.py`; `worker.py` keeps the server, `entry`, `send_result`, `run_call`. Two extra tests import `worker.py` under the `voice_settings` fixture.
+  One-off or pattern?: likely recurs — any LiveKit worker module that reads settings at import.
+- Plan assumed: the worker passes `providers=s.provider_list` to `make_llm`.
+  Territory was: with the default pin (deepinfra, gmicloud, parasail, fp8, no fallback) OpenRouter answers 404 "No endpoints found" for the agent default `google/gemini-3.5-flash-lite`; the stage-1 LLM bench ran with `llm_providers: none` and passed.
+  I did: provisional `make_llm(settings)` without a pin in the worker and the live tests (ESC-2-1).
+  One-off or pattern?: likely recurs — the provider pin and the model choice must be decided together.
+- Plan assumed: a task's `on_enter` is `await self.session.generate_reply()`.
+  Territory was: (1) after the previous step's assistant message the request ends with a model turn and Gemini via OpenRouter answers 400 "Requests ending with a model turn are not supported" (the TaskGroup hand-off then dies); (2) awaiting the handle inside `on_enter` buys nothing (the built-in tasks do not).
+  I did: `generate_reply(chat_ctx=ends_with_user_turn(self.chat_ctx))` (an ephemeral copy gets a stand-in user turn, `CALLER_WAITING`; the agent's own context is untouched), not awaited. The greeting of `BookingFlowAgent` is still awaited before the group starts.
+  One-off or pattern?: likely recurs — every Gemini-backed LiveKit task or handoff that replies without a user turn.
+- Plan assumed: C's `update_record(field, value)` is `apply_record`.
+  Territory was: `apply_record` has no availability check, so `update_record("slot_id", "ST_20261109_0900")` would write a booked or unknown slot into the record.
+  I did: `slot_id` goes through `apply_choose_slot` (same rules as `choose_slot`, releases the old slot); other fields use `apply_record`; unknown fields return error text. Still never completes a task.
+  One-off or pattern?: one-off.
+- Plan assumed: the caller can talk once the agent has greeted.
+  Territory was: under B and C the greeting precedes the hand-off into the first task; a caller turn sent in that window lands in the previous agent's context and the name task asks for the name again.
+  I did: the live tests wait until `session.current_agent` is a `StepTask` before the first turn. Phase 3's caller must wait for the first question, not only the greeting (F-8).
+  One-off or pattern?: likely recurs — Phase 3 runner.
+- Plan left open: malformed `run_id` and `part` values.
+  I did: `parse_metadata` raises `UnknownArchError` for a non-string `run_id` (absent or empty stays "manual"); `check_slots` answers "Use morning or afternoon." for any other `part`. Low stakes, one-off.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [open] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller.
-
+- ESCALATION(ESC-2-1) [open] phase=2 tier=reversible :: The plan pins OpenRouter providers (deepinfra, gmicloud, parasail, fp8, no fallback) for the worker LLM, but no such endpoint serves `google/gemini-3.5-flash-lite` (404). Provisional: the worker and live tests run unpinned, like the stage-1 bench. Options: A keep unpinned (agent runs are then not routing-reproducible) / B pick a model that a pinned upstream serves and re-bench / C pin to Google's providers. User decides before Phase 3 sweeps.
+- ESCALATION(ESC-2-2) [resolved] phase=2 tier=reversible :: OpenRouter provider pin (deepinfra,gmicloud,parasail fp8, no fallback) serves no google/gemini-3.5-flash-lite endpoint (404). Provisional A: worker LLM unpinned like the stage-1 bench (routing not reproducible). B: pick a pinned-served agent model and re-bench. C: pin to Google providers. User decides before Phase 3 sweeps. => Duplicate of ESC-2-1 (recorded twice: subagent + orchestrator); tracked there.

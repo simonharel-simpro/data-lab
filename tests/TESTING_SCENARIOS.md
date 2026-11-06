@@ -66,7 +66,7 @@
 | PIL-04 | Smoke run | `--n 1` | `smoke_*` metrics + tag `smoke=true`, never counted as best | 🆕 New | Phase 3 |
 | PIL-05 | Unanswerable question | answer `null` | IDK counts correct; any answer = hallucination | 🆕 New | Phase 3 |
 
-## voice-arch — stage-1 bench (Phase 1)
+## voice-arch — stage-1 bench (Phase 1), booking archs + worker (Phase 2)
 
 | ID | Scenario | Input | Expected Output | Status | Last Modified |
 |----|----------|-------|-----------------|--------|---------------|
@@ -76,3 +76,13 @@
 | VA-04 | Stale corpus cache | other TTS voice / edited text | wavs re-synthesised | 🆕 New | voice-arch P1 |
 | VA-05 | Browser smoke | Windows browser on `web/index.html` + token | audio both ways, UDP/TCP noted, e2e offset logged | 🆕 New (user) | voice-arch P1 |
 | VA-06 | Default stack untouched | `docker compose up -d` without LiveKit keys | starts, no `livekit` service | 🆕 New | voice-arch P1 |
+| VA-07 | Booked slot offered | caller picks `ST_20261109_0900` (booked) | reply "taken", record unchanged, agent offers another | 🆕 New | voice-arch P2 |
+| VA-08 | Non-ISO day in `check_slots` | day "next tuesday" | reply "Use a date like 2026-11-10." | 🆕 New | voice-arch P2 |
+| VA-09 | Record edited after confirm | `set_field` on a confirmed record | `confirmed` back to False, field logged in `corrections` | 🆕 New | voice-arch P2 |
+| VA-10 | Unknown dispatch arch | metadata `""`, `{x`, no `arch`, `"A"` | error `CallResult` on `voice-arch.result`, no session started | 🆕 New | voice-arch P2 |
+| VA-11 | Clean caller, text mode | `pytest -m integration tests/integration/test_arch_text.py` | each of A, B, C ends with an exact, confirmed record | 🆕 New | voice-arch P2 |
+| VA-12 | Slot change during read-back | "actually Thursday at 2 PM" before the yes | final slot `ST_20261112_1400`, confirmed, old slot released (A, B, C) | 🆕 New | voice-arch P2 |
+| VA-13 | Correction of another field | task = slot, caller fixes the phone | phone updated, the slot task stays open | 🆕 New | voice-arch P2 |
+| VA-14 | Session report fails | `make_session_report` raises | `CallResult.report` None, `error` carries the message, record kept | 🆕 New | voice-arch P2 |
+| VA-15 | Result send after room deleted | `send_text` raises | logged, the job still returns | 🆕 New | voice-arch P2 |
+| VA-16 | Browser call per arch | `voice_arch.worker dev`, token with `--agent booking-agent`, `dispatch --arch a/b/c` | a booking completes by voice, the agent hangs up after the goodbye | 🆕 New (user) | voice-arch P2 |

@@ -62,7 +62,7 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
 | 1 | Infra, gates, OpenRouter audio, stage-1 bench | ✅ landed on feat/voice-arch @ fd114c3 (/check clean, fix-check 2 iter) | `phase-1-infra-bench` |
-| 2 | Booking domain + architectures A/B/C + worker | ⏳ pending | — |
+| 2 | Booking domain + architectures A/B/C + worker | 🔄 implemented, /check pending | `phase-2-booking-archs` |
 | 3 | Simulated caller, sweep runner, scoring, decision | ⏳ pending | — |
 
 ## voice-arch Phase 1 — Infra, gates, OpenRouter audio, stage-1 bench
@@ -72,3 +72,17 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 - Escalations: ESC-1-1 resolved (plan scoring kept); ESC-1-2 open, reversible: caller model provisionally `anthropic/claude-haiku-5.5` (user to confirm)
 - Deferred to the user (approved deviation): browser smoke (README runbook); LiveKit healthcheck unverified until first `--profile voice up`
 - Deviations logged in IMPLEMENTATION_NOTES.md (fields punctuation fix, extra modules seams/candidates/bench_runs, direct mlflow/pydantic-settings pins)
+
+## voice-arch Phase 2 — Booking domain + architectures A/B/C + worker
+
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ ruff, pyright, lint-imports, pytest 185 passed, pre-push hooks
+
+- ✅ Pure domain `booking/` (record, calendar, actions, instructions); `arch.py`, `result.py`
+- ✅ `agents/` (state, tools, arch_a orchestrator, arch_b TaskGroup, arch_c + call record, registry)
+- ✅ `worker.py` (AgentServer, agent_name booking-agent) + pure `worker_logic.py`
+- ✅ Live text-mode integration: A, B, C each pass the clean caller and U-18 slot change (6/6)
+- ⏳ Browser call per arch — deferred to the user (recorded deviation, VA-16)
+
+Open escalations: ESC-1-2 (caller model), ESC-2-1 (provider pin vs gemini-3.5-flash-lite; worker unpinned provisionally).
+Deviations in IMPLEMENTATION_NOTES.md: worker_logic split, unpinned LLM, non-awaited step-task reply on a user-ended
+context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller must wait for the first task question.
