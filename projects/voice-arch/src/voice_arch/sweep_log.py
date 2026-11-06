@@ -20,11 +20,12 @@ def append_row(path: Path, row: CallRow) -> None:
 
 
 def static_params(arch: Arch, personas: Sequence[Persona], reps: int, s: VoiceSettings) -> dict[str, str | float]:
-    """Known before the first call. Neither the worker (ESC-2-1) nor the caller pins an OpenRouter provider."""
+    """Known before the first call. The agent LLM is pinned to the providers (ESC-2-1); the caller LLM is not."""
     return {
         "arch": arch.value, "stt_model": s.stt_model, "tts_model": s.tts_model, "tts_voice": s.tts_voice,
         "llm_model": s.llm_model, "caller_llm_model": s.caller_llm_model, "caller_temperature": s.caller_temperature,
-        "llm_providers": "none", "reps": reps, "personas": ",".join(p.id for p in personas),
+        "llm_providers": ",".join(s.provider_list), "caller_llm_providers": "none",
+        "reps": reps, "personas": ",".join(p.id for p in personas),
         "full_reps": FULL_REPS, "call_timeout_s": s.call_timeout_s, "agent_join_timeout_s": s.agent_join_timeout_s,
         "turn_handling": json.dumps(TURN_HANDLING, sort_keys=True),
     }  # fmt: skip

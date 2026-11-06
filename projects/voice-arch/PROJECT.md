@@ -62,7 +62,8 @@ through the same OpenRouter key, D-16). `cost_per_call_usd` is that cost over th
 ## Suite
 
 <!-- Next steps, or why the project stops here. -->
-1. Resolve ESC-1-2 (caller model) and ESC-2-1 (worker LLM pin) before the sweeps.
+1. ESC-1-2 (caller model) and ESC-2-1 (worker LLM pinned to Google providers) are resolved; ESC-3-2 (silent empty
+   LLM completions) is fixed by a retry. Run the sweeps next.
 2. Smoke: `runner --arch a --personas self_correction --reps 1`, then the full sweeps `a`, `b`, `c` one at a time
    (about 30 calls, 1 to 1.5 h each; see the README).
 3. One browser call per arch, rated with `rate`; then `decide` and the table above.

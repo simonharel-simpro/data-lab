@@ -123,6 +123,10 @@ def collection_name(project: str, *parts: str) -> str:
   holds `state` (`BookingState`), `tools` (`@function_tool` wrappers over `booking.actions`), `arch_a/b/c`,
   `registry.build_agent`. `worker_logic.py` is the testable half of the worker (metadata, pinned
   `TURN_HANDLING` / `MAX_TOOL_STEPS`, `build_result`); `worker.py` builds the `AgentServer` from the settings.
+  The agent LLM is pinned to Google's OpenRouter providers (`google-vertex,google-ai-studio`, no fallback, no
+  quantization filter: their endpoints report "unknown"; ESC-2-1) and wrapped by `llm_guard.retry_on_empty_completion`
+  (Gemini sometimes ends a stream with zero tokens, which LiveKit treats as a finished, silent turn; ESC-3-2).
+  The simulated caller's LLM is unpinned. Preemptive generation is explicitly off in `TURN_HANDLING`.
 - **Must NOT:** let `booking/` import LiveKit; write the record anywhere but `booking.actions`; default an unknown
   `arch` (F-9); write files from the worker (the result goes to the room).
 - **Pattern (a tool completes the step that owns the written field):**

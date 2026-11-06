@@ -81,7 +81,8 @@ def test_defaults_and_provider_list(monkeypatch: pytest.MonkeyPatch) -> None:
 
     winners = _stage1_winners()
     assert s.experiment_budget_usd == 50.0  # the 50 $ software budget (plan)
-    assert s.provider_list == ["deepinfra", "gmicloud", "parasail"]
+    assert s.provider_list == ["google-vertex", "google-ai-studio"]  # ESC-2-1 option C
+    assert s.openrouter_quantization is None  # Google endpoints report "unknown": a filter would exclude them
     assert (s.stt_model, s.tts_model, s.llm_model) == winners
 
     monkeypatch.setenv("VOICE_ARCH_OPENROUTER_PROVIDERS", "p-one,p-two")

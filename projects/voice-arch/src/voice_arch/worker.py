@@ -49,8 +49,9 @@ async def send_result(room: rtc.Room, result: CallResult) -> None:
 async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingState], SessionWatch]:
     session = AgentSession[BookingState](
         stt=make_stt(settings),
-        # PROVISIONAL (ESC-2-1): no provider pin, as in the stage-1 bench: the pinned upstreams serve no gemini.
-        llm=make_llm(settings),
+        # Pinned to Google's providers (ESC-2-1 option C). Only the agent is pinned: the simulated caller's LLM
+        # (anthropic/claude-haiku-5.5, ESC-1-2) is deliberately unpinned.
+        llm=make_llm(settings, providers=settings.provider_list, retry_empty=True),
         tts=make_tts(settings),
         vad=silero.VAD.load(),
         userdata=BookingState(),

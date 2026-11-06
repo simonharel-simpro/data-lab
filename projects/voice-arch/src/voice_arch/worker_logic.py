@@ -18,7 +18,12 @@ from voice_arch.arch import Arch, UnknownArchError, parse_arch
 from voice_arch.result import CallResult, http_status_of
 
 # F-16: pinned so `dev` and `start` behave alike and nothing falls back to LiveKit Cloud inference.
-TURN_HANDLING: Final[TurnHandlingOptions] = {"turn_detection": "vad", "interruption": {"mode": "vad"}}
+# ESC-3-2: preemptive generation off (see IMPLEMENTATION_NOTES); it is on by LiveKit default.
+TURN_HANDLING: Final[TurnHandlingOptions] = {
+    "turn_detection": "vad",
+    "interruption": {"mode": "vad"},
+    "preemptive_generation": {"enabled": False},
+}
 MAX_TOOL_STEPS: Final = 6
 _DEFAULT_RUN_ID: Final = "manual"
 

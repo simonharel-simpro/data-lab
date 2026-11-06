@@ -108,6 +108,11 @@ sweep fails (run FAILED) when no agent joins in time, when OpenRouter answers 40
 is reached, or when more than 10 % of the calls fail on the caller's side. Only a FINISHED run tagged `full=true`
 counts for `decide` and for the app card (`exact_rate`); a smoke run logs `smoke_exact_rate` and never stands in.
 
+The agent LLM is pinned to `openrouter_providers` (default `google-vertex,google-ai-studio`, no fallback; set
+`openrouter_quantization` to add a quantization filter); the caller LLM is not. A live call takes 3 to 5 minutes (real-time
+read-backs); `call_timeout_s` is 240 by default. Under host CPU load the `start` worker marks itself unavailable (load
+threshold 0.7) and no agent joins: use `worker dev` (no threshold) for live checks on a busy machine.
+
 Live check of the whole path (one call, a few cents; the worker must be running):
 
 ```bash

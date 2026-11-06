@@ -13,17 +13,29 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> VoiceSettings:
     monkeypatch.setenv("VOICE_ARCH_TTS_MODEL", "test/tts-x")
     monkeypatch.setenv("VOICE_ARCH_TTS_VOICE", "test-voice")
     monkeypatch.setenv("VOICE_ARCH_STT_MODEL", "test/stt-x")
-    monkeypatch.setenv("VOICE_ARCH_OPENROUTER_QUANTIZATION", "test-quant")
     return VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
 
 
-def test_make_llm_pins_providers_without_fallback(settings: VoiceSettings) -> None:
+def test_make_llm_pins_providers_without_fallback_or_quantization(settings: VoiceSettings) -> None:
     llm = make_llm(settings, providers=["prov-a", "prov-b"])
 
     assert llm.model == "test/llm-x"
     # pyright: private options are the only place the request preferences are visible without a network call.
     assert llm._opts.extra_body == {  # pyright: ignore[reportAttributeAccessIssue]
-        "provider": {"order": ["prov-a", "prov-b"], "quantizations": ["test-quant"], "allow_fallbacks": False}
+        "provider": {"order": ["prov-a", "prov-b"], "allow_fallbacks": False}
+    }
+
+
+def test_make_llm_adds_quantizations_only_when_configured(
+    settings: VoiceSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("VOICE_ARCH_OPENROUTER_QUANTIZATION", "test-quant")
+    quantized = VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
+
+    llm = make_llm(quantized, providers=["prov-a"])
+
+    assert llm._opts.extra_body == {  # pyright: ignore[reportAttributeAccessIssue]
+        "provider": {"order": ["prov-a"], "quantizations": ["test-quant"], "allow_fallbacks": False}
     }
 
 
