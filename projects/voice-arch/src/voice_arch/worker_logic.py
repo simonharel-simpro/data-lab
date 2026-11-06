@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from livekit.agents import AgentSession
-from livekit.agents.voice.events import CloseEvent, ErrorEvent
+from livekit.agents.llm import LLMError
+from livekit.agents.voice.events import CloseEvent, CloseReason, ErrorEvent
 from livekit.agents.voice.turn import TurnHandlingOptions
 
 from voice_arch.agents.state import BookingState
@@ -47,18 +48,32 @@ def parse_metadata(raw: str) -> tuple[Arch, str]:
 
 @dataclass
 class SessionWatch:
+    """Counts the session's errors and ends the call on the first unrecoverable LLM one.
+
+    LiveKit tolerates three unrecoverable errors per component and otherwise leaves the session open and silent
+    (the guard's "failed after 4 attempts" is one such error), so the call would idle until the runner's timeout.
+    """
+
     errors: int = 0
     close: CloseEvent | None = None
+    fatal: LLMError | None = None
     closed: asyncio.Event = field(default_factory=asyncio.Event)
+    _session: AgentSession[BookingState] | None = None
 
-    def on_error(self, _event: ErrorEvent) -> None:
+    def on_error(self, event: ErrorEvent) -> None:
         self.errors += 1
+        error = event.error
+        if self._session is None or not isinstance(error, LLMError) or error.recoverable:
+            return
+        self.fatal = error
+        self._session.shutdown(drain=False)  # nothing is left to say: the agent never got its answer
 
     def on_close(self, event: CloseEvent) -> None:
         self.close = event
         self.closed.set()
 
     def attach(self, session: AgentSession[BookingState]) -> None:
+        self._session = session
         session.on("error", self.on_error)
         session.on("close", self.on_close)
 
@@ -76,6 +91,12 @@ def _close_error(close: CloseEvent | None) -> str | None:
     return f"session closed on error: {getattr(close.error, 'error', close.error)}"
 
 
+def _close_reason(close: CloseEvent | None, fatal: LLMError | None) -> str | None:
+    if fatal is not None:
+        return CloseReason.ERROR.value  # the worker's own shutdown reads as user-initiated otherwise
+    return None if close is None else close.reason.value
+
+
 def build_result(  # the plan fixes this 7-argument signature
     room: str,
     arch: Arch,
@@ -87,8 +108,13 @@ def build_result(  # the plan fixes this 7-argument signature
     *,
     summarize_chat_ctx: bool | None,
     max_tool_steps: int,
+    fatal: LLMError | None = None,
 ) -> CallResult:
-    """A report failure keeps the record and says why (F-3); the close error gives the HTTP status (F-4)."""
+    """A report failure keeps the record and says why (F-3); the close error gives the HTTP status (F-4).
+
+    `fatal` is the unrecoverable LLM error the worker ended the call for: it is reported like a close error and,
+    per ESC-3-1, the call stays scored by its record.
+    """
     report: dict[str, object] | None = None
     problems: list[str] = []
     try:
@@ -97,15 +123,17 @@ def build_result(  # the plan fixes this 7-argument signature
         problems.append(f"report failed: {type(err).__name__}: {err}")
     if (close_problem := _close_error(close)) is not None:
         problems.append(close_problem)
+    if fatal is not None:
+        problems.append(f"unrecoverable LLM error: {fatal.error}")
     return CallResult(
         room=room,
         arch=arch,
         run_id=run_id,
         record=state.record.model_copy(deep=True),
         report=report,
-        close_reason=None if close is None else close.reason.value,
+        close_reason=_close_reason(close, fatal),
         error="; ".join(problems) or None,
-        http_status=None if close is None else http_status_of(close.error),
+        http_status=http_status_of(fatal if close is None or close.error is None else close.error),
         session_errors=errors,
         summarize_chat_ctx=summarize_chat_ctx,
         max_tool_steps=max_tool_steps,

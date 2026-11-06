@@ -11,6 +11,8 @@ from typing import Any, Final
 
 from livekit.agents import APIConnectionError, llm
 
+from voice_arch.llm_dump import dump_empty_request
+
 logger = logging.getLogger("voice_arch.llm_guard")
 
 EMPTY_COMPLETION = "the LLM completed without text or tool call"
@@ -44,6 +46,7 @@ def retry_on_empty_completion(model: llm.LLM) -> llm.LLM:
             attempts += 1
             await run()
             if not stream._event_ch.output_sent:  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
+                dump_empty_request(stream, request, attempts)
                 raise APIConnectionError(EMPTY_COMPLETION, retryable=True)
 
         stream._run = checked_run  # pyright: ignore[reportPrivateUsage]

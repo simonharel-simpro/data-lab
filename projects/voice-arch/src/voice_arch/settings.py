@@ -1,7 +1,7 @@
 """Project settings (`VOICE_ARCH_*`); the shared infra settings come from `datalab.settings.Settings`."""
 
 import re
-from typing import Self
+from typing import Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -46,6 +46,9 @@ class VoiceSettings(BaseSettings):
     # quantization filter by default (it would exclude them). The caller LLM stays unpinned (ESC-1-2).
     openrouter_providers: str = "google-vertex,google-ai-studio"
     openrouter_quantization: str | None = None
+    # Sent for the agent LLM only. "minimal" (and no value at all) reproduced the malformed tool calls; see
+    # IMPLEMENTATION_NOTES "Empty completion root cause" for the replay evidence behind "low".
+    agent_reasoning_effort: Literal["low", "medium", "high"] = "low"
 
     # A self_correction call takes 265 to 300 s (real-time read-backs); 420 leaves room for a retry or two.
     call_timeout_s: float = 420

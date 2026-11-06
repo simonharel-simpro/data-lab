@@ -11,7 +11,7 @@ from voice_arch.agents.arch_b import StepTask
 from voice_arch.agents.registry import build_agent
 from voice_arch.agents.state import BookingState
 from voice_arch.arch import Arch
-from voice_arch.audio import make_llm
+from voice_arch.audio import make_agent_llm
 from voice_arch.booking.record import SCORED_FIELDS, ExpectedRecord, is_exact
 from voice_arch.settings import VoiceSettings
 from voice_arch.worker_logic import MAX_TOOL_STEPS
@@ -60,9 +60,7 @@ async def _until_first_question(session: AgentSession[BookingState], arch: Arch)
 
 async def _book(live: VoiceSettings, arch: Arch, turns: list[str]) -> BookingState:
     state = BookingState()
-    session = AgentSession[BookingState](
-        llm=make_llm(live, providers=live.provider_list), userdata=state, max_tool_steps=MAX_TOOL_STEPS
-    )
+    session = AgentSession[BookingState](llm=make_agent_llm(live), userdata=state, max_tool_steps=MAX_TOOL_STEPS)
     try:
         await session.start(build_agent(arch))
         await _until_first_question(session, arch)

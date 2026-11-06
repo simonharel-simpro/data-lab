@@ -115,6 +115,22 @@ WARNING with its number. A live call takes 3 to 5 minutes (real-time
 read-backs); `call_timeout_s` is 420 by default (a `self_correction` call needs 265 to 300 s). Under host CPU load the `start` worker marks itself unavailable (load
 threshold 0.7) and no agent joins: use `worker dev` (no threshold) for live checks on a busy machine.
 
+Three behaviours of the agent worker, equal for A, B and C:
+
+- **Reasoning effort.** The agent LLM is sent `reasoning_effort` (`agent_reasoning_effort`, default `low`; `minimal`
+  is refused). Without it Gemini answers most tool turns with `MALFORMED_FUNCTION_CALL`, which LiveKit reads as an
+  empty completion (see `IMPLEMENTATION_NOTES.md`, "Empty completion root cause"). The caller LLM never gets it.
+- **Fail fast.** The first unrecoverable LLM error (for example the guard giving up) shuts the session down at once
+  and the `CallResult` carries the error, its HTTP status and `close_reason` `error`. The call is scored by its
+  record and counts against the architecture (ESC-3-1); it no longer idles until `call_timeout_s`.
+- **Confirm waits for the caller.** `confirm_booking` is refused ("Wait for the caller to confirm the read-back
+  first") until the caller has spoken after the last write to the record, so a read-back and its confirmation can no
+  longer share one turn.
+
+Debugging an empty completion: set `VOICE_ARCH_DUMP_EMPTY_DIR` to a directory **outside the repository** (the dump
+holds the whole conversation, so it is PII) and the guard writes the messages, tool definitions and request
+parameters of every empty attempt there as `empty-<time>-attempt<n>.json`. It is off when the variable is unset.
+
 Live check of the whole path (one call, a few cents; the worker must be running):
 
 ```bash

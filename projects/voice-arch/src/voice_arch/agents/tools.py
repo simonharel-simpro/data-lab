@@ -35,6 +35,7 @@ def complete_current_task(ctx: Ctx, field: str) -> None:
 def _record(ctx: Ctx, field: str, value: str) -> str:
     reply = apply_record(ctx.userdata.record, field, value)
     if reply == NOTED:
+        ctx.userdata.note_write()
         complete_current_task(ctx, field)
     return reply
 
@@ -74,13 +75,17 @@ async def choose_slot(ctx: Ctx, slot_id: str) -> str:
     state = ctx.userdata
     reply = apply_choose_slot(state.record, slot_id, state.taken)
     if state.record.slot_id == slot_id:
+        state.note_write()
         complete_current_task(ctx, "slot_id")
     return reply
 
 
 @function_tool(description="Confirm the booking once the caller has agreed to the read-back.")
 async def confirm_booking(ctx: Ctx) -> str:
-    reply = apply_confirm(ctx.userdata.record)
+    state = ctx.userdata
+    reply = apply_confirm(
+        state.record, caller_replied=state.caller_replied_since_write(lambda: ctx.session.history.items)
+    )
     if reply == CONFIRMED:
         ctx.session.say(GOODBYE)
         ctx.session.shutdown(drain=True)  # F-1: the agent ends the call after the booking is confirmed

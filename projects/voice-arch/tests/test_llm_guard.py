@@ -145,3 +145,13 @@ async def test_guard_wraps_the_real_openrouter_stream_and_keeps_its_temperature(
     await stream.aclose()  # cancelled before its first await: nothing is sent
 
     assert stream._extra_kwargs["temperature"] == 0.4  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
+
+
+async def test_guard_dumps_the_request_of_every_empty_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    dumped: list[int] = []
+    monkeypatch.setattr("voice_arch.llm_guard.dump_empty_request", lambda _s, _r, attempt: dumped.append(attempt))
+    model = retry_on_empty_completion(_Llm(empty_attempts=2))
+
+    assert await _text(model) == "Hello"
+
+    assert dumped == [1, 2]  # the third attempt answered: nothing to dump
