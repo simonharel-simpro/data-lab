@@ -46,8 +46,9 @@ templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
-                        booking/ pure domain, agents/ LiveKit layer for archs A/B/C, worker, result), web/ (smoke
-                        client), data/, tests/ (+ tests/integration, live)
+                        booking/ pure domain, agents/ LiveKit layer for archs A/B/C, worker, result, simulated
+                        caller + sweep runner + scoring + decide), web/ (smoke client), data/ (incl. personas),
+                        tests/ (+ tests/integration, live)
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
@@ -139,6 +140,33 @@ def complete_current_task(ctx: Ctx, field: str) -> None:
 - **State:** the booking record is the only stateful entity; its `confirmed` flag resets on any write (U-2), so it
   has no FSM beyond that flag. The TaskGroup walks name -> phone -> address -> problem -> slot -> confirm, and
   `out_of_scope` (added by LiveKit to every task after the first) regresses to an earlier step.
+
+### Voice sweeps (`projects/voice-arch`, Phase 3)
+- **Does:** measures each architecture against a simulated caller: one sweep = one arch x 6 personas x N reps = one
+  MLflow run in `voice-arch/conversations` (metric `exact_rate`), then `decide` picks the architecture (D-15) and
+  `rate` logs human ratings (reported, never ranking).
+- **Layers:** pure and LiveKit-free (import-linter contract "scoring and decision stay LiveKit-free"): `personas`
+  (`load_personas`, `PersonaError`), `naturalness` (counters from `SessionReport.to_dict()`), `scoring`
+  (`aggregate`, `cost_per_call`), `decide` (`pick_arch` on integers), `call` (`run_one_call` -> `CallRow`, the F-*
+  classification), `call_env` (the `CallEnv` / `CallerHandle` protocols the tests fake), `sweep_log`, `sweep_query`.
+  LiveKit side: `caller` (`CallerAgent`, `make_caller_session`), `live_caller` (the live `CallerHandle`),
+  `livekit_env` (`LiveKitCallEnv`). `runner` wires settings, budget gate, MLflow run and spend tracker; `rate` is a
+  small CLI.
+- **Must NOT:** let `call.py` or the scoring modules import LiveKit; start a sweep without the budget gate (F-4b);
+  count a `caller_fault` in `exact_rate` (F-6); let a smoke run log unprefixed metrics (U-1).
+- **Pattern (a call is classified in a fixed order; auth failures stop the sweep before anything else):**
+```python
+_stop_on_auth(handle, result)                       # 401/402 on either side -> ProviderAuthStop
+return _row(persona, rep, room, _classify(handle, result), result)
+```
+- **Data flow:** `runner.main()` loads settings/personas, then `run_sweep` checks the budget, opens the run and the
+  spend tracker, and for each persona x rep calls `run_one_call`: dispatch the booking agent, connect the caller
+  (it joins the room and starts listening; B and C only after the agent's greeting, see `LiveCaller`), wait for the
+  agent's `CallResult` on `voice-arch.result` (firing the persona's interjections while the agent talks), classify,
+  delete the room. Rows are appended to `results/<run_id>.jsonl`; metrics, params and `per_conversation.json` are
+  logged at the end; `cost_usd` (caller included) is logged when the tracker exits, even for a FAILED run.
+- **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
+  transition model, each call is classified once from what the handle reports.
 
 ### App (`app/`, Phase 2B)
 - **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`) and MLflow runs

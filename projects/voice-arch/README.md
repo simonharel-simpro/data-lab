@@ -73,3 +73,43 @@ Live text-mode check of the three architectures (OpenRouter LLM only, a few cent
 ```bash
 uv run pytest -m integration tests/integration/test_arch_text.py
 ```
+
+## Sweeps against the simulated caller (Phase 3)
+
+A sweep is one architecture x 6 personas x N repetitions, logged as one MLflow run in `voice-arch/conversations`.
+The caller is an `AgentSession` (LLM `caller_llm_model` at `caller_temperature`) that joins the room, never speaks
+first, and plays one persona from `data/personas.jsonl`; the call ends when the booking agent's `CallResult` arrives
+or after `call_timeout_s`. The runner scores each record with `is_exact` and deletes the room.
+
+The cost of a sweep is the OpenRouter key's usage delta and includes the simulated caller (D-16). It uses the root
+`OPENROUTER_API_KEY` with the 50 $ software budget (`experiment_budget_usd`): do not use that key elsewhere during a
+sweep, and run one sweep at a time. A sweep refuses to start when the money spent so far plus the cost of the last
+full sweep (15 $ until one has finished) would reach the budget, and stops between two calls when the key's usage
+reaches it.
+
+```bash
+# 1. LiveKit and the worker (see "Booking agent worker"); .env holds the LIVEKIT_* keys
+docker compose --profile voice up -d livekit          # at the repo root
+uv run python -m voice_arch.worker start              # leave it running; `dev` also works
+# 2. smoke: one persona, one repetition (metrics are all `smoke_*`, tag full=false)
+uv run python -m voice_arch.runner --arch a --personas self_correction --reps 1
+# 3. the full sweeps, one at a time: 6 personas x 5 reps = 30 calls, roughly 1 to 1.5 h each
+uv run python -m voice_arch.runner --arch a
+uv run python -m voice_arch.runner --arch b
+uv run python -m voice_arch.runner --arch c
+# 4. a browser call per arch (Browser smoke), then your rating of how natural it felt
+uv run python -m voice_arch.rate --arch a --rating 4 --notes "a bit slow"     # 1 (robotic) .. 5 (natural)
+# 5. the table and the decision, to paste into PROJECT.md `## Enseignements`
+uv run python -m voice_arch.decide
+```
+
+Rows are appended to `results/<run_id>.jsonl` as each call ends, so a failed sweep keeps its finished calls. A
+sweep fails (run FAILED) when no agent joins in time, when OpenRouter answers 401/402 on either side, when the budget
+is reached, or when more than 10 % of the calls fail on the caller's side. Only a FINISHED run tagged `full=true`
+counts for `decide` and for the app card (`exact_rate`); a smoke run logs `smoke_exact_rate` and never stands in.
+
+Live check of the whole path (one call, a few cents; the worker must be running):
+
+```bash
+uv run pytest -m integration tests/integration/test_one_call.py -s
+```

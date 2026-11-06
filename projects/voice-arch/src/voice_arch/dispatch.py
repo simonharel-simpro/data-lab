@@ -18,8 +18,13 @@ def http_url(ws_url: str) -> str:
     return urlunsplit(parts._replace(scheme="https" if parts.scheme == "wss" else "http"))
 
 
-async def dispatch(settings: VoiceSettings, arch: str, room: str) -> str:
-    request = CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room, metadata=json.dumps({"arch": arch}))
+def metadata_json(arch: str, run_id: str | None = None) -> str:
+    """What the worker's `parse_metadata` reads; `run_id` is optional (a manual dispatch has none)."""
+    return json.dumps({"arch": arch} if run_id is None else {"arch": arch, "run_id": run_id})
+
+
+async def dispatch(settings: VoiceSettings, arch: str, room: str, run_id: str | None = None) -> str:
+    request = CreateAgentDispatchRequest(agent_name=AGENT_NAME, room=room, metadata=metadata_json(arch, run_id))
     async with LiveKitAPI(
         url=http_url(settings.livekit_url),
         api_key=settings.livekit_api_key.get_secret_value(),

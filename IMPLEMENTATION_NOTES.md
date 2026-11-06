@@ -91,8 +91,42 @@
 - Plan left open: malformed `run_id` and `part` values.
   I did: `parse_metadata` raises `UnknownArchError` for a non-string `run_id` (absent or empty stays "manual"); `check_slots` answers "Use morning or afternoon." for any other `part`. Low stakes, one-off.
 
+## Phase 3
+
+- Plan assumed: `CallEnv.connect_caller(room)` and `LiveKitCallEnv` inside `call_env.py`.
+  Territory was: the caller needs the persona's instructions and, for B and C, a different start (below); and `call_env.py` must stay LiveKit-free so `call.py`, `scoring.py` and `decide.py` are too.
+  I did: `connect_caller(room, persona, arch)`; protocols stay in `call_env.py`, the real env is `livekit_env.py` (+ `live_caller.py` for the handle, 200-line limit). An import-linter contract keeps the pure modules LiveKit-free.
+  One-off or pattern?: one-off.
+- Plan assumed: the caller can answer once the agent has greeted (Phase 2 note: it must wait for the first question under B and C).
+  Territory was: `AgentSession.start` on the caller blocks until the agent participant links, and there is no event for "the first question". A's greeting is not a question (the agent then waits), B/C hand off to the first task right after the greeting.
+  I did: `session.start` runs in a background task (so `wait_agent` can time out, F-2); the handle tracks `lk.agent.state` and counts the agent's speaking turns; B/C keep the caller's audio input off until the greeting has ended (`listen_after = 1`), A listens at once. A heuristic: the caller of A answers the greeting, the caller of B/C answers the first question.
+  One-off or pattern?: likely recurs — any simulated caller against a greet-then-hand-off agent.
+- Plan assumed: dispatch metadata `{"arch", "run_id"}` is already sent.
+  Territory was: `dispatch.dispatch()` only sent `{"arch"}`; the worker would have logged every sweep call as run "manual".
+  I did: `dispatch(settings, arch, room, run_id=None)` with a pure `metadata_json` (round-trip tested against `parse_metadata`).
+  One-off or pattern?: one-off.
+- Plan left open: how `decide` gets the integer exact count and the arch of a run; how a human run is tied to an arch.
+  I did: `aggregate` also emits `n_exact`; sweep runs carry tags `arch` and `full`; human runs carry tag `arch` (run name stays `human-<arch>`). `decide` sums `n_scored + n_timeout + n_agent_lost` for `n`.
+  One-off or pattern?: one-off.
+- Plan left open: `session_errors` source for a row (worker count in `CallResult.session_errors` vs error events in the report).
+  I did: the report's error events when the report exists (plan: report-derived counters), the worker's count otherwise. `CallRow` also keeps `summarize_chat_ctx` and `max_tool_steps` so the run params come "from the first result".
+  One-off or pattern?: one-off.
+- Plan assumed: the report keys `naturalness` reads can be verified on the live call.
+  Territory was: both live calls timed out (see ESC-3-2), so no audio report was seen. Checked on a text-mode `make_session_report(...).to_dict()` instead: `chat_history.items[*]` has `type`, `role`, `interrupted`, `content`, `metrics.started_speaking_at`, `metrics.stopped_speaking_at`; `events[*].type` has `error`. `metrics.e2e_latency` is absent in text mode (no STT/TTS), so its presence in an audio call is still unverified.
+  I did: coded against the documented `MetricsReport`; a missing key is None (F-7). The first successful audio call must confirm `e2e_latency`.
+  One-off or pattern?: one-off.
+- Plan left open: when the budget is checked between calls.
+  I did: after every call except the last, so a finished sweep is never failed for money already spent (its `cost_usd` still counts next time).
+  One-off or pattern?: one-off.
+- Plan assumed: the run params list "providers".
+  Territory was: neither the worker (ESC-2-1) nor the caller pins an OpenRouter provider.
+  I did: param `llm_providers = none` (as the stage-1 bench), not the settings' pin list, which would be a lie.
+  One-off or pattern?: one-off.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [open] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller.
 - ESCALATION(ESC-2-1) [open] phase=2 tier=reversible :: The plan pins OpenRouter providers (deepinfra, gmicloud, parasail, fp8, no fallback) for the worker LLM, but no such endpoint serves `google/gemini-3.5-flash-lite` (404). Provisional: the worker and live tests run unpinned, like the stage-1 bench. Options: A keep unpinned (agent runs are then not routing-reproducible) / B pick a model that a pinned upstream serves and re-bench / C pin to Google's providers. User decides before Phase 3 sweeps.
 - ESCALATION(ESC-2-2) [resolved] phase=2 tier=reversible :: OpenRouter provider pin (deepinfra,gmicloud,parasail fp8, no fallback) serves no google/gemini-3.5-flash-lite endpoint (404). Provisional A: worker LLM unpinned like the stage-1 bench (routing not reproducible). B: pick a pinned-served agent model and re-bench. C: pin to Google providers. User decides before Phase 3 sweeps. => Duplicate of ESC-2-1 (recorded twice: subagent + orchestrator); tracked there.
+- ESCALATION(ESC-3-1) [open] phase=3 tier=reversible :: `Outcome.PROVIDER_ERROR` is in the plan's enum but no rule assigns it, and it is outside the `exact_rate` denominator (scored + timeout + agent_lost). Provisional: never emitted; a result that carries `error` / a non-auth `http_status` is `scored` by its record (an unfinished record is simply not exact). Option A keep (provider failures count against the arch) / B emit it for a result with a non-auth HTTP status (excluded from the rate, flattering an arch whose provider path failed). User decides before the sweeps.
+- ESCALATION(ESC-3-2) [open] phase=3 tier=reversible :: Both live calls (arch A, `self_correction`, unpinned worker LLM) ended `timeout` at the same point: the agent never answers the address turn ("88 Cedar Lane, Austin, TX 78701"): the user turn is committed, a preemptive generation starts, then no tool call, no reply, no error event for 3 minutes. Text mode with the same turns answers at once (so not the prompt or tools). Suspects: an LLM stream that hangs or comes back empty on the unpinned OpenRouter route (ESC-2-1), or a LiveKit preemptive-generation race. If it recurs a full sweep is mostly timeouts. User decides: investigate with LLM request logging, pin a route, or disable `preemptive_generation` in `TURN_HANDLING` before the sweeps.

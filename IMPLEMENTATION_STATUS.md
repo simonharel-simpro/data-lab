@@ -63,7 +63,7 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 |-------|-------|--------|--------|
 | 1 | Infra, gates, OpenRouter audio, stage-1 bench | ✅ landed on feat/voice-arch @ fd114c3 (/check clean, fix-check 2 iter) | `phase-1-infra-bench` |
 | 2 | Booking domain + architectures A/B/C + worker | ✅ landed on feat/voice-arch @ 7fbfe3b (/check clean, fix-check 1 iter) | `phase-2-booking-archs` |
-| 3 | Simulated caller, sweep runner, scoring, decision | ⏳ pending | — |
+| 3 | Simulated caller, sweep runner, scoring, decision | 🔄 implemented, /check pending | `phase-3-caller-runner` |
 
 ## voice-arch Phase 1 — Infra, gates, OpenRouter audio, stage-1 bench
 **Implemented:** 2026-11-06 · **Agent:** python-fastapi (3 dispatches: A scaffold/infra/core, B bench/tools/docs, C D-17 caller default)
@@ -86,3 +86,13 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 Open escalations: ESC-1-2 (caller model), ESC-2-1 (provider pin vs gemini-3.5-flash-lite; worker unpinned provisionally).
 Deviations in IMPLEMENTATION_NOTES.md: worker_logic split, unpinned LLM, non-awaited step-task reply on a user-ended
 context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller must wait for the first task question.
+
+## voice-arch Phase 3 — Simulated caller, sweep runner, scoring, decision, human ratings
+
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ pyright, ruff, lint-imports (2 contracts), pytest 272 passed, pre-push hooks, weak_tests 0
+
+- ✅ personas (6, validated at load), caller (LiveKit AgentSession on a self-connected room), call + runner (one MLflow run per sweep, budget check, crash-copy JSONL), naturalness, scoring, decide (D-15 rule), rate
+- ❌ Live call: 2 runs (arch A, self_correction) timed out after the address turn — the agent never replied (ESC-3-2); text-mode replay of the same turns works
+- ⏳ Full sweeps, `decide` into PROJECT.md, human ratings — deferred to the user (approved)
+
+Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall; likely coupled with ESC-2-1 unpinned route).
