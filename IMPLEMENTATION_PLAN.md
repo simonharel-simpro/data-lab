@@ -33,7 +33,7 @@ non-streaming OpenRouter audio. Then latency is reported comparatively and #25 t
 | 3 | Simulated caller, sweep runner, scoring, decision, human ratings, card | 14 | Phase 2 (worker, CallResult, record, calendar) |
 
 Cross-phase contracts: Phase 1 produces `VoiceSettings`, `make_stt/make_tts/make_llm`, `key_usage()` / `SpendTracker`,
-`normalize.py` (pure normalisers), `tool_schemas.py` (`TOOL_SCHEMAS`) and the chosen model defaults. Phase 2 produces `BookingRecord`, `normalize_*`, `CALENDAR`, `Arch`, the worker (`agent_name=
+`normalize.py` (pure normalisers), `tool_schemas.py` (`TOOL_SCHEMAS`) and the chosen model defaults. Phase 2 produces `BookingRecord`, `CALENDAR`, `Arch` (`arch.py`), the worker (`agent_name=
 "booking-agent"`) and `CallResult` sent on text-stream topic `voice-arch.result`. Phase 3 consumes all of it.
 
 ## Scope Analysis
@@ -41,9 +41,9 @@ Cross-phase contracts: Phase 1 produces `VoiceSettings`, `make_stt/make_tts/make
 | Feature | Layers / area | New | Modified |
 |---|---|---|---|
 | Infra + gates | compose, root env, hooks, CI | `infra/livekit.yaml`, project scaffold | `compose.yaml`, `.env.example`, `tests/test_compose.py`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `packages/datalab/tests/test_settings.py`, `ARCHITECTURE.md`, `decisions.md` |
-| Stage-1 bench | settings, audio, bench, data | `settings.py`, `audio.py`, `openrouter_key.py`, `fields.py`, `bench.py`, `winners.py`, `data/*.jsonl` | `PROJECT.md` |
-| Architectures | domain, agents, worker | `booking/*`, `agents/*`, `result.py`, `worker.py` | — |
-| Experiment | caller, runner, scoring | `personas.py`, `caller.py`, `runner.py`, `scoring.py`, `naturalness.py`, `rate.py`, `data/personas.jsonl` | `README.md`, `PROJECT.md` |
+| Stage-1 bench | settings, audio, bench, data | `settings.py`, `audio.py`, `openrouter_key.py`, `booking/normalize.py`, `tool_schemas.py`, `fields.py`, `corpus.py`, `bench.py`, `winners.py`, `token.py`, `dispatch.py`, `smoke_agent.py`, `web/index.html`, `data/*` | `PROJECT.md` |
+| Architectures | domain, agents, worker | `booking/{record,calendar,actions,instructions}.py`, `arch.py`, `agents/*`, `result.py`, `worker.py` | — |
+| Experiment | caller, runner, scoring | `personas.py`, `caller.py`, `call_env.py`, `call.py`, `runner.py`, `scoring.py`, `naturalness.py`, `decide.py`, `rate.py`, `data/personas.jsonl` | `README.md`, `PROJECT.md` |
 
 ## Scope Decisions
 
@@ -140,10 +140,12 @@ Trust boundaries crossed: network (OpenRouter, LiveKit), subprocess/concurrency 
 | F-9 | Bad dispatch metadata | input | unknown `arch` refused with an error result, never defaulted to A | `test_f_9_unknown_arch_metadata_is_refused_not_defaulted` | 2 |
 | F-10 | Empty/garbage STT body | external | spike asserts non-empty; bench counts empty transcript as an error | `test_f_10_empty_transcript_counts_as_stt_error_in_bench` | 1 |
 | F-11 | WAV cache partial or stale | partial-failure | tmp + rename; manifest hash covers files + TTS model + voice; mismatch → rebuild | `test_f_11_truncated_or_other_voice_cache_is_rejected` | 1 |
-| F-12 | `/api/v1/key` read fails | external | cost absent + warning, run not failed; wrong shape → error, never 0 | `test_f_12_key_usage_read_failure_omits_cost_without_failing_run` | 1, 3 |
+| F-12 | `/api/v1/key` read fails | external | `SpendTracker` never raises: a failed read → cost absent + warning, run not failed; `key_usage` on a wrong shape raises, never returns 0 | `test_f_12_key_usage_read_failure_omits_cost_without_failing_run` | 1, 3 |
 | F-13 | WSL2 browser media | cross-platform | smoke checks audio both ways, records UDP vs TCP | manual (README runbook) | 1 |
 | F-14 | Retries inflate latency | observability | log session error/retry counts as metrics | `test_f_14_session_errors_are_counted` | 3 |
 | F-15 | TaskGroup summarisation adds an LLM call | state | set `summarize_chat_ctx=False` explicitly, logged as param | `test_f_15_taskgroup_summarize_flag_is_off_and_logged` | 2 |
+| F-16 | Turn/interruption detection differs dev vs start, may call LiveKit Cloud | cross-platform | every session pins `turn_handling` VAD; worker `max_tool_steps=6`; both logged | `test_u_20_caller_llm_uses_configured_model_and_temperature` (params) | 2, 3 |
+| F-17 | Caller session ignores AGENT-kind participants | external | caller `room_options.participant_kinds=[AGENT]` | `test_one_live_call_produces_a_row` (integration) | 3 |
 
 Each mode above is a phase acceptance criterion: its handling AND its test ship in the named phase.
 
@@ -158,10 +160,10 @@ Decision points: scoring, aggregation, winner selection, naturalness counters, c
 | U-3 | Timeout / crash | agent-side → not exact, in denominator; caller-side → `caller_fault` (F-6); infra → abort (F-2) | `test_u_3_agent_timeout_counts_as_not_exact_in_denominator` | 3 |
 | U-4 | US phone / address | phone: spoken digits mapped, digits only, a leading `1` dropped from 11 digits → 10 digits; address: casefold, abbreviation map, equality on number + street + city + state (ZIP optional) | `test_u_4_phone_spoken_double_and_oh_normalise_to_digits` + address table | 2 |
 | U-5 | Problem type | `ProblemType` = plumbing/electrical/hvac/appliance/other; first stated problem wins; each persona fixes its expected value | `test_u_5_persona_expected_problem_type_is_valid_enum` | 2, 3 |
-| U-6 | Card metric | only full arch sweeps log `exact_rate`; bench logs `stt_*`/`tts_*`/`llm_*`; `rate.py` logs `human_rating` only | `test_u_6_bench_and_rating_runs_never_log_exact_rate` | 1, 3 |
+| U-6 | Card metric | only full arch sweeps log `exact_rate`; bench logs `stt_*`/`tts_*`/`llm_*`; `rate.py` logs `human_rating` only | `test_u_6_bench_never_logs_exact_rate`, `test_u_6_rating_run_never_logs_exact_rate` | 1, 3 |
 | U-7 | Calendar date | frozen `REFERENCE_DATE = 2026-11-09` (Monday); persona expected slots must exist | `test_u_7_persona_expected_slot_exists_in_calendar` | 2, 3 |
 | U-8 | Name equality | NFKC + casefold + collapse spaces + drop `'` and `.`; exact equality | `test_u_8_smyth_does_not_match_smith` | 2 |
-| U-9 | Stage-1 winners | STT: fewest field errors, ±1 error per 40 = tie → lower p50 latency → cost; TTS: round-trip intelligibility gate then TTFB; LLM: tool-arg accuracy then TTFT | `test_u_9_accuracy_within_margin_falls_back_to_latency` | 1 |
+| U-9 | Stage-1 winners | STT: fewest field errors, ±1 error per 40 = tie → lower p50 latency (cost reported, not ranked); TTS: round-trip intelligibility gate then TTFB; LLM: tool-arg accuracy then TTFT | `test_u_9_accuracy_within_margin_falls_back_to_latency` | 1 |
 | U-10 | Latency aggregation | pool non-None turns across calls; `statistics.quantiles(method="inclusive")`; log turn counts | `test_u_10_no_turns_omits_latency_metrics` | 3 |
 | U-11 | Long silence | agent-owed gap (user stopped → agent started) strictly > 2.0 s; caller think-time excluded | `test_u_11_exactly_two_seconds_is_not_long` | 3 |
 | U-12 | Handled barge-in | interrupted agent message followed by an agent reply that is not a normalised near-duplicate of it | `test_u_12_verbatim_repeat_after_interrupt_is_not_handled` | 3 |

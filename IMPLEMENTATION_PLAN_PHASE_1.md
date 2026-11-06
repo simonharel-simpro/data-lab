@@ -25,7 +25,8 @@ bench, stage 2 three archs × 6 personas × 5 reps.
 #### `projects/voice-arch/pyproject.toml` (MODIFY)
 Runtime: `livekit-agents==1.8.8`, `livekit-plugins-openai==1.8.8`, `livekit-plugins-silero==1.8.8`, `livekit-api==1.2.2`,
 `httpx~=0.28` (as datalab). Dev group (add to the template's): `import-linter>=2.15` (as mini-rag),
-`pytest-asyncio==1.4.0`. Add `[tool.pytest.ini_options] asyncio_mode = "auto"`, `testpaths = ["tests"]`;
+`pytest-asyncio==1.4.0`. Add `[tool.importlinter] root_package = "voice_arch"`, `include_external_packages = true`
+(as mini-rag), and `[tool.pytest.ini_options] asyncio_mode = "auto"`, `testpaths = ["tests"]`;
 `[tool.coverage.run] source = ["voice_arch"]`. Import-linter contract "booking stays pure": `source_modules =
 ["voice_arch.booking"]`, `forbidden_modules = ["livekit", "mlflow", "datalab", "httpx"]`. Create
 `src/voice_arch/__init__.py`, `src/voice_arch/booking/__init__.py`. Run `uv lock`.
@@ -98,15 +99,17 @@ list is given, else no `provider`. `OPENROUTER = "https://openrouter.ai/api/v1"`
 `KeyUsage(usage: float, limit_remaining: float | None)` (frozen dataclass). `key_usage(api_key: str, *, client:
 httpx.Client | None = None) -> KeyUsage` = `GET https://openrouter.ai/api/v1/key`, `Authorization: Bearer`; non-200 →
 `OpenRouterKeyError(f"HTTP {status}")`; missing `data.usage` → `OpenRouterKeyError` (never 0). `SpendTracker(api_key, *,
-client=None)` context manager: `before = key_usage()` in `__enter__` (raises on failure), `__exit__` reads again; a read
-failure there logs a warning → `cost_usd = None`; else `cost_usd = after - before`; exposes `remaining_before`.
+client=None)` context manager: reads `key_usage()` in `__enter__` and `__exit__`; a failed read (either side) logs a
+warning and makes `cost_usd = None` — never raises, never fails the run (F-12); else `cost_usd = after - before`;
+exposes `remaining_before: float | None`.
 
 #### `src/voice_arch/booking/normalize.py` (pure)
-`spoken_digits(text) -> str`: tokens "oh"/"zero"→0, "one"…"nine", "double X"→XX, "triple X"→XXX, digit characters kept,
+`spoken_digits(text) -> str`: split on non-alphanumerics ("five," → "five"); tokens "oh"/"zero"→0, "one"…"nine", "double X"→XX, "triple X"→XXX, digit characters kept,
 everything else dropped. `normalize_phone(text)`: `spoken_digits`, an 11-digit value starting with 1 loses it.
 `normalize_address(text)`: NFKC, casefold, punctuation → space, map `street→st, road→rd, avenue→ave, drive→dr, lane→ln,
-boulevard→blvd, court→ct, apartment|apt→unit`, US state names (incl. multi-word "new york", "north carolina") → codes,
-collapse spaces, drop a trailing 5-digit ZIP. `normalize_name(text)`: join runs of single letters separated by `-` or
+boulevard→blvd, court→ct, apartment|apt→unit`, US state names (incl. multi-word "new york", "north carolina") → codes on every occurrence (so the city "new york"
+becomes "ny" too — both sides are normalised the same way),
+collapse spaces, drop a trailing 5-digit ZIP. `normalize_name(text)`: join runs of ≥ 2 single letters separated by `-` or
 spaces ("S-M-Y-T-H" → "smyth", U-24), NFKC, casefold, drop `'` and `.`, collapse spaces.
 `normalize_text(text)` / `contains_phrase(hay, needle)`: copied from mini-rag `scoring.py:56-69` (cite it).
 
@@ -114,7 +117,9 @@ spaces ("S-M-Y-T-H" → "smyth", U-24), NFKC, casefold, drop `'` and `.`, collap
 `ToolArg(name: str, type: Literal["str","problem_type","slot_id"])`, `ToolSchema(name: str, description: str, args:
 tuple[ToolArg, ...])`; `TOOL_SCHEMAS: tuple[ToolSchema, ...]` = `record_name(name)`, `record_phone(phone)`,
 `record_address(address)`, `record_problem(problem_type)`, `choose_slot(slot_id)`. `to_openai_tools() -> list[dict]`
-(JSON-schema function tools; `problem_type` enum = plumbing/electrical/hvac/appliance/other). Phase 2's tools must use
+(JSON-schema dicts; `problem_type` enum = plumbing/electrical/hvac/appliance/other) and `to_raw_tools() -> list[RawFunctionTool]`
+(`livekit.agents.function_tool(_noop, raw_schema=<that dict>)` per schema — `LLM.chat(tools=…)` takes tool objects, not dicts).
+(`tool_schemas.py` then imports livekit: it lives outside `booking`, so the purity contract is unaffected.) Phase 2's tools must use
 these names and arg names (U-26).
 
 #### `src/voice_arch/fields.py`
@@ -129,7 +134,7 @@ float, intelligible: bool)`, `LlmRow(model, correct: int, n_cases: int, ttft_p50
 best = fewest errors; candidates with `errors ≤ best + ceil(n_utterances / 40)` tie (margin measured from the best,
 U-22) → lowest `p50_s`. `pick_tts(rows)`: intelligible rows only → lowest TTFB; none → `NoEligibleCandidate` (U-22).
 `pick_llm(rows)`: most correct → lowest TTFT. `Choice(model: str, reason: str)`. Cost is reported (catalog prices in
-PROJECT.md), not used to rank.
+PROJECT.md), not used to rank (U-9).
 
 #### `src/voice_arch/corpus.py`
 `build_corpus(utterances: list[Utterance], tts: tts.TTS, out_dir: Path, *, tts_model: str, voice: str) -> Corpus`:
@@ -141,7 +146,8 @@ re-synthesises each wav to a tmp file then `os.replace` (F-11). `Corpus(paths: d
 Seams take objects, not settings: `run_stt(stts: Mapping[str, stt.STT], corpus, utterances) -> list[SttRow]` ·
 `run_tts(ttss: Mapping[str, tts.TTS], lines: list[str], judge_stt: stt.STT, reps=3) -> list[TtsRow]` (TTFB = first frame;
 intelligible = `field_errors` of the round-trip transcript all False) · `run_llm(llms: Mapping[str, llm.LLM], cases) ->
-list[LlmRow]` (tools from `to_openai_tools()`, `args_correct`). Candidates (constants): STT `deepgram/nova-3`,
+list[LlmRow]` (`llm.chat(chat_ctx=…, tools=to_raw_tools())`; iterate the stream; TTFT = first chunk; collect
+`chunk.delta.tool_calls` name + JSON arguments; correct = right tool name and `args_correct`). Candidates (constants): STT `deepgram/nova-3`,
 `assemblyai/universal-3-6-pro`, `openai/gpt-4o-mini-transcribe`; TTS `elevenlabs/eleven-flash-v2.5`
 (`21m00Tcm4TlvDq8ikWAM`), `deepgram/aura-2` (`aura-2-thalia-en`), `deepgram/flux-tts` (`flux-bree-en`); LLM
 `deepseek/deepseek-v4-flash`, `google/gemini-3.5-flash-lite`, `anthropic/claude-haiku-5.5`. Corpus voice: TTS
@@ -161,8 +167,9 @@ agent_name="booking-agent", room=R, metadata=json))`) — usable once Phase 2's 
 
 #### `src/voice_arch/smoke_agent.py` (CLI `python -m voice_arch.smoke_agent dev`)
 ≤ 40 lines: `AgentServer(ws_url, api_key, api_secret from VoiceSettings)`, `@server.rtc_session(agent_name="smoke")`,
-an `Agent("You are a friendly test agent. Keep answers short.")` with `make_stt/make_tts/make_llm`; logs each
-`e2e_latency` from `conversation_item_added`.
+an `Agent("You are a friendly test agent. Keep answers short.")` with `make_stt/make_tts/make_llm` and
+`turn_handling={"turn_detection": "vad", "interruption": {"mode": "vad"}}` (same as the worker; no LiveKit Cloud
+inference); logs each `e2e_latency` from `conversation_item_added`; `cli.run_app(server)` under `__main__`.
 
 #### `web/index.html` (NEW, static, MIT-style minimal client)
 ~60 lines: inputs for URL (default `ws://127.0.0.1:7880`) and token; `livekit-client@2.23.0` from
@@ -203,12 +210,12 @@ MLflow on a tmp sqlite URI as in mini-rag `tests/conftest.py`)
 | test_normalize · `test_u_8_smyth_does_not_match_smith` | names differ after normalising | U-8 |
 | test_normalize · `test_u_24_spelled_letters_normalise_to_joined_name` | "S-M-Y-T-H" and "s m y t h" → "smyth" | U-24 |
 | test_fields · `test_field_errors_flags_wrong_phone_only` | transcript phone …018, truth …019 + right name → `{"phone": True, "name": False}` | U-9 |
-| test_fields · `test_f_10_empty_transcript_counts_as_stt_error` | "" → every field True | F-10 |
+| test_fields · `test_f_10_empty_transcript_counts_as_stt_error_in_bench` | "" → every field True | F-10 |
 | test_fields · `test_u_15_llm_arg_accuracy_compares_normalised_values` | actual phone "(415) 555-0134" vs expected "4155550134" → True | U-15 |
 | test_tool_schemas · `test_u_26_llm_cases_match_tool_schemas` | every case's tool/arg keys ∈ `TOOL_SCHEMAS` | U-26 |
 | test_winners · `test_u_9_accuracy_within_margin_falls_back_to_latency` | A 2 err 0.6 s, B 1 err 1.1 s, n=40 → A | U-9 |
 | test_winners · `test_pick_stt_outside_margin_prefers_accuracy` | A 4 err 0.6 s, B 1 err 1.1 s → B | U-9 |
-| test_winners · `test_u_22_stt_margin_is_measured_from_the_best` | A 1, B 2, C 3 err, n=40 → C excluded | U-22 |
+| test_winners · `test_u_22_stt_margin_is_measured_from_the_best` | A 1 err 1.0 s, B 2 err 0.9 s, C 3 err 0.5 s, n=40 → B (C out of margin) | U-22 |
 | test_winners · `test_u_22_pick_tts_with_no_intelligible_candidate_raises` | all `intelligible=False` → `NoEligibleCandidate` | U-22 |
 | test_winners · `test_pick_llm_accuracy_then_ttft` | 19/20 0.9 s vs 20/20 1.2 s → the 20/20 | U-9 |
 | test_corpus · `test_f_11_truncated_or_other_voice_cache_is_rejected` | manifest voice differs / a wav's hash differs → re-synthesised (fake TTS called) | F-11 |
@@ -217,10 +224,11 @@ MLflow on a tmp sqlite URI as in mini-rag `tests/conftest.py`)
 | test_bench · `test_u_6_bench_never_logs_exact_rate` | stt bench with fakes → no `exact_rate` metric | U-6 |
 | test_openrouter_key · `test_key_usage_reads_data_usage` | MockTransport `{"data":{"usage":1.25,"limit_remaining":48.0}}` → (1.25, 48.0) | D-6 |
 | test_openrouter_key · `test_key_usage_wrong_shape_or_401_raises` | `{"data":{}}` / HTTP 401 → `OpenRouterKeyError` | F-12 |
-| test_openrouter_key · `test_f_12_failed_second_read_leaves_cost_none` | 2nd read 500 → `cost_usd is None`, no exception | F-12 |
+| test_openrouter_key · `test_f_12_key_usage_read_failure_omits_cost_without_failing_run` | 1st or 2nd read 500 → `cost_usd is None`, no exception | F-12 |
+| test_token · `test_make_token_carries_room_and_agent_dispatch` | decode the JWT (secret from settings) → `video.room == "r"`, room config agent `smoke` | D-2 |
 | integration test_spike · `test_openrouter_stt_returns_text` | first corpus wav → non-empty text containing its truth name | D-4 |
 | integration test_spike · `test_openrouter_tts_returns_frames` | "Hello" → ≥ 1 frame | D-4 |
-| integration test_spike · `test_openrouter_llm_calls_a_tool` | llm_cases[0] → its expected tool and args | D-5 |
+| integration test_spike · `test_openrouter_llm_calls_a_tool` | llm_cases[0] → its expected tool and args | D-4 |
 
 **Done when:** hooks pass (incl. the new gates), the spike passes live, the three bench runs are in MLflow
 `voice-arch/bench`, `VoiceSettings` defaults = winners (reason in PROJECT.md), the browser smoke is in the README.

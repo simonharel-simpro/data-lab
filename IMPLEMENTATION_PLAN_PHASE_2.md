@@ -8,7 +8,8 @@ url/key/secret, chosen `stt_model/tts_model/tts_voice/llm_model`, `provider_list
 `livekit` service (profile `voice`, `ws://127.0.0.1:7880`), the import-linter contract "booking stays pure"
 (`voice_arch.booking` must not import livekit, mlflow, datalab, httpx), `token.py`, `dispatch.py`, `web/index.html`.
 **Agent:** `python-fastapi`. **Produces for Phase 3:** `BookingRecord`, `SCORED_FIELDS`, `is_exact`, `CALENDAR`,
-`ProblemType`, `Arch`/`parse_arch`, `CallResult` (+`RESULT_TOPIC`), the worker (`agent_name="booking-agent"`).
+`ProblemType`, `Arch`/`parse_arch` (`arch.py`, LiveKit-free), `CallResult` (+`RESULT_TOPIC`), the worker
+(`agent_name="booking-agent"`).
 
 Context (self-contained): the agent books a US service appointment by voice — name, phone, address, problem type, slot,
 then a read-back confirmation. A, B and C differ ONLY in control structure: same LLM, audio, per-field instructions and
@@ -48,10 +49,11 @@ None = None, taken: frozenset[str] = frozenset()) -> list[Slot]` (excludes `book
 
 #### `booking/actions.py` (pure; the only code that writes the record)
 Each returns the reply string the LLM sees. `apply_record(record, field, value) -> str` ("Noted.", or the error text
-for an invalid problem type) · `apply_check_slots(day: str | None, part: str | None, taken) -> str` (≤ 2 described
-slots with ids, or "No free slot then; offer another day.") · `apply_choose_slot(record, slot_id, taken) -> str`:
+for an invalid problem type) · `apply_check_slots(day: str | None, part: str | None, taken) -> str` (`day` = ISO
+`YYYY-MM-DD` or None, invalid → "Use a date like 2026-11-10."; `part` morning/afternoon or None; ≤ 2 described slots,
+earliest first, with ids; or "No free slot then; offer another day.") · `apply_choose_slot(record, slot_id, taken) -> str`:
 unknown id → "That slot doesn't exist…", booked/taken → "That slot is taken…" (record unchanged, U-17), else
-`set_field("slot_id")` · `apply_confirm(record) -> str`: incomplete → "Still missing: …" listing fields; complete →
+`set_field("slot_id")`, the previous slot removed from `taken`, the new one added (re-choosing releases) · `apply_confirm(record) -> str`: incomplete → "Still missing: …" listing fields; complete →
 `confirm()`, "Confirmed."
 
 #### `booking/instructions.py`
@@ -62,13 +64,19 @@ update it and read back again — U-18), `GOODBYE`, `CONTEXT` ("This week starts
 
 ## LiveKit layer (package `voice_arch.agents`)
 
+#### `src/voice_arch/arch.py` (pure): `Arch(StrEnum)` a/b/c; `parse_arch(raw: str | None) -> Arch` — exact lowercase
+value only; None, "", unknown, whitespace or uppercase ("A") → `UnknownArchError` — never a default (F-9).
+
 #### `agents/state.py`: `@dataclass BookingState`: `record: BookingRecord = field(default_factory=BookingRecord)`,
 `taken: set[str] = field(default_factory=set)`.
 
 #### `agents/tools.py`
-`@function_tool` wrappers named exactly as `TOOL_SCHEMAS` (+ `check_slots(day, part)`, `confirm_booking()`), each one
-line delegating to `booking.actions` with `ctx.userdata`. `confirm_booking`, on "Confirmed.", says `GOODBYE` and
-schedules `ctx.session.shutdown(drain=True)` (F-1). `ALL_TOOLS` list.
+`@function_tool` wrappers named exactly as `TOOL_SCHEMAS` (+ `check_slots(day, part)`, `confirm_booking()`), each
+delegating to `booking.actions` with `ctx.userdata`. After a success reply ("Noted.", a chosen slot, "Confirmed."),
+`complete_current_task(ctx)`: `a = ctx.session.current_agent; if isinstance(a, AgentTask) and not a.done():
+a.complete(None)` (no-op under arch A; `complete` raises if called twice). `confirm_booking`, on "Confirmed.", says
+`GOODBYE` and schedules `ctx.session.shutdown(drain=True)` (F-1). `ALL_TOOLS` list. `check_slots` description states the
+ISO date format.
 
 #### `agents/arch_a.py`: `OrchestratorAgent(Agent)`: instructions = CONTEXT + GREETING + every ASK_* + CONFIRM; tools
 `ALL_TOOLS`; `on_enter` says GREETING (only the booking agent greets, F-8).
@@ -76,42 +84,46 @@ schedules `ctx.session.shutdown(drain=True)` (F-1). `ALL_TOOLS` list.
 #### `agents/arch_b.py`
 `SUMMARIZE_CHAT_CTX: Final = False` (F-15). Custom tasks (NOT LiveKit's built-in Get*Task — their own instructions would
 break the shared-instruction rule): `NameTask`, `PhoneTask`, `AddressTask`, `ProblemTask`, `SlotTask`, `ConfirmTask`,
-each `AgentTask[None]` with instructions = CONTEXT + its ASK_*/CONFIRM, its tool(s) from `agents/tools.py`, and
-`self.complete(None)` once the tool reply is "Noted."/a chosen slot/"Confirmed.". `build_task_group() -> TaskGroup`:
+each `AgentTask[None]` with instructions = CONTEXT + its ASK_*/CONFIRM, its tool(s) from `agents/tools.py` (which complete
+the task, see above), and `on_enter` → `await self.session.generate_reply()` (an `AgentTask`'s default `on_enter` does
+nothing, so without it the task stays silent). Regression (U-18): TaskGroup adds an `out_of_scope` tool to each task
+that returns to an earlier task — the CONFIRM instruction relies on it to change the slot. `build_task_group() -> TaskGroup`:
 `TaskGroup(summarize_chat_ctx=SUMMARIZE_CHAT_CTX)`, `.add(lambda: NameTask(), id="name", description="collect the
 caller's name")`, then phone, address, problem, slot, confirm. `BookingFlowAgent(Agent)`: greets, then `await
 build_task_group()`. The tools are the only write path (no write from task results).
 
 #### `agents/arch_c.py`
 Same tasks and group (import from arch_b) with `memory=True`: each task's `on_enter` calls `await
-self.update_instructions(base + render_call_record(ctx.userdata.record))`; `render_call_record(record) -> str` (pure,
+self.update_instructions(base + render_call_record(self.session.userdata.record))`, then `generate_reply()`; `render_call_record(record) -> str` (pure,
 lives in `booking/actions.py`) lists filled fields, `missing()`, `corrections`. Extra tools `read_record()` and
 `update_record(field, value)` (→ `apply_record`; unknown field → error text).
 
-#### `agents/registry.py`: `Arch(StrEnum)` a/b/c; `parse_arch(raw: str | None) -> Arch` → `UnknownArchError` for
-None/""/unknown/whitespace — never a default (F-9); `build_agent(arch) -> Agent`.
+#### `agents/registry.py`: `build_agent(arch: Arch) -> Agent` (imports `Arch` from `voice_arch.arch`).
 
 #### `src/voice_arch/result.py`
 `RESULT_TOPIC: Final = "voice-arch.result"`. `CallResult(BaseModel)`: `room: str`, `arch: Arch | None`, `run_id: str |
 None`, `record: BookingRecord | None`, `report: dict | None` (`SessionReport.to_dict()`), `close_reason: str | None`,
-`error: str | None`, `http_status: int | None`, `session_errors: int = 0`, `summarize_chat_ctx: bool | None`.
+`error: str | None`, `http_status: int | None`, `session_errors: int = 0`, `summarize_chat_ctx: bool | None`, `max_tool_steps: int | None`.
 `to_json()`, `from_json(text)` (invalid → `ResultFormatError`). `http_status_of(err) -> int | None`: walks `err`,
 `err.error`, `__cause__` for a `status_code` attribute.
 
 #### `src/voice_arch/worker.py` (`python -m voice_arch.worker dev|start`)
 `server = AgentServer(ws_url=s.livekit_url, api_key=…, api_secret=…)`; `@server.rtc_session(agent_name="booking-agent")
 async def entry(ctx: JobContext)`:
-1. `meta = parse_metadata(ctx.job.metadata)` → `(Arch, run_id or "manual")`; `UnknownArchError` → send an error
-   `CallResult` and return (F-9).
+1. `meta = parse_metadata(ctx.job.metadata)` → `(Arch, run_id or "manual")`; empty/invalid JSON or no `arch` →
+   `UnknownArchError` (never `JSONDecodeError`) → send an error `CallResult` and return (F-9).
 2. `session = AgentSession(stt=make_stt(s), llm=make_llm(s, providers=s.provider_list), tts=make_tts(s),
-   vad=silero.VAD.load(), userdata=BookingState())`; count `error` events; keep the last `CloseEvent`.
+   vad=silero.VAD.load(), userdata=BookingState(), turn_handling={"turn_detection": "vad", "interruption":
+   {"mode": "vad"}}, max_tool_steps=MAX_TOOL_STEPS)` with `MAX_TOOL_STEPS: Final = 6` (pinned so dev and start modes
+   behave alike and nothing calls LiveKit Cloud inference); count `error` events; keep the last `CloseEvent`.
 3. `await session.start(agent=build_agent(arch), room=ctx.room)`; wait for the close event (asyncio.Event).
 4. `result = build_result(...)`: report via `ctx.make_session_report(session).to_dict()` (raises → `report=None`,
    `error=` message, F-3); `http_status = http_status_of(close.error)`; then `await
    ctx.room.local_participant.send_text(result.to_json(), topic=RESULT_TOPIC)` BEFORE returning (not in
-   `on_session_end`, where the room may be gone). Never writes files.
+   `on_session_end`, where the room may be gone); a send failure (room already deleted) is logged, not raised. Never
+   writes files. `cli.run_app(server)` under `__main__`.
 `parse_metadata(raw: str) -> tuple[Arch, str]` and `build_result(room, arch, run_id, state, close, errors,
-report_fn) -> CallResult` are pure and unit-tested.
+report_fn, *, summarize_chat_ctx: bool | None, max_tool_steps: int) -> CallResult` are pure and unit-tested.
 
 ## Tests (pure units; LiveKit-free except the integration file)
 
@@ -132,15 +144,17 @@ report_fn) -> CallResult` are pure and unit-tested.
 | booking/test_actions · `test_u_17_choose_booked_slot_returns_error_and_keeps_record` | `ST_20261109_0900` → text "taken", `slot_id is None` | U-17 |
 | booking/test_actions · `test_choose_unknown_slot_returns_error` | `ST_x` → text "doesn't exist", record unchanged | D-18 |
 | booking/test_actions · `test_confirm_incomplete_lists_missing_fields` | name only → "Still missing: phone, address, problem_type, slot_id" | U-2 |
-| booking/test_actions · `test_render_call_record_lists_missing_and_corrections` | phone corrected once → text contains "phone" under corrections and the 3 missing fields | D-5 |
-| agents/test_registry · `test_f_9_unknown_arch_metadata_is_refused_not_defaulted` | None, "", "d", "B " → `UnknownArchError` | F-9 |
-| agents/test_registry · `test_parse_arch_accepts_known_values` | "a","b","c" → A/B/C | F-9 |
-| agents/test_arch_b · `test_f_15_taskgroup_summarize_flag_is_off` | `build_task_group()._summarize_chat_ctx is False`; `SUMMARIZE_CHAT_CTX is False` | F-15 |
+| booking/test_actions · `test_render_call_record_lists_missing_and_corrections` | name and phone set, phone corrected once → "phone" under corrections; missing = address, problem_type, slot_id | arch C |
+| booking/test_actions · `test_rechoosing_a_slot_releases_the_previous` | choose 1400 then 0900 on Nov 10 → `taken == {"ST_20261110_0900"}` | U-17 |
+| booking/test_actions · `test_check_slots_rejects_non_iso_day` | day "next tuesday" → "Use a date like 2026-11-10." | input |
+| test_arch · `test_f_9_unknown_arch_metadata_is_refused_not_defaulted` | None, "", "d", "B ", "A" → `UnknownArchError` | F-9 |
+| test_arch · `test_parse_arch_accepts_known_values` | "a","b","c" → A/B/C | F-9 |
+| agents/test_arch_b · `test_f_15_taskgroup_summarize_flag_is_off_and_logged` | `build_task_group()._summarize_chat_ctx is False`; `build_result(..., summarize_chat_ctx=False, ...)` carries it | F-15 |
 | agents/test_tools · `test_u_26_tool_names_and_args_match_schemas` | each `TOOL_SCHEMAS` name exists in `ALL_TOOLS` with the same arg names (inspect signatures) | U-26 |
 | test_result · `test_result_round_trips` | CallResult with record + report → `from_json(to_json())` equal | D-7 |
 | test_result · `test_f_3_garbage_result_raises_format_error` | `"{not json"` → `ResultFormatError` | F-3 |
 | test_result · `test_http_status_of_finds_nested_status` | wrapper with `.error.status_code == 402` → 402; plain Exception → None | F-4 |
-| test_worker · `test_parse_metadata_requires_arch` | `'{"run_id":"r"}'` → `UnknownArchError`; `'{"arch":"b"}'` → (B, "manual") | F-9 |
+| test_worker · `test_parse_metadata_requires_arch` | `'{"run_id":"r"}'`, `""`, `"{x"` → `UnknownArchError`; `'{"arch":"b"}'` → (B, "manual") | F-9 |
 | test_worker · `test_f_3_report_failure_yields_error_result` | `report_fn` raises RuntimeError → `report None`, `error` contains its message, record kept | F-3 |
 | integration/test_arch_text · `test_arch_<a|b|c>_books_a_clean_caller` (param) | text-mode session (`AgentSession(llm=make_llm(...))`, `await session.run(user_input=…)` turns giving all fields + "yes") → `is_exact` True vs the script's expected record | goal |
 | integration/test_arch_text · `test_u_18_slot_change_during_readback_reconfirms_new_slot` (param) | during read-back the user says "actually Thursday at 2" → final slot `ST_20261112_1400`, confirmed | U-18 |
