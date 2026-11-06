@@ -38,12 +38,13 @@ def test_choose_free_slot_records_it_and_marks_it_taken() -> None:
 
 def test_rechoosing_a_slot_releases_the_previous() -> None:
     record, taken = BookingRecord(), set[str]()
+    first, second = "ST_20261110_1400", "ST_20261110_0900"
 
-    apply_choose_slot(record, "ST_20261110_1400", taken)
-    apply_choose_slot(record, "ST_20261110_0900", taken)
+    apply_choose_slot(record, first, taken)
+    apply_choose_slot(record, second, taken)
 
-    assert taken == {"ST_20261110_0900"}
-    assert record.slot_id == "ST_20261110_0900"
+    assert taken == {second}
+    assert record.slot_id == second
 
 
 def test_rechoosing_the_same_slot_keeps_it() -> None:
