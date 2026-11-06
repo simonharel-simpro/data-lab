@@ -112,3 +112,25 @@ protocol handler (fragile under WSL, where the browser and the app run on differ
 **Consequences:** The fork drifts further from upstream (#5), in a few contained files. Anything on the machine can
 reach 127.0.0.1:3080; the header and host checks stop other web pages, not local processes. With the OpenRouter key
 loaded, every Weaviate call carries it, so a query using the plain OpenAI provider would send it to OpenAI.
+
+## 2026-11-06 — mini-rag on OpenRouter: an fp8 provider allow-list, endpoint checks at startup
+
+**Status:** accepted (amends 2026-11-05 "OpenRouter as the default LLM endpoint for mini-rag")
+**Context:** A code review of the OpenRouter switch found that OpenRouter routes `deepseek/deepseek-v4-flash`
+to about fifteen upstream providers running fp4, fp8 or mxfp4 weights, so two runs with the same config could
+meet different models. Old DGX `.env` files kept `MINI_RAG_DGX_BASE_URL`, which was silently ignored, so those
+runs went to OpenRouter.
+**Decision:** On OpenRouter, every request allows only `provider.order=MINI_RAG_OPENROUTER_PROVIDERS` (default
+`deepinfra,gmicloud,parasail`) at `quantizations=[MINI_RAG_OPENROUTER_QUANTIZATION]` (default `fp8`), with
+`allow_fallbacks=false`. The allow-list is logged as `llm_providers`. OpenRouter's `provider` response field,
+counted per answer, becomes the run tag `llm_served_by`. `llm_base_url` is logged without userinfo, query or
+fragment. Validation errors hide their input, so the key never shows in a traceback.
+Startup refuses three setups, before any I/O: the legacy variable, an OpenRouter URL without a key, and any
+other endpoint left on OpenRouter's default model id. The DGX needs no key.
+**Alternatives considered:** Letting OpenRouter route (cheapest, not reproducible); a single pinned provider
+(tried first: DeepInfra was rate-limited the same day, so every run would have failed); the `quantizations`
+filter alone (any fp8 provider, unbounded).
+**Consequences:** `config_hash` covers `llm_base_url` and `llm_provider`, so runs from before 2026-11-05 never
+share a hash with later ones, even on the same endpoint. "Comparable with DGX runs" means the same model, not the
+same config hash. Answers in one run can come from different listed providers; `llm_served_by` shows it, and
+a strict comparison filters on it. If all three providers are down, OpenRouter runs fail.

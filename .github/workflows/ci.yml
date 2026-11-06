@@ -76,7 +76,7 @@ jobs:
     defaults:
       run:
         working-directory: projects/mini-rag
-    # Unit tests only: no Weaviate, MLflow (sqlite in tmp) or DGX in CI; integration tests are marked and deselected.
+    # Unit tests only: no Weaviate, MLflow (sqlite in tmp) or LLM endpoint in CI; integration tests are marked and deselected.
     steps:
       - uses: actions/checkout@v4
         with:

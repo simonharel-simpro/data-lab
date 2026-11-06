@@ -6,7 +6,7 @@
 import argparse
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -20,7 +20,7 @@ from mini_rag.generate import LlmGenerator
 from mini_rag.index import Retrieval, corpus_hash, ensure_collection, search
 from mini_rag.questions import Question, load_questions
 from mini_rag.scoring import Outcome, metrics, outcome
-from mini_rag.settings import PilotSettings
+from mini_rag.settings import PilotSettings, is_openrouter, public_url
 
 Answer = Callable[[str, list[Chunk]], str]
 Search = Callable[[str, Retrieval, int], list[Chunk]]
@@ -88,13 +88,15 @@ def run(
     answer: Answer,
     search: Search,
     results_dir: Path,
+    served_by: Callable[[], Mapping[str, int]] | None = None,
 ) -> str:
     """Returns the run id. Metrics are logged once, after every question is scored (F-13)."""
     selected = _select(questions, config.n)
     partial = len(selected) < len(questions)  # D-15: a subset logs smoke_* only, never `score`
     params = {"retrieval": str(config.retrieval), "k": config.k, "n": config.n}
     params |= {"questions_hash": _sha256([q.id for q in selected])}
-    params |= {"llm_base_url": pilot.llm_base_url, "gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
+    params |= {"llm_base_url": public_url(pilot.llm_base_url), "llm_providers": _routing(pilot)}
+    params |= {"gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
     params |= {"size": config.size, "overlap": config.overlap, "collection": config.collection}
     params |= {"corpus_hash": config.corpus_hash}
     tags = {"config_hash": _sha256(params)} | ({"smoke": "true"} if partial else {})
@@ -105,7 +107,16 @@ def run(
         results = _answer_all(selected, config.retrieval, config.k, answer, search, sink)
         mlflow.log_metrics(metrics([r.outcome for r in results]).as_dict(prefix="smoke_" if partial else ""))
         mlflow.log_dict({"results": [asdict(r) for r in results]}, "per_question.json")
+        if served_by is not None and (counts := served_by()):
+            mlflow.set_tag("llm_served_by", json.dumps(dict(counts), sort_keys=True))
     return run_id
+
+
+def _routing(pilot: PilotSettings) -> str:
+    """The OpenRouter provider allow-list and quantization, as logged; "none" for another endpoint."""
+    if not is_openrouter(pilot.llm_base_url):
+        return "none"
+    return f"{pilot.openrouter_providers}@{pilot.openrouter_quantization}"
 
 
 def _positive_int(text: str) -> int:
@@ -129,9 +140,12 @@ def main(argv: list[str] | None = None) -> int:
     questions = load_questions(project.root / "data" / "questions.jsonl")
     chunks = load_corpus(project.root / "data" / "corpus", size=SIZE, overlap=OVERLAP)
     preflight(settings.mlflow_tracking_uri)
+    key = pilot.llm_api_key.get_secret_value() if pilot.llm_api_key else None
+    openrouter = is_openrouter(pilot.llm_base_url)
     generator = LlmGenerator(
-        pilot.llm_base_url, pilot.gen_model, api_key=pilot.llm_api_key.get_secret_value(),
-        timeout_s=pilot.gen_timeout_s, max_tokens=pilot.max_tokens,
+        pilot.llm_base_url, pilot.gen_model, api_key=key, timeout_s=pilot.gen_timeout_s, max_tokens=pilot.max_tokens,
+        providers=pilot.provider_list if openrouter else None,
+        quantization=pilot.openrouter_quantization if openrouter else None,
     )  # fmt: skip
     corpus = corpus_hash(chunks)
     with connect_weaviate(settings) as client:
@@ -140,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         run_id = run(
             project, settings, pilot, questions, config=config, answer=generator.answer,
             search=lambda query, mode, k: search(client, name, query, mode, k),
-            results_dir=project.root / "results",
+            results_dir=project.root / "results", served_by=lambda: generator.served,
         )  # fmt: skip
     print(f"run {run_id} ({args.retrieval}-k{args.k}) logged to {settings.mlflow_tracking_uri}")
     return 0

@@ -57,8 +57,11 @@
 
 | ID | Scenario | Input | Expected Output | Status | Last Modified |
 |----|----------|-------|-----------------|--------|---------------|
-| PIL-01 | Full run | `--retrieval bm25 --k 3`, DGX up | FINISHED run in `mini-rag/retrieval`, tag `project=mini-rag`, metrics accuracy/hallucination/score | 🆕 New | Phase 3 |
+| PIL-01 | Full run | `--retrieval bm25 --k 3`, OpenRouter key set (or DGX up with `MINI_RAG_LLM_BASE_URL` + `MINI_RAG_GEN_MODEL`) | FINISHED run in `mini-rag/retrieval`, tag `project=mini-rag`, metrics accuracy/hallucination/score | 🆕 New | Phase 3 |
 | PIL-02 | 4 configs | bm25/vector × k 3/5 | 4 runs; app card "score = …, Meilleur de 4 runs" | 🆕 New | Phase 3 |
-| PIL-03 | DGX down | any config | run FAILED, no metrics logged | 🆕 New | Phase 3 |
+| PIL-03 | LLM endpoint down | any config, endpoint unreachable | run FAILED, no metrics logged | 🆕 New | Phase 3 |
+| PIL-06 | OpenRouter refuses | bad key (401), no credits (402), rate-limited (429) | run FAILED; the error carries OpenRouter's reason | 🆕 New | 2026-11-06 |
+| PIL-07 | Misconfigured endpoint | no key for OpenRouter; DGX URL without `MINI_RAG_GEN_MODEL`; legacy `MINI_RAG_DGX_BASE_URL` | refused at startup, before any I/O, with the fix in the message | 🆕 New | 2026-11-06 |
+| PIL-08 | Reproducible routing | OpenRouter run | request allows only `provider.order=[deepinfra,gmicloud,parasail]`, `quantizations=[fp8]`, `allow_fallbacks=false`; params `llm_providers`, credential-free `llm_base_url`; tag `llm_served_by` counts the provider of each answer | 🆕 New | 2026-11-06 |
 | PIL-04 | Smoke run | `--n 1` | `smoke_*` metrics + tag `smoke=true`, never counted as best | 🆕 New | Phase 3 |
 | PIL-05 | Unanswerable question | answer `null` | IDK counts correct; any answer = hallucination | 🆕 New | Phase 3 |
