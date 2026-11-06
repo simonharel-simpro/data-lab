@@ -63,7 +63,7 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 |-------|-------|--------|--------|
 | 1 | Infra, gates, OpenRouter audio, stage-1 bench | ✅ landed on feat/voice-arch @ fd114c3 (/check clean, fix-check 2 iter) | `phase-1-infra-bench` |
 | 2 | Booking domain + architectures A/B/C + worker | ✅ landed on feat/voice-arch @ 7fbfe3b (/check clean, fix-check 1 iter) | `phase-2-booking-archs` |
-| 3 | Simulated caller, sweep runner, scoring, decision | 🔄 implemented, /check pending | `phase-3-caller-runner` |
+| 3 | Simulated caller, sweep runner, scoring, decision | ✅ landed on feat/voice-arch @ 0e69038 (/check clean; live call ESC-3-2; sweeps await user) | `phase-3-caller-runner` |
 
 ## voice-arch Phase 1 — Infra, gates, OpenRouter audio, stage-1 bench
 **Implemented:** 2026-11-06 · **Agent:** python-fastapi (3 dispatches: A scaffold/infra/core, B bench/tools/docs, C D-17 caller default)
