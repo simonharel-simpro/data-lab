@@ -13,7 +13,7 @@ NEVER_SPEAK_FIRST: Final = "Never speak first."
 
 
 class LlmFactory(Protocol):
-    def __call__(self, settings: VoiceSettings, *, model: str, temperature: float) -> llm.LLM: ...
+    def __call__(self, settings: VoiceSettings, *, model: str, temperature: float, retry_empty: bool) -> llm.LLM: ...
 
 
 class CallerAgent(Agent):
@@ -24,10 +24,15 @@ class CallerAgent(Agent):
 
 
 def make_caller_session(settings: VoiceSettings, llm_factory: LlmFactory = make_llm) -> AgentSession[None]:
-    """Same audio stack and turn handling as the worker; the LLM is the configured caller model (D-17)."""
+    """Same audio stack and turn handling as the worker; the LLM is the configured caller model (D-17).
+
+    The LLM is guarded against empty completions like the agent's: an empty caller reply would stall the call.
+    """
     return AgentSession[None](
         stt=make_stt(settings),
-        llm=llm_factory(settings, model=settings.caller_llm_model, temperature=settings.caller_temperature),
+        llm=llm_factory(
+            settings, model=settings.caller_llm_model, temperature=settings.caller_temperature, retry_empty=True
+        ),
         tts=make_tts(settings),
         vad=silero.VAD.load(),
         turn_handling=TURN_HANDLING,

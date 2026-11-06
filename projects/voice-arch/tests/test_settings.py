@@ -122,3 +122,10 @@ def test_d_17_same_caller_and_agent_model_refused(monkeypatch: pytest.MonkeyPatc
         _settings()
 
     assert "D-17" in str(err.value)
+
+
+@pytest.mark.usefixtures("livekit_env")
+def test_call_timeout_default_covers_a_self_correction_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k1")
+
+    assert _settings().call_timeout_s == 420  # a self_correction call takes 265 to 300 s

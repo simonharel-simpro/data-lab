@@ -138,6 +138,33 @@
   I did: ran the live checks with `VOICE_ARCH_CALL_TIMEOUT_S` raised (env only, default unchanged) and used `worker dev`, because the `start` worker marks itself unavailable above 0.7 CPU load and the host was busy.
   One-off or pattern?: likely recurs: the sweep's 240 s default may make many self_correction calls `timeout`; decide before the sweeps.
 
+## Sweep prerequisites (branch fix/voice-arch-sweep-prereqs)
+
+- Plan assumed: a retry of an empty completion could be the same request (LiveKit re-calls `_run`).
+  Territory was: LiveKit's `LLMStream._main_task` re-invokes `self._run()` up to `max_retry + 1` times; the OpenAI/OpenRouter stream sends `self._extra_kwargs` (a per-stream dict that holds `temperature`) on each attempt, so the request is identical at temperature 0.
+  I did: the guard wraps `_run` and, before each retry, sets `_extra_kwargs["temperature"]` to `min(base + 0.3 * retry, 1.0)` (first attempt keeps the base, so 0 -> 0.3 -> 0.6 -> 0.9; the caller's 0.7 -> 1.0). Each retry is logged at WARNING (`empty LLM completion, retry N at temperature T`, no text). `_extra_kwargs` is read without a fallback: a LiveKit upgrade that drops it fails on the first call, and a contract test builds the real OpenRouter stream. No system-nudge variant was needed.
+  One-off or pattern?: likely recurs: any guard on a LiveKit stream depends on these two private attributes (`_run`, `_extra_kwargs`).
+- Plan assumed: raising the temperature makes the retry succeed.
+  Territory was: live check, arch C, `self_correction` (2026-11-06): one turn came back empty on all 4 attempts (temperatures 0, 0.3, 0.6, 0.9), the same turn pattern as the pilot (after several phone corrections, the user turn ends with the caller repeating the number). So the empty answer is not (only) a temperature-0 artefact for that context. LiveKit then logged `failed to generate LLM completion after 4 attempts`, the agent session stayed open and silent, and the runner recorded a timeout at 420 s.
+  I did: nothing further (out of scope, budget). Open question for the user: what to do after the guard gives up (end the call with an error so it counts as agent failure at once, a different nudge on retry, or investigate the context that Gemini returns empty for).
+  One-off or pattern?: likely recurs: seen twice on C.
+- Plan assumed: the caller factory protocol had to be extended and its fakes in `tests/call_fakes.py` updated.
+  Territory was: `LlmFactory` gets a required keyword `retry_empty`; the only implementation outside `make_llm` is the spy in `tests/test_runner.py` (`call_fakes.py` has none). `make_caller_session` passes `retry_empty=True`.
+  I did: updated that spy's signature; new `tests/test_caller.py` shows the caller session's LLM fails loud (and is retried) on empty completions.
+  One-off or pattern?: one-off.
+- Plan assumed: `VOICE_ARCH_CALL_TIMEOUT_S` could be set for the integration test.
+  Territory was: `tests/conftest.py` strips `VOICE_ARCH_*` env vars, so it never had effect. `tests/integration/test_one_call.py` has no hard-coded limit: it passes `live.call_timeout_s` from `VoiceSettings`, so it follows the new default (420 s).
+  I did: raised the default `call_timeout_s` 240 -> 420 and added a settings test.
+  One-off or pattern?: one-off.
+- B's wrong phone number (read-only diagnosis of the live pilot log, `worker12.log`, room `va-live-fix-b-self_correction-0-3b877e`):
+  - 10:08:27 heard `Sure, my number is 512-550-147. Sorry, the last digit is 8, so it's 512-555-0148.` -> `record_phone("512-555-0148")` (correct).
+  - 10:11:07 read-back says `Phone Number: 512-555-0148` (correct).
+  - 10:11:29 heard `Not quite. The phone number should be 512-550-148, not 512-550-148. The rest sounds right, but I'm not sure about the year...` -> `out_of_scope(["phone"])` then `record_phone("512-550-0148")`.
+  - 10:11:55 the agent reads back `512-550-0148` and, in the same turn (10:11:56), calls `confirm_booking`; there is no user transcript between them. The call ends scored with `512-550-0148`.
+  - Conclusion: not a correction lost behind a closed step (the phone was right, and B's regression path works: `out_of_scope` re-opened the phone task). It is an STT mishearing of `555-0148` as `550-148` (same garble on A/C: `512-550-1488`, `512-550-148`; the first wrong number was heard as `512-550-147`); the persona text has no `550` anywhere, so the caller LLM did not invent it. Not separable from the logs: why the caller objected to a correct read-back (the caller's own text is not logged; only the agent-side transcript is).
+  - Mechanism in `agents/arch_b.py` / `agents/tools.py`: the confirm step's only escape is `out_of_scope`, which re-runs `PhoneTask`; `record_phone` normalises whatever the model passes and nothing compares it with the value already recorded. `ConfirmTask` ends in `confirm_booking`, whose `apply_confirm` checks only that the record is complete, so the model can confirm in the turn where it asked "does this look correct?". No behaviour changed; the user decides whether to add a wait for the caller's yes.
+  One-off or pattern?: likely recurs: caller number read-backs through this STT.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [resolved] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller. => User 2026-11-06: caller = anthropic/claude-haiku-5.5 @ temperature 0.7 (agent = google/gemini-3.5-flash-lite).

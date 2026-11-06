@@ -47,7 +47,8 @@ class VoiceSettings(BaseSettings):
     openrouter_providers: str = "google-vertex,google-ai-studio"
     openrouter_quantization: str | None = None
 
-    call_timeout_s: float = 240
+    # A self_correction call takes 265 to 300 s (real-time read-backs); 420 leaves room for a retry or two.
+    call_timeout_s: float = 420
     agent_join_timeout_s: float = 20
 
     @field_validator("livekit_url")

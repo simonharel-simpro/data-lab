@@ -132,7 +132,7 @@ timeout.
 | Arch | Outcome | Duration | Cost | What happened |
 |---|---|---|---|---|
 | **A** orchestrator | ✅ exact booking | 296 s | 0.079 $ | The caller's phone correction was applied. The retry absorbed several empty responses. |
-| **B** TaskGroup | ⚠️ scored, not exact | 265 s | 0.107 $ | Every field right except the phone (`512-550-0148`). Reported as an STT mishearing of the digits; not yet checked against the log. |
+| **B** TaskGroup | ⚠️ scored, not exact | 265 s | 0.107 $ | Every field right except the phone (`512-550-0148`). The log shows an STT mishearing of the digits, after the number had been recorded correctly (see "Suite", point 2). |
 | **C** B + call record | ❌ timeout | 663 s | 0.137 $ | The conversation went off course and never converged. The last turn was empty on all 4 tries, and the agent fell silent. |
 
 **What this does and does not say.** One call per architecture does not measure an architecture effect. It shows
@@ -152,14 +152,21 @@ from `python -m voice_arch.decide` here. `cost_per_call_usd` is the cost over th
 
 ## Suite
 
-1. **Before the sweeps (fixes, cents):**
-   - Retry an empty response at a higher temperature. At temperature 0, an identical request can come back empty
-     every time, as on C's last turn.
-   - Guard the simulated caller's LLM the same way.
-   - Raise `call_timeout_s` from 240 s to about 400 s. A `self_correction` call takes 265 to 300 s.
-2. **Check B's phone error:** read the call log to tell an STT mishearing from a correction that was lost after its
-   step closed.
-3. **Smoke run:** `runner --arch a --personas self_correction --reps 1`.
+1. **Before the sweeps (fixes, cents) — done on branch `fix/voice-arch-sweep-prereqs`:**
+   - An empty response is retried at a higher temperature (+0.3 per retry, cap 1.0; the first attempt keeps the
+     configured one), because an identical request at temperature 0 can come back empty every time.
+   - The simulated caller's LLM has the same guard.
+   - `call_timeout_s` default raised from 240 s to 420 s (a `self_correction` call takes 265 to 300 s).
+2. **B's phone error — diagnosed from the log, no code change:** the correct number (`512-555-0148`) was recorded
+   first and read back correctly; then the agent's STT heard the caller's objection as `512-550-148`, and B's confirm
+   step re-opened the phone step and overwrote the good value with `512-550-0148`. The same garble appeared on C's
+   last turns (`512-550-1488`). See `IMPLEMENTATION_NOTES.md`, "Sweep prerequisites". Open decisions for you: B calls
+   `confirm_booking` in the same turn as the read-back, without waiting for the caller's yes, and nothing checks a
+   re-recorded value against the earlier one.
+3. **Smoke run:** one live call, arch C, `self_correction` (2026-11-06, 0.135 $): timeout at 420 s. One turn came back
+   empty on all 4 attempts (temperature 0, 0.3, 0.6, 0.9) and the session then stayed silent, so raising the
+   temperature does not cure every empty turn. Decide what happens after the guard gives up before the sweeps (see
+   `IMPLEMENTATION_NOTES.md`, "Sweep prerequisites").
 4. **Full sweeps:** `a`, `b`, `c` one at a time (about 30 calls each, 25 to 40 $ in total), then `decide`, and the
    table above.
 5. **Manual:** one browser call per architecture, rated with `rate`, plus the browser smoke (UDP vs TCP, hand-timed

@@ -1,15 +1,26 @@
-"""Retry an LLM call that completes with no text and no tool call (ESC-3-2).
+"""Retry an LLM call that completes with no text and no tool call (ESC-3-2), each retry hotter than the last.
 
 Gemini through OpenRouter sometimes ends a stream with zero completion tokens. LiveKit treats that as a finished
-turn: the agent says nothing, raises no error, and the call waits until the caller gives up.
+turn: the agent says nothing, raises no error, and the call waits until the caller gives up. At temperature 0 an
+identical request can come back empty every time, so a retry raises the temperature instead of repeating itself.
 """
 
+import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Final
 
 from livekit.agents import APIConnectionError, llm
 
+logger = logging.getLogger("voice_arch.llm_guard")
+
 EMPTY_COMPLETION = "the LLM completed without text or tool call"
+RETRY_TEMPERATURE_STEP: Final = 0.3
+MAX_RETRY_TEMPERATURE: Final = 1.0  # beyond this a booking agent starts to improvise
+
+
+def retry_temperature(base: float, retry: int) -> float:
+    """`retry` counts from 1 (the first re-send); the first attempt keeps `base`."""
+    return max(base, min(base + RETRY_TEMPERATURE_STEP * retry, MAX_RETRY_TEMPERATURE))
 
 
 def retry_on_empty_completion(model: llm.LLM) -> llm.LLM:
@@ -19,8 +30,18 @@ def retry_on_empty_completion(model: llm.LLM) -> llm.LLM:
     def guarded_chat(*args: Any, **kwargs: Any) -> llm.LLMStream:  # forwards LiveKit's signature
         stream = chat(*args, **kwargs)
         run = stream._run  # pyright: ignore[reportPrivateUsage]  # the only hook on a stream's attempt
+        # The dict LiveKit's OpenAI stream sends as request parameters on every attempt. Read directly: if a
+        # LiveKit upgrade drops it, the first call fails loudly rather than retrying at an unchanged temperature.
+        request: dict[str, Any] = stream._extra_kwargs  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
+        base = float(request.get("temperature", 0.0))
+        attempts = 0
 
         async def checked_run() -> None:
+            nonlocal attempts
+            if attempts > 0:
+                request["temperature"] = retry_temperature(base, attempts)
+                logger.warning("empty LLM completion, retry %d at temperature %.2f", attempts, request["temperature"])
+            attempts += 1
             await run()
             if not stream._event_ch.output_sent:  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
                 raise APIConnectionError(EMPTY_COMPLETION, retryable=True)

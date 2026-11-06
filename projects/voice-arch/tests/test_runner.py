@@ -213,7 +213,7 @@ async def test_f_12_cost_absent_when_key_read_fails(sweep: Sweep) -> None:
 async def test_u_20_caller_llm_uses_configured_model_and_temperature(sweep: Sweep) -> None:
     seen: list[tuple[str, float]] = []
 
-    def spy(settings: VoiceSettings, *, model: str, temperature: float) -> llm.LLM:
+    def spy(settings: VoiceSettings, *, model: str, temperature: float, retry_empty: bool) -> llm.LLM:
         seen.append((model, temperature))
         return cast("llm.LLM", FakeLlm(lambda _text: None))
 

@@ -109,8 +109,10 @@ is reached, or when more than 10 % of the calls fail on the caller's side. Only 
 counts for `decide` and for the app card (`exact_rate`); a smoke run logs `smoke_exact_rate` and never stands in.
 
 The agent LLM is pinned to `openrouter_providers` (default `google-vertex,google-ai-studio`, no fallback; set
-`openrouter_quantization` to add a quantization filter); the caller LLM is not. A live call takes 3 to 5 minutes (real-time
-read-backs); `call_timeout_s` is 240 by default. Under host CPU load the `start` worker marks itself unavailable (load
+`openrouter_quantization` to add a quantization filter); the caller LLM is not. Both LLMs are guarded against empty completions (`llm_guard`): an empty reply is retried, and
+each retry raises the temperature by 0.3 (capped at 1.0) so it is not an identical request; every retry is logged at
+WARNING with its number. A live call takes 3 to 5 minutes (real-time
+read-backs); `call_timeout_s` is 420 by default (a `self_correction` call needs 265 to 300 s). Under host CPU load the `start` worker marks itself unavailable (load
 threshold 0.7) and no agent joins: use `worker dev` (no threshold) for live checks on a busy machine.
 
 Live check of the whole path (one call, a few cents; the worker must be running):
