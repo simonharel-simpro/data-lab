@@ -61,7 +61,7 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
-| 1 | Infra, gates, OpenRouter audio, stage-1 bench | 🔄 implemented, /check pending | `phase-1-infra-bench` |
+| 1 | Infra, gates, OpenRouter audio, stage-1 bench | ✅ landed on feat/voice-arch @ fd114c3 (/check clean, fix-check 2 iter) | `phase-1-infra-bench` |
 | 2 | Booking domain + architectures A/B/C + worker | ⏳ pending | — |
 | 3 | Simulated caller, sweep runner, scoring, decision | ⏳ pending | — |
 
