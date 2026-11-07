@@ -44,7 +44,8 @@ contracts/              cross-side contracts read by the Python and app test sui
                         milestones.json, run_ledger_vectors.json, mlflow_tags.json
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A); experiment ledger:
                         split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries,
-                        wiring (text-level hook + CI matrix wiring for `datalab-new`, parity check)
+                        wiring (text-level hook + CI matrix wiring for `datalab-new`)
+                        wiring_parity (test-time check that every projects/* has its hook stanzas + CI matrix entry)
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
@@ -236,7 +237,7 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 5. `datalab-new <name>` copies the template, locks it, then `wiring.plan` computes the new text of
    `.pre-commit-config.yaml` (declared-deps + gates stanzas) and `ci.yml` (matrix entry) between the
    `# >>> datalab-new` markers; both are written only after the project folder is published, and
-   `wiring.parity_problems` (a test) fails if any project is unwired.
+   `wiring_parity.parity_problems` (a test) fails if any project is unwired.
 
 ### Concrete example: the `mini-rag` pilot (Phase 3)
 

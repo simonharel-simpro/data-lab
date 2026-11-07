@@ -160,6 +160,19 @@ def test_parity_reports_fail_fast_not_false(wired_repo: Path) -> None:
     assert problems == ["jobs.projects.strategy.fail-fast must be false"]
 
 
+def test_parity_reports_scalar_matrix(wired_repo: Path) -> None:
+    ci = wired_repo / CI
+    text = ci.read_text("utf-8")
+    start = text.index("        project:\n")
+    end = text.index("    defaults:", start)
+    ci.write_text(text[:start] + "        project: mini-rag\n" + text[end:], encoding="utf-8")
+
+    problems = "\n".join(parity_problems(wired_repo))
+
+    assert "unexpected shape" in problems
+    assert "project mini-rag is missing from jobs.projects.strategy.matrix.project" in problems
+
+
 _CI_WITHOUT_PROJECTS_JOB = (
     "jobs:\n  other:\n    strategy:\n      matrix:\n        project:\n"
     "          # >>> datalab-new: matrix\n          - mini-rag\n          # <<< datalab-new: matrix\n"
