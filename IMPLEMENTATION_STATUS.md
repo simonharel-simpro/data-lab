@@ -105,7 +105,7 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 | 2 | Hydra gate, ledger hook, wiring, CI matrix | ✅ landed on feat/experiment @ 24a40a0 (/check clean, fix-check 3 iter) | `phase-2-gates-wiring` |
 | 3 | Hydra template, package name, scaffold-and-gate | ✅ landed on feat/experiment @ a46c76e (/check clean, fix-check 1 iter) | `phase-3-hydra-template` |
 | 4 | `/experiment` skill | ✅ landed on feat/experiment @ 8480b2b (/check clean first pass) | `phase-4-experiment-skill` |
-| 5 | App stepper + run groups + card best | ⏳ pending | — |
+| 5 | App stepper + run groups + card best | 🔄 implemented, awaiting /check | `phase-5-app-stepper` |
 
 ## experiment Phase 1 — Contract + ledger, split, tags, trial helpers
 
@@ -114,6 +114,14 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 - Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
 - Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
 - Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).
+
+## experiment Phase 5 — App stepper + run groups + ledger-aware card best (read-only)
+
+**Implemented:** 2026-11-07 · **Agent:** general-purpose (Astro/TS) · **Tooling (verified):** `npm run check` 0/0/0, `npm test` 114/114, line coverage 99.75 % (floor 70), pre-commit pre-push green, CI build steps run locally (fixture build, strict export refuses the invalid ledger)
+- New: `app/src/lib/{ledger,run-groups,best,tags}.ts` + tests, `components/{Stepper,RunGroups}.astro`, `test-fixtures/ledger/{valid,invalid}`.
+- Modified: `mlflow-rest.ts` (tags, status, paging), `mlflow.ts` (`projectView`, all-status query), `report.ts`, `export-guard.ts`, pages, `.pre-commit-config.yaml` (gates-app files), `ci.yml` (2 build steps), ARCHITECTURE.md.
+- Tests: every planned test seen red; mutation sweep 28/29 (the survivor is equivalent). Existing `mlflow.test.ts` order_by assertion changed as planned.
+- Decision: `Step.decision` admits `redo` (only Python's I-3 refuses it); nested-run children shown as orphans.
 
 ## experiment Phase 4 — `/experiment` skill
 

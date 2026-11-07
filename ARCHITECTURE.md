@@ -212,15 +212,19 @@ return _row(persona, rep, room, _classify(handle, result), result)
   transition model, each call is classified once from what the handle reports.
 
 ### App (`app/`, Phase 2B)
-- **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`) and MLflow runs
-  (REST, D-1), renders an index and one page per project.
+- **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`), each project's
+  `run.json` (optional) and MLflow runs (REST, D-1), renders an index and one page per project.
 - **Must NOT:** write anything — the app only calls MLflow's `experiments/search`, `runs/search` and `/health`; no
-  Weaviate access, no card edits; never launch runs (#4). Pages never import MLflow code other than `metricState()`.
+  Weaviate access, no card edits, no run.json writes; never launch runs (#4). Pages never import MLflow code other
+  than `projectView()` (`metricState()` stays for callers that only need the card best).
 - **Two modes, one code base (no server adapter, S-2):** `astro dev` re-reads cards and metrics per request and
   links run names to MLflow; `astro build` is a static export with metrics frozen and no MLflow link or URI (D-14).
 - **Modules:** `lib/name.ts` (`NAME_RE`, same literal as Python), `lib/card.ts` (zod schema, statuses),
-  `lib/completeness.ts` (badge), `lib/mlflow.ts` + `lib/mlflow-rest.ts` (best run, zod-checked responses),
-  `lib/report.ts` (build report), `lib/config.ts` (the only module that names the app's `DATALAB_*` env vars),
+  `lib/completeness.ts` (badge), `lib/mlflow.ts` (`projectView`: one experiments + runs fetch → card best + run
+  groups) + `lib/mlflow-rest.ts` (zod-checked responses, `runs/search` pagination), `lib/best.ts` (`pickBest`,
+  `eligibleForBest`, `bestFilter`), `lib/run-groups.ts` (parent → children, orphans, counts), `lib/tags.ts` (the
+  `mlflow_tags.json` names), `lib/ledger.ts` (run.json reader: strict schema + I-1 in Python's check order, stepper
+  steps, artifact containment; no writes), `lib/report.ts` (build report), `lib/config.ts` (the only module that names the app's `DATALAB_*` env vars),
   `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
   Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
 - **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.
@@ -228,9 +232,19 @@ return _row(persona, rep, room, _classify(handle, result), result)
   not the max over steps. Only exactly `metric.key` counts (a `smoke_score` never stands in for `score`, D-15).
 - **Build report on `globalThis` (B-1):** during `astro build` the pages and the integration load separate module
   instances, so `reportUnavailable()` writes to `globalThis.__datalabBuildReport`; the `astro:build:done` hook logs
-  it and, with `DATALAB_STRICT_EXPORT=1`, fails the build when any card's metrics were unavailable (F-1).
+  it and, with `DATALAB_STRICT_EXPORT=1`, fails the build when any card's metrics were unavailable (F-1) or its
+  run.json is invalid (key `run.json:<project>`, F-20).
+- **run.json in the app (F-18):** checked are the schema, U-13 (`kind` missing) and I-1 (milestone keys = the kind's
+  sequence, which also orders the stepper); I-2..I-15 and V-1..V-3 are Python-only (the `ledger` hook and the CI
+  `projects` step), so a ledger that breaks only those renders as valid. `checked_by` in the shared vectors says
+  which side checks what. An artifact shows `missing` unless it exists inside the project's real path (U-15).
+- **Card best (F-13, U-9, U-27):** `eligibleForBest` drops `split=test` runs; a child counts only if it and its
+  parent FINISHED; with a run.json the parent's `split_sha256`/`data_sha256` tags must equal the ledger's (a null
+  ledger hash → no best); without one a parentless FINISHED run still counts (legacy); an invalid run.json → no best.
+  The index card and the project page use the same filter, so they show the same best.
 
 ```ts
+// lib/best.ts
 export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
   if (runs.length === 0) return { kind: 'no-runs' };
   const carrying = runs.flatMap((run) => {
@@ -260,8 +274,10 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 2. Ingest: documents go to a collection named `<Pascal>_<parts>_<hash8>`; Weaviate calls `t2v-transformers` to
    embed them when the collection opts in to the module.
 3. Experiments: each run is logged to the experiment `<name>` or `<name>/<sub>` with tag `project=<name>`.
-4. The app reads `projects/*/PROJECT.md`, queries MLflow for runs with exactly `tags.project = '<name>'`, picks the
-   best run by the card's `metric {key, goal}` and renders it (links only in dev, D-14).
+4. The app reads `projects/*/PROJECT.md` and `projects/<name>/run.json` (stepper), queries MLflow for runs of any
+   status with exactly `tags.project = '<name>'` (all pages), groups them parent → children, picks the best eligible
+   run by the card's `metric {key, goal}` — on the frozen split when a run.json exists — and renders it (links only
+   in dev, D-14).
 5. `datalab-new <name>` copies the template, locks it, then `wiring.plan` computes the new text of
    `.pre-commit-config.yaml` (declared-deps + gates stanzas) and `ci.yml` (matrix entry) between the
    `# >>> datalab-new` markers; both are written only after the project folder is published, and

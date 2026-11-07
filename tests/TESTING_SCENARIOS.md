@@ -141,5 +141,10 @@
 | EXP-28 | Kind change | expert switches training → comparison after scoping | run.json + split.json archived, new ledger at scoping | 🆕 New | exp Phase 4 |
 | EXP-29 | Hydra not wired at the BOX | gate fails | modeling redone, BOX re-runs | 🆕 New | exp Phase 4 |
 | EXP-30 | Stale RUNNING runs | crashed runs older than N days | listed; only the ones the expert names are closed | 🆕 New | exp Phase 4 |
+| EXP-31 | Stepper renders a ledger | project with a valid run.json | steps in kind order, current marked, decision notes shown | 🆕 New | exp Phase 5 |
+| EXP-32 | Invalid run.json | trouvetou-format ledger | reported in the build report; strict export fails | 🆕 New | exp Phase 5 |
+| EXP-33 | Missing artifact | run.json lists a file that is absent, or `../` | flagged missing | 🆕 New | exp Phase 5 |
+| EXP-34 | Run groups | parents with FINISHED/FAILED children, orphans, legacy runs | counts per parent, orphans grouped, legacy standalone | 🆕 New | exp Phase 5 |
+| EXP-35 | Card best | test-split runs, running parents, another split | none eligible; only children of the frozen split + data count | 🆕 New | exp Phase 5 |
 
 > ⚠️ After merge: required CI checks are renamed `project (mini-rag)` / `project (voice-arch)` (were `pilot` / `voice-arch`) — update branch protection.

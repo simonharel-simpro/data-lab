@@ -34,3 +34,10 @@ test('F-1: the astro:build:done hook reads the shared build report', async () =>
   assert.throws(() => hook?.({ logger } as never), /p/);
   assert.deepEqual(warned, ["metrics unavailable for 'p': down"]);
 });
+
+test('F-20: ledger entries get their own line', () => {
+  const lines: string[] = [];
+  checkReport(new Map([['run.json:p', 'x'], ['q', 'down']]), {}, (l) => lines.push(l));
+  assert.deepEqual(lines, ["run.json invalid for 'p': x", "metrics unavailable for 'q': down"]);
+  assert.throws(() => checkReport(new Map([['run.json:p', 'x'], ['q', 'down']]), { DATALAB_STRICT_EXPORT: '1' }, quiet), /run\.json:p, q/);
+});

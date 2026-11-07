@@ -3,9 +3,15 @@ import type { InferGetStaticPropsType } from 'astro';
 import { render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import Metric from '../../components/Metric.astro';
+import Stepper from '../../components/Stepper.astro';
+import RunGroups from '../../components/RunGroups.astro';
 import { loadProjects } from '../../lib/projects.ts';
 import { missing } from '../../lib/completeness.ts';
-import { metricState } from '../../lib/mlflow.ts';
+import { join } from 'node:path';
+import { projectView } from '../../lib/mlflow.ts';
+import { bestFilter } from '../../lib/best.ts';
+import { ledgerState } from '../../lib/ledger.ts';
+import { projectsDir } from '../../lib/config.ts';
 
 export async function getStaticPaths() {
   return (await loadProjects()).map((entry) => ({ params: { name: entry.id }, props: { entry } }));
@@ -15,14 +21,17 @@ type Props = InferGetStaticPropsType<typeof getStaticPaths>;
 const { entry } = Astro.props;
 const { Content } = await render(entry);
 const gaps = missing(entry.data, entry.body ?? '');
-const state = await metricState(entry.data);
+const ledger = ledgerState(entry.id, join(projectsDir(), entry.id));
+const view = await projectView(entry.data, bestFilter(ledger));
 ---
 <Base title={entry.data.title}>
   <p><a href="/">← Projets</a> · <span class="status">{entry.data.status}</span></p>
   <h1>{entry.data.title}</h1>
+  <Stepper state={ledger} />
   {entry.data.data && <p class="muted">Données : {entry.data.data}</p>}
   <section class="card">
-    <Metric state={state} metricKey={entry.data.metric?.key} />
+    <Metric state={view.state} metricKey={entry.data.metric?.key} />
+    <RunGroups groups={view.groups} metricKey={entry.data.metric?.key} />
   </section>
   {gaps.length > 0 && <p class="badge">À compléter : {gaps.join(', ')}</p>}
   <Content />

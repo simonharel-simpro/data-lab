@@ -1,6 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { bestRun, metricState, pickBest, readReport, reportUnavailable, warmUp, type MlflowRun } from './mlflow.ts';
+import { bestRun, metricState, pickBest, projectView, readReport, reportUnavailable, warmUp, type MlflowRun } from './mlflow.ts';
+import type { BestFilter } from './best.ts';
 
 type Call = { path: string; body: Record<string, unknown> };
 type Reply = unknown | Error | ((n: number) => unknown);
@@ -9,10 +10,11 @@ const score = { key: 'score', goal: 'max' } as const;
 
 beforeEach(() => readReport().clear());
 
-function run(id: string, metrics: Record<string, number>, start = 1, exp = '1', params: Record<string, string> = {}): MlflowRun {
+function run(id: string, metrics: Record<string, number>, start = 1, exp = '1', params: Record<string, string> = {}, tags: Record<string, string> = {}, status = 'FINISHED'): MlflowRun {
   const m = Object.entries(metrics).map(([key, value]) => ({ key, value }));
   const p = Object.entries(params).map(([key, value]) => ({ key, value }));
-  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start }, data: { metrics: m, params: p } };
+  const t = Object.entries(tags).map(([key, value]) => ({ key, value }));
+  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status }, data: { metrics: m, params: p, tags: t } };
 }
 
 /** Fake MLflow: route by REST path; an Error reply is thrown, a function gets the call count for that path. */
@@ -106,7 +108,7 @@ test('ok result carries experiment name and run URL; requests are well-formed', 
   const [expCall, runsCall] = f.calls;
   assert.ok(expCall && runsCall);
   assert.equal(expCall.body.view_type, 'ACTIVE_ONLY');
-  assert.deepEqual(runsCall.body.order_by, ['metrics.`score` DESC', 'attributes.start_time DESC']);
+  assert.deepEqual(runsCall.body.order_by, ['attributes.start_time DESC']);
 });
 
 test('no matching experiment → no-runs without searching runs', async () => {
@@ -233,4 +235,58 @@ test('ok result has no collection when the param is absent or not a collection n
     assert.equal(r.kind, 'ok');
     assert.ok(!('collection' in r), JSON.stringify(params));
   }
+});
+
+const L: BestFilter = { kind: 'ledger', splitSha256: 'a'.repeat(64), dataSha256: 'b'.repeat(64) };
+const child = (id: string, parent: string, value: number, tags: Record<string, string> = {}) =>
+  run(id, { score: value }, 1, '1', {}, { 'mlflow.parentRunId': parent, ...tags });
+
+test('F-19: all-status query', async () => {
+  const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': {} });
+  await bestRun('p', score, f.impl, env);
+  const filter = String(f.calls.find((c) => c.path === 'runs/search')?.body.filter);
+  assert.equal(filter, "tags.project = 'p'");
+  assert.doesNotMatch(filter, /attributes\.status/);
+});
+
+test('U-8: projectView without metric makes no request', async () => {
+  const f = fakeFetch({});
+  assert.deepEqual(await projectView({ name: 'p' }, { kind: 'legacy' }, f.impl, env), { state: { kind: 'no-metric' }, groups: [] });
+  assert.equal(f.calls.length, 0);
+});
+
+test('F-13 / U-9: card best ignores test runs and unfinished parents', async () => {
+  const runs = [
+    run('ok', {}, 1, '1', {}, { n_children: '2' }), child('c1', 'ok', 0.5), child('c2', 'ok', 0.99, { split: 'test' }),
+    run('bad', {}, 1, '1', {}, { n_children: '1' }, 'FAILED'), child('c3', 'bad', 0.9),
+  ];
+  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
+  const r = await bestRun('p', score, f.impl, env);
+  assert.equal(r.kind === 'ok' && r.value, 0.5);
+  assert.equal(r.kind === 'ok' && r.runCount, 1);
+});
+
+test('U-27: projectView with a ledger filter ranks only matching parents', async () => {
+  const runs = [
+    run('pa', {}, 1, '1', {}, { split_sha256: 'a'.repeat(64), data_sha256: 'b'.repeat(64) }), child('ca', 'pa', 0.4),
+    run('pc', {}, 2, '1', {}, { split_sha256: 'c'.repeat(64), data_sha256: 'b'.repeat(64) }), child('cc', 'pc', 0.9),
+  ];
+  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
+  const view = await projectView({ name: 'p', metric: score }, L, f.impl, env);
+  assert.equal(view.state.kind === 'ok' && view.state.value, 0.4);
+  assert.deepEqual(view.groups.map((g) => (g.kind === 'parent' ? g.best?.value : g.kind)), [undefined, 0.4]);
+  assert.equal(f.calls.filter((c) => c.path === 'runs/search').length, 1);
+});
+
+test('legacy parentless FINISHED run still counts', async () => {
+  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs: [run('r', { score: 0.6 })] } });
+  const r = await metricState({ name: 'p', metric: score }, f.impl, env);
+  assert.equal(r.kind === 'ok' && r.value, 0.6);
+});
+
+test('projectView unavailable → no groups', async () => {
+  const f = fakeFetch({ health: 'OK', 'experiments/search': new TypeError('fetch failed') });
+  const view = await projectView({ name: 'p', metric: score }, { kind: 'legacy' }, f.impl, env);
+  assert.equal(view.state.kind, 'unavailable');
+  assert.deepEqual(view.groups, []);
 });
