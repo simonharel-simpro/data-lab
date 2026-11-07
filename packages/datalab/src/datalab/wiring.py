@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import yaml
 
@@ -19,8 +19,6 @@ PRE_COMMIT: Final = Path(".pre-commit-config.yaml")
 CI: Final = Path(".github") / "workflows" / "ci.yml"
 _BLOCK_ID: Final = re.compile(r"^ {6}- id: (\S+)$")
 _MATRIX_ITEM: Final = re.compile(r"^ {10}- (\S+)$")
-_HYDRA_STEP: Final = "tools/pre_commit_checks/hydra_gate.py projects/${{ matrix.project }}"
-_LEDGER_STEP: Final = "python -m datalab.ledger validate projects/${{ matrix.project }}"
 
 
 class Region(StrEnum):
@@ -110,21 +108,45 @@ def _checked(text: str, path: Path) -> None:
         raise ProjectError(f"{path}: wiring would produce invalid YAML: {err}") from err
 
 
-def _hook_ids(config: object) -> set[str]:
-    try:
-        return {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}  # pyright: ignore[reportIndexIssue]
-    except (KeyError, TypeError, AttributeError) as err:
-        raise ProjectError(f"wiring target has an unexpected shape: .pre-commit-config.yaml {err!r}") from err
+def _shape_error(what: str, detail: str) -> ProjectError:
+    return ProjectError(f"wiring target has an unexpected shape: {what} {detail}")
 
 
-def matrix_entries(ci: object) -> list[object]:
-    try:
-        matrix = ci["jobs"]["projects"]["strategy"]["matrix"]["project"]  # pyright: ignore[reportIndexIssue]
-    except (KeyError, TypeError, AttributeError) as err:
-        raise ProjectError(f"wiring target has an unexpected shape: ci.yml {err!r}") from err
+def _at(value: object, *keys: str, what: str) -> object:
+    for key in keys:
+        if not isinstance(value, dict) or key not in value:
+            raise _shape_error(what, f"(missing {key!r})")
+        # safe_load only yields str-keyed mappings here; isinstance cannot narrow dict[Unknown, Unknown]
+        value = cast("dict[str, object]", value)[key]
+    return value
+
+
+def hook_ids(config: object) -> set[str]:
+    what = ".pre-commit-config.yaml"
+    repos = _at(config, "repos", what=what)
+    if not isinstance(repos, list):
+        raise _shape_error(what, "(repos is not a list)")
+    ids: set[str] = set()
+    for repo in cast("list[object]", repos):
+        hooks = _at(repo, "hooks", what=what)
+        if not isinstance(hooks, list):
+            raise _shape_error(what, "(hooks is not a list)")
+        for hook in cast("list[object]", hooks):
+            hook_id = _at(hook, "id", what=what)
+            if not isinstance(hook_id, str):
+                raise _shape_error(what, "(hook id is not a string)")
+            ids.add(hook_id)
+    return ids
+
+
+def matrix_entries(ci: object) -> list[str]:
+    matrix = _at(ci, "jobs", "projects", "strategy", "matrix", "project", what="ci.yml")
     if not isinstance(matrix, list):
-        raise ProjectError(f"wiring target has an unexpected shape: ci.yml matrix is {type(matrix).__name__}")
-    return matrix  # pyright: ignore[reportUnknownVariableType]
+        raise _shape_error("ci.yml", f"matrix is {type(matrix).__name__}")
+    items = cast("list[object]", matrix)
+    if not all(isinstance(item, str) for item in items):
+        raise _shape_error("ci.yml", "matrix has a non-string entry")
+    return cast("list[str]", items)
 
 
 def plan(root: Path, name: str) -> WiringPlan:
@@ -139,7 +161,7 @@ def plan(root: Path, name: str) -> WiringPlan:
     ci_new = _splice(ci_old, Region.MATRIX, lambda body: _merge_matrix(body, name))
     for path, text in ((pc_path, pc_new), (ci_path, ci_new)):
         _checked(text, path)
-    hooks = _hook_ids(yaml.safe_load(pc_new))
+    hooks = hook_ids(yaml.safe_load(pc_new))
     matrix = matrix_entries(yaml.safe_load(ci_new))
     if not {f"declared-deps-{name}", f"gates-{name}"} <= hooks or name not in matrix:
         raise ProjectError(f"wiring for {name} did not land in the hook ids or the CI matrix")
@@ -152,37 +174,3 @@ def apply(wiring_plan: WiringPlan) -> None:
         tmp = path.with_name(f".{path.name}.tmp")
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, path)
-
-
-def _project_names(root: Path) -> list[str]:
-    folders = (root / "projects").glob("*")
-    wired = (p for p in folders if p.is_dir() and not p.name.startswith(".") and (p / "pyproject.toml").is_file())
-    return sorted(p.name for p in wired)
-
-
-def _ci_problems(ci: object, names: list[str]) -> list[str]:
-    job = ci.get("jobs", {}).get("projects") if isinstance(ci, dict) else None
-    if not isinstance(job, dict):
-        return ["ci.yml has no jobs.projects"]
-    strategy = job.get("strategy") or {}
-    matrix = (strategy.get("matrix") or {}).get("project") or []
-    problems = [f"project {n} is missing from jobs.projects.strategy.matrix.project" for n in names if n not in matrix]
-    problems += [f"matrix entry {m} has no projects/{m} directory" for m in matrix if m not in names]
-    if strategy.get("fail-fast") is not False:
-        problems.append("jobs.projects.strategy.fail-fast must be false")
-    runs = [str(step.get("run", "")) for step in job.get("steps") or []]
-    if not any(_HYDRA_STEP in run for run in runs):
-        problems.append(f"jobs.projects has no step running {_HYDRA_STEP}")
-    if not any(_LEDGER_STEP in run for run in runs):
-        problems.append(f"jobs.projects has no step running {_LEDGER_STEP}")
-    return problems
-
-
-def parity_problems(root: Path) -> list[str]:
-    names = _project_names(root)
-    pre_commit = yaml.safe_load((root / PRE_COMMIT).read_text(encoding="utf-8"))
-    ids = {hook["id"] for repo in pre_commit["repos"] for hook in repo["hooks"]}
-    wanted = [f"{prefix}-{n}" for n in names for prefix in ("declared-deps", "gates")]
-    problems = [f"missing hook {hook_id}" for hook_id in wanted if hook_id not in ids]
-    ci = yaml.safe_load((root / CI).read_text(encoding="utf-8"))  # its `on:` key loads as True: never index "on"
-    return problems + _ci_problems(ci, names)

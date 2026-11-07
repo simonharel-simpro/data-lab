@@ -280,7 +280,9 @@
   Territory was: `_merge_blocks` overwrote the first block.
   I did: raise `ProjectError("duplicate hook id ...")`.
   One-off or pattern?: one-off.
-- Two `# pyright: ignore[reportIndexIssue]` lines in `wiring.py` index an `object`-typed parsed YAML on purpose; the surrounding `except (KeyError, TypeError, AttributeError)` is the runtime guard.
+- The two `# pyright: ignore[reportIndexIssue]` lines (and a third on `matrix_entries`' return) in `wiring.py` were removed in the /check follow-up: `_at` walks the parsed YAML with `isinstance` narrowing (one justified `cast` for `dict[Unknown, Unknown]`) and raises `ProjectError` on a wrong shape.
+- Plan assumed: `wiring.py` keeps the parity checks. Territory was: the typed helpers pushed it to 217 lines (limit 200). I did: moved `parity_problems` / `_ci_problems` / `_project_names` into `wiring_parity.py`, made `hook_ids` public for it, and switched the test import. One-off or pattern?: one-off.
+- Plan assumed: `_ci_problems` could still default a missing matrix to `[]`. Territory was: a string matrix then became a substring check. I did: use `matrix_entries`; on `ProjectError` report its message as a problem (plus the per-project missing lines) instead of raising. One-off or pattern?: one-off.
 
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.

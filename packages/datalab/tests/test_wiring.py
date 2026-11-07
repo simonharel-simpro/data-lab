@@ -9,7 +9,8 @@ import yaml
 from datalab import ledger, wiring
 from datalab.new_project import main
 from datalab.project import ProjectError
-from datalab.wiring import CI, PRE_COMMIT, apply, declared_deps_block, gates_block, parity_problems, plan
+from datalab.wiring import CI, PRE_COMMIT, apply, declared_deps_block, gates_block, plan
+from datalab.wiring_parity import parity_problems
 from tests.conftest import REPO_ROOT
 from tests.ledger_support import project, vector
 from tests.test_new_project import _no_lock
