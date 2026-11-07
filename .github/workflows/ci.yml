@@ -71,12 +71,21 @@ jobs:
         env:
           DATALAB_PROJECTS_DIR: test-fixtures/bad-name
 
-  pilot:
+  projects:
+    name: project (${{ matrix.project }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          # >>> datalab-new: matrix
+          - mini-rag
+          - voice-arch
+          # <<< datalab-new: matrix
     defaults:
       run:
-        working-directory: projects/mini-rag
-    # Unit tests only: no Weaviate, MLflow (sqlite in tmp) or LLM endpoint in CI; integration tests are marked and deselected.
+        working-directory: projects/${{ matrix.project }}
+    # Unit tests only: no Weaviate, LiveKit, MLflow server or LLM endpoint in CI; integration tests are deselected.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,32 +94,16 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v6
-      - name: mini-rag gates (contracts, types, deps) + unit tests + coverage floor
+      - name: gates (contracts, types, deps) + unit tests + coverage floor
         run: |
           uv sync --locked
           uv run --locked lint-imports
           uv run --locked pyright
           uv run --locked pip-audit
           uv run --locked pytest --cov
-
-  voice-arch:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: projects/voice-arch
-    # Unit tests only: no LiveKit, MLflow (sqlite in tmp) or OpenRouter in CI; integration tests are marked and deselected.
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: false
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v6
-      - name: voice-arch gates (contracts, types, deps) + unit tests + coverage floor
-        run: |
-          uv sync --locked
-          uv run --locked lint-imports
-          uv run --locked pyright
-          uv run --locked pip-audit
-          uv run --locked pytest --cov
+      - name: Hydra gate (skips a project without configs/)
+        working-directory: .
+        run: python tools/pre_commit_checks/hydra_gate.py projects/${{ matrix.project }}
+      - name: experiment ledger (run.json / split.json; ok when neither exists)
+        working-directory: .
+        run: uv run --locked --project packages/datalab python -m datalab.ledger validate projects/${{ matrix.project }}

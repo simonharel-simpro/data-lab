@@ -31,6 +31,7 @@ repos:
         language: system
         pass_filenames: false
         files: ^(packages/datalab/|tools/pre_commit_checks/)
+      # >>> datalab-new: declared-deps
       - id: declared-deps-mini-rag
         name: mini-rag imports are declared dependencies
         # Same recipe and flags as declared-deps above, run in the pilot's own env.
@@ -44,6 +45,18 @@ repos:
         language: system
         pass_filenames: false
         files: ^(projects/voice-arch/|tools/pre_commit_checks/)
+      # <<< datalab-new: declared-deps
+      - id: hydra-gate
+        name: Hydra is wired in projects with configs/
+        entry: python tools/pre_commit_checks/hydra_gate.py
+        language: python
+        files: ^projects/[^/]+/(configs/|src/|pyproject\.toml)
+      - id: ledger
+        name: run.json / split.json are valid experiment ledgers
+        # --project keeps the repo-root cwd, so pre-commit's relative file names resolve (--directory would not).
+        entry: uv run --locked --project packages/datalab python -m datalab.ledger validate
+        language: system
+        files: ^projects/[^/]+/(run|split)\.json$
       # Pre-push parity with ci.yml's gates + tests. pip-audit, npm audit and the gitleaks history scan stay CI-only
       # because they need the network.
       - id: gates-datalab
@@ -52,7 +65,8 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
-        files: ^(packages/datalab/|contracts/)
+        files: ^(packages/datalab/|contracts/|tools/|projects/[^/]+/pyproject\.toml$|\.pre-commit-config\.yaml$|\.github/workflows/ci\.yml$|app/src/lib/card\.ts$)
+      # >>> datalab-new: gates
       - id: gates-mini-rag
         name: mini-rag gates (contracts, types) + unit tests + coverage floor
         entry: bash -c 'cd projects/mini-rag && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
@@ -67,6 +81,7 @@ repos:
         pass_filenames: false
         stages: [pre-push]
         files: ^(projects/voice-arch/|packages/datalab/src/)
+      # <<< datalab-new: gates
       - id: gates-app
         name: app astro check + unit tests + coverage floor
         # Needs node >=22.22 on PATH (see .nvmrc); node 20 rejects --test-coverage-lines.
