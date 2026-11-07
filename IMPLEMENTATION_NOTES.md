@@ -291,6 +291,7 @@
 - ESCALATION(ESC-2-2) [resolved] phase=2 tier=reversible :: OpenRouter provider pin (deepinfra,gmicloud,parasail fp8, no fallback) serves no google/gemini-3.5-flash-lite endpoint (404). Provisional A: worker LLM unpinned like the stage-1 bench (routing not reproducible). B: pick a pinned-served agent model and re-bench. C: pin to Google providers. User decides before Phase 3 sweeps. => Duplicate of ESC-2-1 (recorded twice: subagent + orchestrator); tracked there.
 - ESCALATION(ESC-3-1) [resolved] phase=3 tier=reversible :: `Outcome.PROVIDER_ERROR` is in the plan's enum but no rule assigns it, and it is outside the `exact_rate` denominator (scored + timeout + agent_lost). Provisional: never emitted; a result that carries `error` / a non-auth `http_status` is `scored` by its record (an unfinished record is simply not exact). Option A keep (provider failures count against the arch) / B emit it for a result with a non-auth HTTP status (excluded from the rate, flattering an arch whose provider path failed). User decides before the sweeps. => User 2026-11-06: option A — provider errors mid-call count against the arch (PROVIDER_ERROR not emitted).
 - ESCALATION(ESC-3-2) [resolved] phase=3 tier=reversible :: Both live calls (arch A, `self_correction`, unpinned worker LLM) ended `timeout` at the same point: the agent never answers the address turn ("88 Cedar Lane, Austin, TX 78701"): the user turn is committed, a preemptive generation starts, then no tool call, no reply, no error event for 3 minutes. Text mode with the same turns answers at once (so not the prompt or tools). Suspects: an LLM stream that hangs or comes back empty on the unpinned OpenRouter route (ESC-2-1), or a LiveKit preemptive-generation race. If it recurs a full sweep is mostly timeouts. User decides: investigate with LLM request logging, pin a route, or disable `preemptive_generation` in `TURN_HANDLING` before the sweeps. => Root cause (evidence from a temporary LLM/TTS/session-state diagnostic, since removed): the LLM stream ended with `text=0, tools=0, chunks=1, completion_tokens=0` (an empty completion, also on the Google-pinned route); LiveKit treats that as a finished turn, so the agent goes idle (`agent=listening`, no speech task, no error) until the caller gives up. Seen 2 of 2 diagnosed calls, always on a turn right after the caller's self-correction. Not preemptive generation (disabled in a first test: still stalled). Fixed by `llm_guard.retry_on_empty_completion` (retryable `APIConnectionError`, LiveKit's own retry, then a loud error). Also kept: preemptive generation explicitly off.
+- ESCALATION(ESC-4-1) [resolved] phase=4 tier=reversible :: U-17: on run.json archive, is split.json moved alongside (new experiment must re-freeze; provisional, SKILL.md §11) or left in place (re-freeze resets the test-look counter on an already-read test set)? => user 2026-11-07: split.json is archived with run.json; the new experiment re-freezes (SKILL.md §11)
 
 ## Experiment Phase 3
 
@@ -314,3 +315,40 @@
   Territory was: Hydra takes the last `model=` override, so with the candidate's choice appended the test is green even without the filter.
   I did: kept the filter and the planned test as specified; the test cannot distinguish them.
   One-off or pattern?: one-off.
+
+## Experiment Phase 4
+
+- Plan assumed: the MLflow twin calls `tracking.project_spend(p, s)` / `stale_runs(p, ...)` / `close_runs(p, ...)` with `p = load(...)`.
+  Territory was: all three take `project: str` (`tracking_queries.py`); a `Project` fails the name check.
+  I did: the snippet passes `p.name`.
+  One-off or pattern?: one-off.
+- Plan assumed: `ledger.Winner(candidate, run_id)`.
+  Territory was: `Winner` is a strict pydantic model; positional arguments raise `TypeError`.
+  I did: the skill uses `ledger.Winner(candidate="<family>", run_id="<id>")`.
+  One-off or pattern?: one-off.
+- Plan assumed: the ops produce / decide / freeze_split / record_data / redo cover every ledger change.
+  Territory was: no op sets `dataset` or `features`, and I-11 refuses `decide(l, "dataset", VALIDATE, ...)` while `dataset` is null (seen in the dry run). The dataset is validated before it is acquired, so its hash cannot be a file hash.
+  I did: the skill sets them with the public `ledger.parse(json.dumps(l.model_dump(mode="json") | {...}))` (re-checks every invariant, no `model_copy`); `dataset.hash` = the Hub revision sha that `dataset.md` records and the acquisition downloads.
+  One-off or pattern?: likely recurs: a `set_dataset` / `set_features` op in `ledger_ops` would remove the workaround.
+- Plan assumed: deliverables only for scoping, dataset, eda, audit, tracking, report.
+  Territory was: `produce` needs at least one existing artifact (I-4, V-1) for cleaning, features and modeling too, and their specialists may not write `src/`.
+  I did: `cleaning.md` (+ `data/clean/data.jsonl` after the code route), `features.md`, `modeling.md` (+ the experiment and grid YAML).
+  One-off or pattern?: one-off.
+- Plan assumed: the ledger snippet is `python -c "..."`.
+  Territory was: the expert's words go into the snippet as the note; inside a double-quoted shell string a `$`, a backtick or a `"` is expanded or breaks the command (French notes carry apostrophes too).
+  I did: the same body in a quoted heredoc (`python - <<'PY'`) with triple-quoted notes; the dry run passed a note with `'`, `$` and `"` verbatim.
+  One-off or pattern?: likely recurs: any skill that pastes user text into a shell command.
+- Plan assumed: `python tools/pre_commit_checks/hydra_gate.py projects/<name>`.
+  Territory was: this machine has only `python3` on PATH (the hook runs in pre-commit's own venv).
+  I did: the skill says `python3`.
+  One-off or pattern?: one-off.
+- Plan assumed: eval's refusal prints the exact rerun form.
+  Territory was: `templates/project/src/__DATALAB_PACKAGE__/eval.py:112` prints `python -m <pkg> model=...` (`__package__`, no `.eval`); seen in the dry run as `python -m exp_dryrun model=dummy model.value=1.0`.
+  I did: the skill takes the overrides from the hint and always runs `python -m <pkg>.eval`; the template is not changed in this Markdown-only phase.
+  One-off or pattern?: one-off (a one-word template fix: `{__package__}.eval`).
+- Plan assumed: the acquired data lands where the split and `paths.data_file` expect it.
+  Territory was: the plan names no acquisition path, and a comparison has no cleaning milestone to write `data/clean/data.jsonl`.
+  I did: acquisition writes `data/raw/data.jsonl`; a comparison also copies it unchanged to `data/clean/data.jsonl`.
+  One-off or pattern?: one-off.
+- The eval hint bug (deviation 1: `python -m <pkg>` instead of `python -m <pkg>.eval`) is fixed in phase 4 at the user's request; `test_u_27` asserts the full command.
+- ESC-4-1 was settled by the user (2026-11-07): on archive, `split.json` is moved with `run.json`, and the new experiment freezes its own split.

@@ -108,7 +108,7 @@ def test_u_27_config_hash_mismatch_refused(
 
     assert _eval(configs, [*data_overrides, "model.value=0.5"]) == 2
 
-    assert "model=dummy model.value=" in capsys.readouterr().err
+    assert "python -m __DATALAB_PACKAGE__.eval model=dummy model.value=" in capsys.readouterr().err
     assert MlflowClient(tracking).get_experiment_by_name(A) is None
 
 
