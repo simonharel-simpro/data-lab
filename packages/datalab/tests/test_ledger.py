@@ -1,0 +1,178 @@
+import json
+from typing import Any
+
+import pytest
+
+from datalab import ledger
+from datalab.ledger import (
+    Decision,
+    Kind,
+    LedgerError,
+    RunLedger,
+    Status,
+    Winner,
+    contract,
+    decide,
+    look_number,
+    new_ledger,
+    parse,
+    produce,
+    record_test_look,
+    redo,
+)
+from tests.ledger_support import VECTORS, at_modeling, h, vector
+from tests.ledger_support import ledger as vec_ledger
+
+_NAMES = [(v["name"], v, True) for v in VECTORS["valid"]] + [(v["name"], v, False) for v in VECTORS["invalid"]]
+
+
+def _expected_prefix(rule: str) -> str:
+    return {"schema": "schema:", "U-13": "unsupported schema (kind missing)"}.get(rule, f"{rule}:")
+
+
+@pytest.mark.parametrize(("name", "entry", "valid"), _NAMES, ids=[n for n, _, _ in _NAMES])
+def test_f_18_ledger_vectors(name: str, entry: dict[str, Any], valid: bool) -> None:
+    text = json.dumps(entry["run"])
+
+    if valid:
+        assert parse(text).model_dump(mode="json") == entry["run"]
+        return
+    with pytest.raises(LedgerError) as caught:
+        parse(text)
+    assert str(caught.value).startswith(_expected_prefix(entry["rule"])), name
+
+
+def test_contract_matches_kind_enum() -> None:
+    sequences = contract().sequences
+
+    assert set(sequences) == {Kind.TRAINING, Kind.COMPARISON}
+    assert (len(sequences[Kind.TRAINING]), len(sequences[Kind.COMPARISON])) == (9, 7)
+
+
+def test_u_2_redo_resets_later_milestones_to_todo() -> None:
+    expected = vector("after-redo")
+    expected["decisions_log"] = expected["decisions_log"][:-1]
+
+    assert redo(vec_ledger("training-mid-run"), "dataset").model_dump(mode="json") == expected
+
+
+def _scoping_produced() -> RunLedger:
+    return produce(vec_ledger("fresh-comparison"), "scoping", ["scope.md"])
+
+
+def test_decide_validate_advances_current() -> None:
+    result = decide(_scoping_produced(), "scoping", Decision.VALIDATE, "ok")
+
+    assert result.milestones["scoping"].status is Status.VALIDATED
+    assert (result.current_milestone, len(result.decisions_log)) == ("dataset", 1)
+
+
+def test_decide_correct_then_produce_resets_decision() -> None:
+    corrected = decide(_scoping_produced(), "scoping", Decision.CORRECT, "narrow it")
+
+    assert (corrected.milestones["scoping"].status, corrected.milestones["scoping"].decision) == (
+        Status.PRODUCED,
+        Decision.CORRECT,
+    )
+    assert produce(corrected, "scoping", ["scope.md"]).milestones["scoping"].decision is None
+
+
+def test_redo_after_correct_resets_milestones() -> None:
+    corrected = decide(_scoping_produced(), "scoping", Decision.CORRECT, "narrow it")
+    again = produce(corrected, "scoping", ["scope.md"])
+
+    result = decide(again, "scoping", Decision.REDO, "start over")
+
+    scoping = result.milestones["scoping"]
+    assert (scoping.status, scoping.decision) == (Status.TODO, None)
+    assert result.decisions_log[-1].decision is Decision.REDO
+
+
+def test_redo_directly_after_correct_resets_milestones() -> None:
+    corrected = decide(_scoping_produced(), "scoping", Decision.CORRECT, "narrow it")
+
+    result = decide(corrected, "scoping", Decision.REDO, "start over")
+
+    scoping = result.milestones["scoping"]
+    assert (scoping.status, scoping.decision) == (Status.TODO, None)
+    assert [e.decision for e in result.decisions_log] == [Decision.CORRECT, Decision.REDO]
+
+
+def test_produce_with_empty_artifact_rejected() -> None:
+    for bad in ("", ".", "./", "a/.."):
+        with pytest.raises(LedgerError, match="I-12"):
+            produce(vec_ledger("fresh-comparison"), "scoping", [bad])
+
+
+def test_decide_redo_from_modeling_at_audit() -> None:
+    result = decide(vec_ledger("audit-first-look"), "audit", Decision.REDO, "leak", redo_from="modeling")
+
+    assert [result.milestones[m].status for m in ("modeling", "audit")] == [Status.TODO, Status.TODO]
+    assert (result.current_milestone, result.winner, result.data_sha256) == ("modeling", None, None)
+    assert (result.decisions_log[-1].milestone, result.decisions_log[-1].decision) == ("audit", Decision.REDO)
+
+
+def test_decide_modeling_requires_winner() -> None:
+    produced = parse(json.dumps(at_modeling("produced")))
+
+    with pytest.raises(LedgerError, match="winner"):
+        decide(produced, "modeling", Decision.VALIDATE, "ok")
+    result = decide(produced, "modeling", Decision.VALIDATE, "ok", winner=Winner(candidate="dummy", run_id="r1"))
+
+    assert result.winner == Winner(candidate="dummy", run_id="r1")
+
+
+def test_decide_refuses_blank_note() -> None:
+    with pytest.raises(LedgerError, match="note"):
+        decide(_scoping_produced(), "scoping", Decision.VALIDATE, "")
+
+
+def test_produce_refuses_non_current_milestone() -> None:
+    with pytest.raises(LedgerError, match="eda is not the current milestone"):
+        produce(vec_ledger("fresh-comparison"), "eda", ["x"])
+
+
+def test_decide_refuses_non_produced_milestone() -> None:
+    with pytest.raises(LedgerError, match="scoping is todo: produce it before deciding"):
+        decide(vec_ledger("fresh-comparison"), "scoping", Decision.VALIDATE, "ok")
+
+
+def test_decide_refuses_redo_from_after_milestone() -> None:
+    with pytest.raises(LedgerError, match="redo_from"):
+        decide(vec_ledger("training-mid-run"), "eda", Decision.REDO, "x", redo_from="features")
+
+
+def test_redo_unknown_milestone_refused() -> None:
+    with pytest.raises(LedgerError, match="foo"):
+        redo(vec_ledger("training-mid-run"), "foo")
+
+
+def test_u_16_scoping_ledger_with_null_dataset_is_valid() -> None:
+    fresh = new_ledger(Kind.COMPARISON, "m")
+
+    assert fresh.dataset is None
+    assert parse(json.dumps(fresh.model_dump(mode="json"))) == fresh
+
+
+def test_f_5_unknown_key_rejected_not_dropped() -> None:
+    with pytest.raises(LedgerError, match="notes"):
+        parse(json.dumps(vector("unknown-key")))
+
+
+def test_u_28_test_access_rules() -> None:
+    audit = vec_ledger("audit-first-look")
+
+    assert "note" in str(ledger.test_access_problem(audit, h("a"), None))
+    assert ledger.test_access_problem(audit, h("a"), "why") is None
+    assert "split.json" in str(ledger.test_access_problem(audit, h("c"), "why"))
+    assert "audit" in str(ledger.test_access_problem(vec_ledger("training-mid-run"), h("a"), "why"))
+    assert look_number(audit, h("a")) == 2
+    assert ledger.test_access_allowed(audit, h("a"), "why")
+
+
+def test_record_test_look_appends() -> None:
+    result = record_test_look(vec_ledger("audit-first-look"), h("a"), "e2", "re-check after fix")
+
+    assert [(look.run_id, look.note) for look in result.test_looks] == [("e1", ""), ("e2", "re-check after fix")]
+    with pytest.raises(LedgerError, match="note"):
+        record_test_look(vec_ledger("audit-first-look"), h("a"), "e2", None)

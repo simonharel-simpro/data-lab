@@ -101,8 +101,16 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 
 | Phase | Title | Status | Branch |
 |---|---|---|---|
-| 1 | Contract + ledger, split, tags, trial helpers | ⏳ pending | — |
+| 1 | Contract + ledger, split, tags, trial helpers | 🔄 implemented, awaiting /check | `phase-1-contract-ledger` |
 | 2 | Hydra gate, ledger hook, wiring, CI matrix | ⏳ pending | — |
 | 3 | Hydra template, package name, scaffold-and-gate | ⏳ pending | — |
 | 4 | `/experiment` skill | ⏳ pending | — |
 | 5 | App stepper + run groups + card best | ⏳ pending | — |
+
+## experiment Phase 1 — Contract + ledger, split, tags, trial helpers
+
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ gate exit 0 (pre-push hooks, pyright 0, ruff, lint-imports 1 kept, pytest 174 passed, coverage 94 %)
+- New: `contracts/{EXPERIMENT.md,milestones.json,mlflow_tags.json,run_ledger_vectors.json}`, `datalab/{split,ledger_model,ledger_rules,ledger_ops,ledger_checks,ledger,tags,tracking_queries}.py`, tests `test_split`, `test_ledger`, `test_ledger_io`, `ledger_support`.
+- Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
+- Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
+- Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).

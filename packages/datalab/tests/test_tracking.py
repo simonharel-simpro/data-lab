@@ -1,23 +1,26 @@
+import json
 import os
 import re
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import mlflow
 import pytest
 from mlflow import MlflowClient
 from mlflow.entities import Run
 
-from datalab.project import Project
-from datalab.settings import Settings
-from datalab.tracking import TrackingUnavailable, preflight, tracked_run
-
-
-def _project(tmp_path: Path) -> Project:
-    return Project(name="p", root=tmp_path)
-
-
-def _settings(sqlite_uri: str) -> Settings:
-    return Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]  # pydantic-settings init kwarg
+from datalab.tags import Tag
+from datalab.tracking import (
+    TrackingUnavailable,
+    close_runs,
+    preflight,
+    project_spend,
+    stale_runs,
+    tracked_run,
+)
+from tests.conftest import REPO_ROOT
+from tests.tracking_support import make_project, make_settings
 
 
 def _only_run(sqlite_uri: str, experiment: str) -> Run:
@@ -33,7 +36,7 @@ def test_f_5_tracked_run_uses_settings_uri_not_env(
 ) -> None:
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:9")
 
-    with tracked_run(_project(tmp_path), _settings(sqlite_uri), "r") as run_id:
+    with tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r") as run_id:
         pass
 
     run = _only_run(sqlite_uri, "p")
@@ -44,7 +47,7 @@ def test_f_5_tracked_run_uses_settings_uri_not_env(
 def test_project_tag_cannot_be_overridden(sqlite_uri: str, tmp_path: Path) -> None:
     with (
         pytest.raises(ValueError, match="project"),
-        tracked_run(_project(tmp_path), _settings(sqlite_uri), "r", tags={"project": "x"}),
+        tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r", tags={"project": "x"}),
     ):
         pass
 
@@ -52,7 +55,7 @@ def test_project_tag_cannot_be_overridden(sqlite_uri: str, tmp_path: Path) -> No
 
 
 def test_tracked_run_sets_project_tag_and_experiment(sqlite_uri: str, tmp_path: Path) -> None:
-    with tracked_run(_project(tmp_path), _settings(sqlite_uri), "r", sub="bm25", tags={"step": "1"}):
+    with tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r", sub="bm25", tags={"step": "1"}):
         pass
 
     run = _only_run(sqlite_uri, "p/bm25")
@@ -63,7 +66,7 @@ def test_tracked_run_sets_project_tag_and_experiment(sqlite_uri: str, tmp_path: 
 
 
 def test_tracked_run_exception_marks_failed(sqlite_uri: str, tmp_path: Path) -> None:
-    with pytest.raises(RuntimeError, match="boom"), tracked_run(_project(tmp_path), _settings(sqlite_uri), "r"):
+    with pytest.raises(RuntimeError, match="boom"), tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r"):
         raise RuntimeError("boom")
 
     assert _only_run(sqlite_uri, "p").info.status == "FAILED"
@@ -97,3 +100,64 @@ def test_tracking_keeps_a_user_retry_setting(sqlite_uri: str, monkeypatch: pytes
     preflight(sqlite_uri)
 
     assert os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] == "5"
+
+
+def _seed_run(
+    client: MlflowClient, experiment: str, cost: float, *, finished: bool, start_ms: int | None = None
+) -> str:
+    exp_id = client.get_experiment_by_name(experiment)
+    experiment_id = exp_id.experiment_id if exp_id is not None else client.create_experiment(experiment)
+    run = client.create_run(experiment_id, start_time=start_ms, tags={"project": "p"})
+    client.log_metric(run.info.run_id, "cost_usd", cost)
+    if finished:
+        client.set_terminated(run.info.run_id, status="FINISHED")
+    return run.info.run_id
+
+
+def test_f_7_budget_counts_running_runs(sqlite_uri: str) -> None:
+    client = MlflowClient(tracking_uri=sqlite_uri)
+    _seed_run(client, "p/x", 0.4, finished=False)
+    _seed_run(client, "p/x", 0.1, finished=True)
+    _seed_run(client, "p-x", 9.0, finished=True)
+
+    assert project_spend("p", make_settings(sqlite_uri)) == pytest.approx(0.5)
+
+
+def test_project_spend_without_experiment_is_zero(sqlite_uri: str) -> None:
+    with patch.object(MlflowClient, "search_runs", side_effect=AssertionError("must not be called")):
+        assert project_spend("p", make_settings(sqlite_uri)) == 0.0
+
+
+def test_f_9_stale_runs_listed_not_closed(sqlite_uri: str) -> None:
+    now = datetime(2026, 1, 10, tzinfo=UTC)
+    client = MlflowClient(tracking_uri=sqlite_uri)
+    old = _seed_run(client, "p/x", 0.0, finished=False, start_ms=int((now - timedelta(hours=48)).timestamp() * 1000))
+    recent = _seed_run(client, "p/x", 0.0, finished=False, start_ms=int((now - timedelta(hours=1)).timestamp() * 1000))
+
+    found = stale_runs("p", make_settings(sqlite_uri), timedelta(hours=24), now=lambda: now)
+
+    assert [(s.run_id, s.experiment) for s in found] == [(old, "p/x")]
+    assert [client.get_run(r).info.status for r in (old, recent)] == ["RUNNING", "RUNNING"]
+    with pytest.raises(ValueError, match="positive"):
+        stale_runs("p", make_settings(sqlite_uri), timedelta(0))
+
+
+def test_f_9_close_runs_kills_only_given_ids(sqlite_uri: str) -> None:
+    client = MlflowClient(tracking_uri=sqlite_uri)
+    old = _seed_run(client, "p/x", 0.0, finished=False)
+    other = _seed_run(client, "p/x", 0.0, finished=False)
+    done = _seed_run(client, "p/x", 0.0, finished=True)
+
+    with pytest.raises(ValueError, match=done):
+        close_runs("p", make_settings(sqlite_uri), [old, done])
+    assert client.get_run(old).info.status == "RUNNING"
+
+    assert close_runs("p", make_settings(sqlite_uri), [old]) == [old]
+    assert [client.get_run(r).info.status for r in (old, other)] == ["KILLED", "RUNNING"]
+
+
+def test_tag_names_match_contract() -> None:
+    contract = json.loads((REPO_ROOT / "contracts" / "mlflow_tags.json").read_text(encoding="utf-8"))
+
+    assert {t.value for t in Tag} == set(contract["tags"])
+    assert len(contract["tags"]) == 11

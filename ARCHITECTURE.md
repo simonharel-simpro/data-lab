@@ -40,8 +40,10 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 compose.yaml            shared infra: weaviate, t2v-transformers, mlflow, livekit (profile `voice`; 127.0.0.1 only)
 infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys: `LIVEKIT_KEYS` from the env)
 .env.example            DATALAB_* connection settings (ports, tracking URI)
-contracts/              cross-side contracts (name_vectors.json) read by the Python and app test suites
-packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A)
+contracts/              cross-side contracts read by the Python and app test suites: name_vectors.json, EXPERIMENT.md,
+                        milestones.json, run_ledger_vectors.json, mlflow_tags.json
+packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A); experiment ledger:
+                        split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
@@ -268,6 +270,9 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 - **Card** — `projects/<name>/PROJECT.md`: YAML frontmatter (`name`, `title`, `status`, `tags`, `data`,
   `metric {key, goal}`) plus `##` sections. Schema single-sourced in the app (D-3).
 - **Run** — an MLflow run tagged `project=<name>` in experiment `<name>` or `<name>/<sub>`.
+- **Experiment ledger** — `projects/<name>/run.json` (a `RunLedger`, kind `training|comparison`): one status per
+  milestone, the expert's decisions log, the frozen `split_sha256`, the winner and the test looks. Guarded by
+  invariants I-1..I-15 (`datalab.ledger_rules`) and checks V-1..V-3; `split.json` is its frozen split.
 - **Collection** — a Weaviate collection named from the project name + parts, hashed to avoid collisions.
 
 ## State Machines
@@ -282,6 +287,19 @@ idée ──► en cours ──► conclu
 
 Valid transitions: `idée → en cours`, `en cours → conclu`, any → `abandonné`. The required card sections grow with
 the status (enforced by the app, Phase 2B).
+
+### Experiment milestone (`run.json`, per milestone)
+
+```
+todo ──► produced ──► validated
+            │  ▲
+            └──┘  correct          (produced → produced, decision `correct`)
+```
+
+`produce` moves the current milestone `todo → produced`; `decide` validates it (current advances) or corrects it. A
+`redo` of milestone m sets m and every later milestone back to `todo` and clears the fields they fed (split, dataset,
+features, winner, data hash). Order is strict (a milestone starts only after every earlier one is validated) and
+there is no `skipped` status. Transitions live in `datalab.ledger_ops`; the log and test looks are append-only.
 
 ## Cross-phase contracts
 
@@ -300,3 +318,11 @@ the status (enforced by the app, Phase 2B).
   suites; ports → G-10 parity test (`.env.example` = Python `Settings` = compose) + an app test (`.env.example` =
   `mlflowUri({})`); the fork's `DATALAB_PORTS` (another repo) has no copy-check on purpose: drift fails safe (the
   profile is refused with `skip: ports`, nothing connects to the wrong Weaviate).
+- **Experiment methodology** (`contracts/EXPERIMENT.md`): `run.json` + `split.json` per project, validated by
+  `python -m datalab.ledger validate PATH...`. Three JSON contracts: `milestones.json` (ids, sequences, `freeze_after`),
+  `run_ledger_vectors.json` (shared valid/invalid cases) and `mlflow_tags.json` (the 11 tag names). Check order: JSON,
+  `kind` present, field errors, I-1..I-15. MLflow: one parent per invocation, one nested child per grid combination
+  via `tracked_trial` (the parent's experiment, tags `project` and `candidate` not overridable, one open trial at a
+  time); only children log `metric.key` and `cost_usd`; parents get `n_children`, `n_failed`, `failed_candidates`
+  from the `_OUTCOMES` registry. Naming: experiment `<project>/<experiment.name>`, eval in `<project>/audit`. The
+  budget (`project_spend`, RUNNING included) is shown, never enforced.
