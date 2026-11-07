@@ -96,3 +96,13 @@ context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller mus
 - ⏳ Full sweeps, `decide` into PROJECT.md, human ratings — deferred to the user (approved)
 
 Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall; likely coupled with ESC-2-1 unpinned route).
+
+# experiment — trouvetou experiment methodology (`IMPLEMENTATION_PLAN_EXPERIMENT*.md`, loop on `feat/experiment`)
+
+| Phase | Title | Status | Branch |
+|---|---|---|---|
+| 1 | Contract + ledger, split, tags, trial helpers | ⏳ pending | — |
+| 2 | Hydra gate, ledger hook, wiring, CI matrix | ⏳ pending | — |
+| 3 | Hydra template, package name, scaffold-and-gate | ⏳ pending | — |
+| 4 | `/experiment` skill | ⏳ pending | — |
+| 5 | App stepper + run groups + card best | ⏳ pending | — |
