@@ -136,5 +136,10 @@
 | EXP-23 | Second test look | eval twice on one split | 2nd needs `look_note`; tagged `test_look=2`; 2 looks in run.json | 🆕 New | exp Phase 3 |
 | EXP-24 | Eval with a different model config | `eval model.value=0.5` | exit 2, hint `model=<family> model.<k>=<v>` | 🆕 New | exp Phase 3 |
 | EXP-25 | Split or data changed since modeling | edit split.json / append data | eval exit 2 | 🆕 New | exp Phase 3 |
+| EXP-26 | Milestone stop | `/experiment` on a new project | each milestone ends at ⏸️ with validate / correct / redo; the metric is restated | 🆕 New | exp Phase 4 |
+| EXP-27 | Redo demotes downstream | redo at eda | eda…report back to todo, split + dataset kept | 🆕 New | exp Phase 4 |
+| EXP-28 | Kind change | expert switches training → comparison after scoping | run.json + split.json archived, new ledger at scoping | 🆕 New | exp Phase 4 |
+| EXP-29 | Hydra not wired at the BOX | gate fails | modeling redone, BOX re-runs | 🆕 New | exp Phase 4 |
+| EXP-30 | Stale RUNNING runs | crashed runs older than N days | listed; only the ones the expert names are closed | 🆕 New | exp Phase 4 |
 
 > ⚠️ After merge: required CI checks are renamed `project (mini-rag)` / `project (voice-arch)` (were `pilot` / `voice-arch`) — update branch protection.

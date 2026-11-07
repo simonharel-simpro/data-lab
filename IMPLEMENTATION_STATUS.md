@@ -104,7 +104,7 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 | 1 | Contract + ledger, split, tags, trial helpers | ✅ landed on feat/experiment (/check clean, fix-check 1 iter) | `phase-1-contract-ledger` |
 | 2 | Hydra gate, ledger hook, wiring, CI matrix | ✅ landed on feat/experiment @ 24a40a0 (/check clean, fix-check 3 iter) | `phase-2-gates-wiring` |
 | 3 | Hydra template, package name, scaffold-and-gate | ✅ landed on feat/experiment @ a46c76e (/check clean, fix-check 1 iter) | `phase-3-hydra-template` |
-| 4 | `/experiment` skill | ⏳ pending | — |
+| 4 | `/experiment` skill | 🔄 implemented, awaiting /check | `phase-4-experiment-skill` |
 | 5 | App stepper + run groups + card best | ⏳ pending | — |
 
 ## experiment Phase 1 — Contract + ledger, split, tags, trial helpers
@@ -114,6 +114,14 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 - Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
 - Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
 - Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).
+
+## experiment Phase 4 — `/experiment` skill
+
+**Implemented:** 2026-11-07 · **Agent:** general-purpose (+ python-fastapi for the eval hint fix) · **Acceptance:** dry-run walkthrough 19/19 pass (scratch `projects/exp-dryrun`, isolated sqlite MLflow, torn down; config files restored)
+- New: `.claude/skills/experiment/SKILL.md` (204 lines), `references/dispatch-briefs.md` (9 briefs, return citations checked), `references/agent-overrides.md`.
+- Also fixed (user decision, recorded deviation): template eval rerun hint printed `python -m <pkg>` instead of `<pkg>.eval`; `test_u_27` now asserts the full command (seen red).
+- ESC-4-1 settled by the user: on archive, `split.json` moves with `run.json`; the new experiment re-freezes.
+- Gaps for a later cycle (IMPLEMENTATION_NOTES.md): no ledger op sets `dataset`/`features` (the skill goes through `ledger.parse` on a merged dump), so a `set_dataset`/`set_features` op would remove that workaround.
 
 ## experiment Phase 3 — Hydra template, package name, scaffold-and-gate
 

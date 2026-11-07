@@ -109,7 +109,7 @@ def _check_winner(gate: _Gate, client: MlflowClient) -> None:
     if child.data.tags.get(Tag.CONFIG_SHA256.value) != gate.config_sha:
         family = child.data.tags.get(Tag.CANDIDATE.value, gate.winner.candidate)
         hint = _cli_form(family, child.data.params)
-        raise PrepareError(f"config_sha256 differs from the winner's: rerun with `python -m {__package__} {hint}`")
+        raise PrepareError(f"config_sha256 differs from the winner's: rerun with `python -m {__package__}.eval {hint}`")
 
 
 def _score_test(gate: _Gate, trial_id: str) -> None:
