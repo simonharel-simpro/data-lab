@@ -1,8 +1,11 @@
 """Project identity and naming. Pure: no weaviate/mlflow import, so it loads anywhere (app tooling, tests)."""
 
 import hashlib
+import importlib.metadata
 import json
+import keyword
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
@@ -40,6 +43,19 @@ def validate_name(name: object) -> str:
     if name in RESERVED:
         raise ProjectError(f"project name {name!r} is reserved")
     return name
+
+
+def package_name(name: str) -> str:
+    """The import name of a project: `name` with dashes as underscores, refused when it would shadow something (U-25).
+
+    Refused: a Python keyword, a stdlib module, an import name installed in this env (where `datalab-new` runs), or
+    one of the template's Hydra deps (`hydra`, `omegaconf`, `antlr4`).
+    """
+    pkg = validate_name(name).replace("-", "_")
+    taken = set(importlib.metadata.packages_distributions()) | {"hydra", "omegaconf", "antlr4"}
+    if keyword.iskeyword(pkg) or pkg in sys.stdlib_module_names or pkg in taken:
+        raise ProjectError(f"project name {name!r} gives the package {pkg!r}, which shadows a keyword or module")
+    return pkg
 
 
 def repo_root(start: Path | None = None) -> Path:

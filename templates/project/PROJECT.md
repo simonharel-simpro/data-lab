@@ -4,9 +4,9 @@ title: __DATALAB_TITLE__
 status: idée
 tags: []
 # data: where the data comes from (path, URL, dataset id)
-# metric:
-#   key: score   # an MLflow metric your runs log
-#   goal: max    # max | min
+metric:
+  key: score   # an MLflow metric your runs log
+  goal: max    # max | min
 ---
 
 ## Objectif

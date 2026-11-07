@@ -126,5 +126,15 @@
 | EXP-13 | Legacy project without configs | mini-rag / voice-arch | Hydra gate skips them; ledger hook finds no run.json | 🆕 New | exp Phase 2 |
 | EXP-14 | Secret interpolation in a config | `${oc.env:X}` in a YAML under configs/ | hydra hook fails | 🆕 New | exp Phase 2 |
 | EXP-15 | CI matrix covers every project | parity check on ci.yml | `fail-fast: false`, one matrix entry per `projects/*`, ledger-validate + Hydra steps present | 🆕 New | exp Phase 2 |
+| EXP-16 | Fresh project is green on its gates | `datalab-new demo-app` | `uv sync --locked`, lint-imports, pyright, pytest --cov ≥ 70, pip-audit, ruff, Hydra gate all pass | 🆕 New | exp Phase 3 |
+| EXP-17 | Package name collides | `datalab-new json` / `hydra` / `class` | exit 2, nothing written, config files untouched | 🆕 New | exp Phase 3 |
+| EXP-18 | Grid search | `train hparams_search=g` with 3 values | one parent, 3 children `dummy-0..2`, distinct `config_sha256` | 🆕 New | exp Phase 3 |
+| EXP-19 | Grid names an unknown candidate or param | `{ghost: …}` / `{dummy: {offset: …}}` | exit 2 before any MLflow run | 🆕 New | exp Phase 3 |
+| EXP-20 | One candidate crashes | candidates `[dummy, boom]` | exit 1, `boom-0` FAILED, parent lists it | 🆕 New | exp Phase 3 |
+| EXP-21 | `--multirun` | `train --multirun` | exit 2, no run | 🆕 New | exp Phase 3 |
+| EXP-22 | Eval outside the audit | no run.json / before audit / audit validated | exit 2, no MLflow run | 🆕 New | exp Phase 3 |
+| EXP-23 | Second test look | eval twice on one split | 2nd needs `look_note`; tagged `test_look=2`; 2 looks in run.json | 🆕 New | exp Phase 3 |
+| EXP-24 | Eval with a different model config | `eval model.value=0.5` | exit 2, hint `model=<family> model.<k>=<v>` | 🆕 New | exp Phase 3 |
+| EXP-25 | Split or data changed since modeling | edit split.json / append data | eval exit 2 | 🆕 New | exp Phase 3 |
 
 > ⚠️ After merge: required CI checks are renamed `project (mini-rag)` / `project (voice-arch)` (were `pilot` / `voice-arch`) — update branch protection.

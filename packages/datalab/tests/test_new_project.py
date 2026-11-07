@@ -59,12 +59,34 @@ def test_u_10_new_project_excludes_venv_and_lock(fake_repo: Path) -> None:
 
 
 def test_u_10_no_placeholder_left(fake_repo: Path) -> None:
-    assert main(["demo"], root=fake_repo, lock=_no_lock) == 0
+    assert main(["demo-app"], root=fake_repo, lock=_no_lock) == 0
 
-    out = fake_repo / "projects" / "demo"
+    out = fake_repo / "projects" / "demo-app"
     leftovers = [p for p in out.rglob("*") if p.is_file() and "__DATALAB_" in p.read_text(encoding="utf-8")]
     assert leftovers == []
-    assert load(out, root=fake_repo).name == "demo"
+    assert [str(p.relative_to(out)) for p in out.rglob("*") if "__DATALAB_" in str(p.relative_to(out))] == []
+    assert (out / "src" / "demo_app" / "train.py").is_file()
+    assert load(out, root=fake_repo).name == "demo-app"
+
+
+def test_u_25_package_name_refusals_write_nothing(fake_repo: Path) -> None:
+    wiring = (".pre-commit-config.yaml", ".github/workflows/ci.yml")
+    before = {rel: (fake_repo / rel).read_bytes() for rel in wiring}
+
+    codes = [main([name], root=fake_repo, lock=_no_lock) for name in ("class", "json", "hydra", "mlflow")]
+
+    assert codes == [2, 2, 2, 2]
+    assert _projects_entries(fake_repo) == []
+    assert {rel: (fake_repo / rel).read_bytes() for rel in wiring} == before
+
+
+def test_importlinter_root_is_the_package(fake_repo: Path) -> None:
+    assert main(["demo-app"], root=fake_repo, lock=_no_lock) == 0
+
+    pyproject = tomllib.loads((fake_repo / "projects" / "demo-app" / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pyproject["tool"]["importlinter"]["root_package"] == "demo_app"
+    sources = pyproject["tool"]["importlinter"]["contracts"][0]["source_modules"]
+    assert sources == ["demo_app.scoring", "demo_app.candidates", "demo_app.grid"]
 
 
 @pytest.mark.parametrize("kind", ["empty-dir", "file"])
@@ -132,8 +154,7 @@ def test_b1_package_added_after_first_sync_imports(fake_repo: Path) -> None:
     env = {k: v for k, v in os.environ.items() if k not in {"VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT"}}
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
-        # Fixed argv, absolute binary, no shell.
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(  # noqa: S603  # fixed argv: absolute uv binary, no shell
             [uv, *args], cwd=project, env=env, capture_output=True, text=True, check=False, timeout=600
         )
 

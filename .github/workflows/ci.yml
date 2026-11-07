@@ -38,6 +38,9 @@ jobs:
           uv run --locked pyright
           uv run --locked pip-audit
           uv run --locked pytest --cov=datalab
+      - name: scaffold a fresh project and run its gates (F-3; network for uv lock)
+        working-directory: packages/datalab
+        run: uv run --locked pytest -m scaffold -q
 
   app:
     runs-on: ubuntu-latest

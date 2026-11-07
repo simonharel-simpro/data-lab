@@ -1,0 +1,2 @@
+experiment_dir: ${project_dir:} # holds split.json and run.json
+data_file: ${project_dir:}/data/clean/data.jsonl

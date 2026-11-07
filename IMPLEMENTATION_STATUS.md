@@ -103,7 +103,7 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 |---|---|---|---|
 | 1 | Contract + ledger, split, tags, trial helpers | ✅ landed on feat/experiment (/check clean, fix-check 1 iter) | `phase-1-contract-ledger` |
 | 2 | Hydra gate, ledger hook, wiring, CI matrix | ✅ landed on feat/experiment @ 24a40a0 (/check clean, fix-check 3 iter) | `phase-2-gates-wiring` |
-| 3 | Hydra template, package name, scaffold-and-gate | ⏳ pending | — |
+| 3 | Hydra template, package name, scaffold-and-gate | 🔄 implemented, awaiting /check | `phase-3-hydra-template` |
 | 4 | `/experiment` skill | ⏳ pending | — |
 | 5 | App stepper + run groups + card best | ⏳ pending | — |
 
@@ -114,6 +114,14 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 - Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
 - Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
 - Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).
+
+## experiment Phase 3 — Hydra template, package name, scaffold-and-gate
+
+**Implemented:** 2026-11-07 · **Agent:** python-fastapi · **Tooling (agent run, verified by /check):** pre-commit pre-push green, datalab pytest 207 passed (cov 94.1 %), pyright 0, scaffold test (`-m scaffold`, real `uv lock`) 1 passed, template tests 37 passed (cov 87.7 %)
+- New: the template `configs/` (train, eval + 4 groups), `src/__DATALAB_PACKAGE__/{paths,candidates,split,scoring,grid,prepare,train,eval}.py`, template tests + fixtures, `.gitignore`, `packages/datalab/tests/test_scaffold.py`.
+- Modified: `project.py` (`package_name`), `new_project.py` (package rename, path leftover scan), template `pyproject.toml`/`PROJECT.md`/`README.md`, datalab `pyproject.toml` (scaffold marker), `ruff.toml`, `ci.yml` (scaffold step), ARCHITECTURE.md.
+- Tests: all planned tests red first (missing module); 11 also mutation-checked. `test_u_3` tightened (`data.score_on=train`), `test_grid_expand_sorts_param_names_before_the_product` added; `test_model_override_dropped_per_candidate` cannot fail (Hydra keeps the last `model=`), kept as specified.
+- Deviations (IMPLEMENTATION_NOTES.md): scaffold test copies `ruff.toml`; `# isort: split` in template tests; eval hint = family defaults + winner params; a very long project name may re-wrap a template line under `ruff format`.
 
 ## experiment Phase 2 — Hydra gate, ledger hook, wiring, CI matrix
 
