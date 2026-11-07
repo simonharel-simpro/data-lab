@@ -154,8 +154,7 @@ def test_b1_package_added_after_first_sync_imports(fake_repo: Path) -> None:
     env = {k: v for k, v in os.environ.items() if k not in {"VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT"}}
 
     def run(*args: str) -> subprocess.CompletedProcess[str]:
-        # Fixed argv, absolute binary, no shell.
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(  # noqa: S603  # fixed argv: absolute uv binary, no shell
             [uv, *args], cwd=project, env=env, capture_output=True, text=True, check=False, timeout=600
         )
 

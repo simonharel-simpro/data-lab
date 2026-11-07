@@ -27,7 +27,7 @@ from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracke
 from .candidates import config_sha256
 from .paths import PROJECT_DIR, register_resolvers
 from .prepare import PrepareError, compose_model, file_sha256, refuse_multirun
-from .scoring import score
+from .scoring import label, score
 from .split import SplitAccessError, load_split, read_rows
 
 register_resolvers()
@@ -119,7 +119,7 @@ def _score_test(gate: _Gate, trial_id: str) -> None:
     test_rows = load_split(gate.folder, [Partition.TEST], rows=rows, allow_test=True)[Partition.TEST]
     model = instantiate(gate.model)
     predictions = [model.predict(row) for row in test_rows]
-    labels = [float(row[gate.target]) for row in test_rows]  # pyright: ignore[reportArgumentType]
+    labels = [label(row, gate.target) for row in test_rows]
     mlflow.log_metric(f"test_{gate.metric.key}", score(predictions, labels))
 
 

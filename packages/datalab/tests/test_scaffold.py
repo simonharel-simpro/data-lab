@@ -49,8 +49,7 @@ def _failures(project: Path, uv: str) -> list[str]:
     ]
     failed = []
     for command in commands:
-        # Fixed argv: the uv binary from shutil.which plus constant arguments, no shell.
-        done = subprocess.run(  # noqa: S603
+        done = subprocess.run(  # noqa: S603  # fixed argv: uv from shutil.which, no shell
             command, cwd=project, env=env, capture_output=True, text=True, check=False, timeout=900
         )
         if done.returncode != 0:

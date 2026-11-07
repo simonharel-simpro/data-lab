@@ -4,6 +4,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import hydra
 import mlflow
@@ -24,7 +25,7 @@ from .candidates import Row, config_sha256
 from .grid import Combo, GridError, expand
 from .paths import PROJECT_DIR, register_resolvers
 from .prepare import PrepareError, compose_model, file_sha256, read_ledger, refuse_multirun, resolve_config, score_on
-from .scoring import metric_key_problems, score
+from .scoring import label, metric_key_problems, score
 from .split import SplitAccessError, load_split, read_rows
 
 register_resolvers()
@@ -98,7 +99,7 @@ def _eval_part(cfg: DictConfig, on: Partition) -> tuple[list[Row], list[float], 
     if not eval_rows:
         raise PrepareError(f"the {on.value} partition is empty: nothing to score")
     try:
-        labels = [float(row[str(cfg.data.target)]) for row in eval_rows]  # pyright: ignore[reportArgumentType]
+        labels = [label(row, str(cfg.data.target)) for row in eval_rows]
     except (KeyError, TypeError, ValueError) as err:
         raise PrepareError(f"data.target {cfg.data.target!r} is missing or not numeric in a row: {err!r}") from err
     tags = {
@@ -145,7 +146,9 @@ def _key_problems(plan: _Plan, parent_id: str) -> list[str]:
     experiment_id = client.get_run(parent_id).info.experiment_id
     found = client.search_runs([experiment_id], filter_string=f"tags.mlflow.parentRunId = '{parent_id}'")
     keys = {r.info.run_name or r.info.run_id: frozenset(r.data.metrics) for r in found if r.info.status == "FINISHED"}
-    allowed = [str(k) for k in plan.resolved["experiment"]["metrics"]]  # pyright: ignore[reportIndexIssue]
+    # resolve_config yields plain containers and the experiment group is validated at compose time
+    experiment = cast("dict[str, list[object]]", plan.resolved["experiment"])
+    allowed = [str(k) for k in experiment["metrics"]]
     return metric_key_problems(keys, plan.metric.key, allowed, plan.candidates)
 
 

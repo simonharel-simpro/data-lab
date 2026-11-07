@@ -16,6 +16,14 @@ def score(predictions: Sequence[float], labels: Sequence[float]) -> float:
     return -sum(abs(p - y) for p, y in zip(predictions, labels, strict=True)) / len(labels)
 
 
+def label(row: Mapping[str, object], target: str) -> float:
+    """The numeric label of a row; a missing or non-numeric one raises KeyError, TypeError or ValueError."""
+    value = row[target]
+    if not isinstance(value, int | float | str):
+        raise TypeError(f"label {target!r} is {type(value).__name__}, not a number")
+    return float(value)
+
+
 def metric_key_problems(
     child_keys: Mapping[str, frozenset[str]], key: str, allowed: Collection[str], candidates: Collection[str]
 ) -> list[str]:

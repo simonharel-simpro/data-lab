@@ -13,10 +13,11 @@ from mlflow.exceptions import MlflowException
 
 from datalab import ledger
 from datalab.ledger import Kind
+from datalab.tags import Tag
 
 # The package name varies per project and would sort differently against `datalab`: sort the two apart.
 # isort: split
-from __DATALAB_PACKAGE__.candidates import Constant
+from __DATALAB_PACKAGE__.candidates import Constant, Row
 from __DATALAB_PACKAGE__.train import run
 
 from .conftest import CONFIGS, FIXTURES, PROJECT_DIR, E, _runs, composed, write_model
@@ -47,14 +48,15 @@ def test_u_5_train_logs_one_parent_and_one_child_per_listed_candidate(
     parent, children = _split(_runs(tracking, E))
     sha = hashlib.sha256((FIXTURES / "split.json").read_bytes()).hexdigest()
     assert parent.data.metrics == {}
-    assert {k: parent.data.tags[k] for k in ("n_children", "entry", "split_sha256", "score_on")} == {
-        "n_children": "2", "entry": "train", "split_sha256": sha, "score_on": "val",
+    keys = (Tag.N_CHILDREN, Tag.ENTRY, Tag.SPLIT_SHA256, Tag.SCORE_ON)
+    assert {k: parent.data.tags[k] for k in keys} == {
+        Tag.N_CHILDREN: "2", Tag.ENTRY: "train", Tag.SPLIT_SHA256: sha, Tag.SCORE_ON: "val",
     }  # fmt: skip
     assert sorted(children) == ["dummy-0", "dummy-high-0"]
     assert children["dummy-0"].data.metrics == {"score": -1.0, "cost_usd": 0.0}
     assert children["dummy-high-0"].data.metrics == {"score": 0.0, "cost_usd": 0.0}
-    assert children["dummy-high-0"].data.tags["candidate"] == "dummy-high"
-    assert len(children["dummy-0"].data.tags["config_sha256"]) == 64
+    assert children["dummy-high-0"].data.tags[Tag.CANDIDATE] == "dummy-high"
+    assert len(children["dummy-0"].data.tags[Tag.CONFIG_SHA256]) == 64
 
 
 def test_u_26_grid_one_child_per_combination(configs: Path, data_overrides: list[str], tracking: str) -> None:
@@ -67,7 +69,7 @@ def test_u_26_grid_one_child_per_combination(configs: Path, data_overrides: list
     assert sorted(children) == ["dummy-0", "dummy-1", "dummy-2"]
     assert [children[n].data.params["value"] for n in sorted(children)] == ["0.0", "0.5", "1.0"]
     assert [children[n].data.metrics["score"] for n in sorted(children)] == [-1.0, -0.5, 0.0]
-    assert len({c.data.tags["config_sha256"] for c in children.values()}) == 3
+    assert len({c.data.tags[Tag.CONFIG_SHA256] for c in children.values()}) == 3
 
 
 def test_u_26_grid_naming_unknown_candidate_exits_2(
@@ -106,8 +108,8 @@ def test_f_8_one_failing_candidate_parent_lists_it_and_exit_nonzero(
     parent, children = _split(_runs(tracking, E))
     assert children["boom-0"].info.status == "FAILED"
     assert children["dummy-0"].info.status == "FINISHED"
-    assert parent.data.tags["n_failed"] == "1"
-    assert parent.data.tags["failed_candidates"] == "boom-0"
+    assert parent.data.tags[Tag.N_FAILED] == "1"
+    assert parent.data.tags[Tag.FAILED_CANDIDATES] == "boom-0"
 
 
 def test_tracking_error_is_not_a_candidate_failure(
@@ -134,6 +136,14 @@ def test_model_override_dropped_per_candidate(configs: Path, data_overrides: lis
     overrides = [*data_overrides, "model=dummy-high"]
 
     assert _train(configs, overrides) == 0
+
+    _, children = _split(_runs(tracking, E))
+    assert children["dummy-0"].data.metrics["score"] == -1.0
+
+
+def test_model_deletion_override_dropped_per_candidate(configs: Path, data_overrides: list[str], tracking: str) -> None:
+    # `~model=dummy` deletes the model default: only the per-candidate filter lets `model=dummy` compose afterwards
+    assert _train(configs, [*data_overrides, "~model=dummy"]) == 0
 
     _, children = _split(_runs(tracking, E))
     assert children["dummy-0"].data.metrics["score"] == -1.0
@@ -199,7 +209,7 @@ def test_u_30_comparison_ledger_scores_on_train(
     assert _train(configs, data_overrides) == 0
 
     parent, children = _split(_runs(tracking, E))
-    assert parent.data.tags["score_on"] == "train"
+    assert parent.data.tags[Tag.SCORE_ON] == "train"
     assert children["dummy-0"].data.metrics["score"] == 0.0
 
 
@@ -212,9 +222,9 @@ def test_u_29_secondary_key_not_declared_exits_1(
 ) -> None:
     original = Constant.predict
 
-    def predict(self: Constant, row: object) -> float:
+    def predict(self: Constant, row: Row) -> float:
         mlflow.log_metric("dummy_rate", 1.0)
-        return original(self, row)  # pyright: ignore[reportArgumentType]
+        return original(self, row)
 
     monkeypatch.setattr(Constant, "predict", predict)
 
@@ -249,7 +259,7 @@ def test_f_10_train_runs_from_foreign_cwd_without_env(
     assert done.returncode == 0, done.stderr
     parent, children = _split(_runs(sqlite_uri, E))
     assert sorted(children) == ["dummy-0"]
-    assert parent.data.tags["entry"] == "train"
+    assert parent.data.tags[Tag.ENTRY] == "train"
     assert (tmp_path / "h" / ".hydra" / "config.yaml").is_file()
 
 

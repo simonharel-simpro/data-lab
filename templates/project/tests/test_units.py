@@ -8,7 +8,7 @@ from datalab.split import Partition, SplitError
 # The package name varies per project and would sort differently against `datalab`: sort the two apart.
 # isort: split
 from __DATALAB_PACKAGE__.grid import expand
-from __DATALAB_PACKAGE__.scoring import metric_key_problems, score
+from __DATALAB_PACKAGE__.scoring import label, metric_key_problems, score
 from __DATALAB_PACKAGE__.split import load_split, read_rows
 
 from .conftest import FIXTURES
@@ -23,6 +23,22 @@ def _write(folder: Path, split: dict[str, object]) -> Path:
 
 def _rows(n: int) -> list[dict[str, object]]:
     return [{"x": i, "y": 0.0} for i in range(n)]
+
+
+def test_label_reads_numbers_and_numeric_strings() -> None:
+    assert label({"y": 2}, "y") == 2.0
+    assert label({"y": "1.5"}, "y") == 1.5
+
+
+def test_label_rejects_missing_none_and_non_numeric() -> None:
+    with pytest.raises(KeyError):
+        label({"x": 1}, "y")
+    with pytest.raises(TypeError):
+        label({"y": None}, "y")
+    with pytest.raises(TypeError):
+        label({"y": [1]}, "y")
+    with pytest.raises(ValueError, match="abc"):
+        label({"y": "abc"}, "y")
 
 
 def test_score_rejects_empty_or_unequal() -> None:

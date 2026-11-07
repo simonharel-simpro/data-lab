@@ -68,6 +68,30 @@ def _uv_lock(project: Path) -> None:
         raise ProjectError(f"uv lock failed (exit {done.returncode}): {done.stderr.strip() or done.stdout.strip()}")
 
 
+def _build(
+    root: Path, tmp: Path, target: Path, names: tuple[str, str, str], lock: Callable[[Path], None]
+) -> wiring.WiringPlan:
+    name, title, pkg = names
+    shutil.copytree(root / "templates" / "project", tmp, ignore=_IGNORE)
+    _rewrite(tmp, name, title, pkg)
+    lock(tmp)
+    wiring_plan = wiring.plan(root, name)
+    os.rename(tmp, target)
+    return wiring_plan
+
+
+def _wired(wiring_plan: wiring.WiringPlan, target: Path) -> bool:
+    try:
+        wiring.apply(wiring_plan)
+    except OSError as err:
+        print(
+            f"created {target}, but hook/CI wiring failed: {err}; the parity test fails until it is fixed",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
 def main(argv: list[str] | None = None, *, root: Path | None = None, lock: Callable[[Path], None] = _uv_lock) -> int:
     parser = argparse.ArgumentParser(prog="datalab-new", description="Create projects/<name> from the template.")
     parser.add_argument("name", help="project name: lowercase letters/digits, single dashes, not reserved")
@@ -80,29 +104,18 @@ def main(argv: list[str] | None = None, *, root: Path | None = None, lock: Calla
     except ProjectError as err:
         print(f"datalab-new: {err}", file=sys.stderr)
         return 2
-    projects, template = root / "projects", root / "templates" / "project"
-    target = projects / name
+    target = root / "projects" / name
     if target.exists() or target.is_symlink():
         print(f"datalab-new: {target} already exists; nothing written", file=sys.stderr)
         return 2
-    tmp = projects / f".{name}.tmp-{secrets.token_hex(4)}"
+    tmp = root / "projects" / f".{name}.tmp-{secrets.token_hex(4)}"
     try:
-        shutil.copytree(template, tmp, ignore=_IGNORE)
-        _rewrite(tmp, name, args.title or name, pkg)
-        lock(tmp)
-        wiring_plan = wiring.plan(root, name)
-        os.rename(tmp, target)
+        wiring_plan = _build(root, tmp, target, (name, args.title or name, pkg), lock)
     except (OSError, ProjectError) as err:
         shutil.rmtree(tmp, ignore_errors=True)
         print(f"datalab-new: failed, nothing written: {err}", file=sys.stderr)
         return 1
-    try:
-        wiring.apply(wiring_plan)
-    except OSError as err:
-        print(
-            f"created {target}, but hook/CI wiring failed: {err}; the parity test fails until it is fixed",
-            file=sys.stderr,
-        )
+    if not _wired(wiring_plan, target):
         return 1
     print(f"created {target} (package {pkg})\nnext: cd projects/{name} && uv sync, then run /experiment")
     return 0

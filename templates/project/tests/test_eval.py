@@ -9,6 +9,7 @@ from mlflow import MlflowClient
 
 from datalab import ledger
 from datalab.ledger import RunLedger
+from datalab.tags import Tag
 
 # The package name varies per project and would sort differently against `datalab`: sort the two apart.
 # isort: split
@@ -37,8 +38,8 @@ def test_f_13_eval_logs_test_prefixed_key_not_metric_key(
     assert child.info.run_name == "dummy-test"
     assert child.data.metrics == {"test_score": -0.5, "cost_usd": 0.0}
     for entry in (parent, child):
-        assert entry.data.tags["split"] == "test"
-        assert entry.data.tags["test_look"] == "1"
+        assert entry.data.tags[Tag.SPLIT] == "test"
+        assert entry.data.tags[Tag.TEST_LOOK] == "1"
     assert ledger.read(exp_dir).test_looks[0].run_id == child.info.run_id != child_id
 
 
@@ -91,7 +92,7 @@ def test_u_28_second_look_needs_note(
     assert "note" in capsys.readouterr().err
 
     assert _eval(configs, [*data_overrides, "look_note='recheck after fix'"]) == 0
-    child = [r for r in _runs(tracking, A) if r.info.run_name == "dummy-test" and r.data.tags["test_look"] == "2"]
+    child = [r for r in _runs(tracking, A) if r.info.run_name == "dummy-test" and r.data.tags[Tag.TEST_LOOK] == "2"]
     assert len(child) == 1
     assert len(ledger.read(exp_dir).test_looks) == 2
 
@@ -146,7 +147,7 @@ def test_eval_refuses_winner_from_another_split(
     lg, child_id = audit_ready()
     client = MlflowClient(tracking)
     parent_id = client.get_run(child_id).data.tags["mlflow.parentRunId"]
-    client.set_tag(parent_id, "split_sha256", "c" * 64)
+    client.set_tag(parent_id, Tag.SPLIT_SHA256, "c" * 64)
 
     assert _eval(configs, data_overrides) == 2
 
