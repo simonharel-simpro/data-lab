@@ -352,3 +352,10 @@
   One-off or pattern?: one-off.
 - The eval hint bug (deviation 1: `python -m <pkg>` instead of `python -m <pkg>.eval`) is fixed in phase 4 at the user's request; `test_u_27` asserts the full command.
 - ESC-4-1 was settled by the user (2026-11-07): on archive, `split.json` is moved with `run.json`, and the new experiment freezes its own split.
+
+## Experiment Phase 5 (app stepper + run groups)
+
+- Plan assumed: `Step.decision: 'validate' | 'correct' | null` (I-3: a milestone's decision is never `redo`).
+  Territory was: the app checks only schema + U-13 + I-1, and the schema admits `redo` on a milestone, so a ledger that breaks only Python's I-3 (vector `produced-with-redo`) parses as valid in the app.
+  I did: widened `Step.decision` to `Decision | null` and render the value as is, rather than coercing `redo` to `null` (a silent fallback); display-only.
+  One-off or pattern?: likely recurs — any app type narrowed by a Python-only invariant has the same gap.

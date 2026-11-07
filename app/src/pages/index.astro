@@ -3,13 +3,18 @@ import Base from '../layouts/Base.astro';
 import Metric from '../components/Metric.astro';
 import { loadProjects } from '../lib/projects.ts';
 import { missing } from '../lib/completeness.ts';
-import { metricState } from '../lib/mlflow.ts';
+import { join } from 'node:path';
+import { projectView } from '../lib/mlflow.ts';
+import { bestFilter } from '../lib/best.ts';
+import { ledgerState } from '../lib/ledger.ts';
+import { projectsDir } from '../lib/config.ts';
 
 const cards = await Promise.all(
   (await loadProjects()).map(async (e) => ({
     e,
     gaps: missing(e.data, e.body ?? ''),
-    state: await metricState(e.data),
+    // Same filter as the project page, so both show the same best (the report dedupes the ledger warning).
+    state: (await projectView(e.data, bestFilter(ledgerState(e.id, join(projectsDir(), e.id))))).state,
   })),
 );
 ---

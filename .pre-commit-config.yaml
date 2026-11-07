@@ -89,4 +89,4 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
-        files: ^(app/|contracts/|\.env\.example$)
+        files: ^(app/|contracts/|\.env\.example$|packages/datalab/src/datalab/project\.py$)

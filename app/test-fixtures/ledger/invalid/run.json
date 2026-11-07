@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "current_milestone": "eda",
+  "milestones": {
+    "scoping": {
+      "status": "validated",
+      "artifacts": [
+        "scope.md"
+      ],
+      "decision": "validate"
+    },
+    "dataset": {
+      "status": "validated",
+      "artifacts": [
+        "dataset.md"
+      ],
+      "decision": "validate"
+    },
+    "cleaning": {
+      "status": "validated",
+      "artifacts": [
+        "src/demo/data/clean.py"
+      ],
+      "decision": "validate"
+    },
+    "eda": {
+      "status": "produced",
+      "artifacts": [
+        "eda.md"
+      ],
+      "decision": null
+    },
+    "features": {
+      "status": "todo",
+      "artifacts": [],
+      "decision": null
+    },
+    "modeling": {
+      "status": "todo",
+      "artifacts": [],
+      "decision": null
+    },
+    "audit": {
+      "status": "todo",
+      "artifacts": [],
+      "decision": null
+    },
+    "tracking": {
+      "status": "todo",
+      "artifacts": [],
+      "decision": null
+    },
+    "report": {
+      "status": "todo",
+      "artifacts": [],
+      "decision": null
+    }
+  },
+  "dataset": {
+    "id": "org/ds",
+    "hash": "0123456789abcdef"
+  },
+  "metric": "score (max): mean task success on the dev personas",
+  "split_summary": "grouped seed 0: 60/20/20",
+  "split_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "data_sha256": null,
+  "features": null,
+  "winner": null,
+  "test_looks": [],
+  "decisions_log": [
+    {
+      "milestone": "scoping",
+      "decision": "validate",
+      "note": "ok"
+    },
+    {
+      "milestone": "dataset",
+      "decision": "validate",
+      "note": "ok"
+    },
+    {
+      "milestone": "cleaning",
+      "decision": "validate",
+      "note": "ok"
+    }
+  ]
+}

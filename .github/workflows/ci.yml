@@ -73,6 +73,17 @@ jobs:
         run: "! npm run build"
         env:
           DATALAB_PROJECTS_DIR: test-fixtures/bad-name
+      - name: ledger fixtures build (valid + invalid run.json, F-20)
+        run: |
+          npm run build
+          grep -q 'class="stepper"' dist/projects/valid/index.html && grep -q 'unsupported schema (kind missing)' dist/projects/invalid/index.html
+        env:
+          DATALAB_PROJECTS_DIR: test-fixtures/ledger
+      - name: invalid run.json fails a strict export (F-20)
+        run: "! npm run build"
+        env:
+          DATALAB_PROJECTS_DIR: test-fixtures/ledger
+          DATALAB_STRICT_EXPORT: "1"
 
   projects:
     name: project (${{ matrix.project }})
