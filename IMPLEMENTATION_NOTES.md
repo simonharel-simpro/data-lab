@@ -270,6 +270,18 @@
   I did: moved the trial tests (and `_parent`, `_children`, `_fail`) to `tests/test_tracking_trials.py`, shared builders in `tests/tracking_support.py`; names and assertions unchanged.
   One-off or pattern?: one-off.
 
+## experiment Phase 2
+
+- Plan assumed: `plan()` can index the parsed YAML directly after the marker splice.
+  Territory was: a YAML that parses but lacks `jobs.projects` (or `repos`) raised a bare `KeyError`/`TypeError`, escaping `main`'s `except ProjectError`.
+  I did: `_hook_ids` / `matrix_entries` convert those to `ProjectError("wiring target has an unexpected shape: ...")` and require the matrix to be a list; `matrix_entries` is public so the non-list branch is unit-tested (it cannot be reached through marker text, which would be invalid YAML).
+  One-off or pattern?: pattern — any parsed-config lookup at a trust boundary.
+- Plan assumed: a duplicate hook id inside a datalab-new region is merged silently.
+  Territory was: `_merge_blocks` overwrote the first block.
+  I did: raise `ProjectError("duplicate hook id ...")`.
+  One-off or pattern?: one-off.
+- Two `# pyright: ignore[reportIndexIssue]` lines in `wiring.py` index an `object`-typed parsed YAML on purpose; the surrounding `except (KeyError, TypeError, AttributeError)` is the runtime guard.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [resolved] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller. => User 2026-11-06: caller = anthropic/claude-haiku-5.5 @ temperature 0.7 (agent = google/gemini-3.5-flash-lite).

@@ -8,6 +8,7 @@ import yaml
 
 from datalab import ledger, wiring
 from datalab.new_project import main
+from datalab.project import ProjectError
 from datalab.wiring import CI, PRE_COMMIT, apply, declared_deps_block, gates_block, parity_problems, plan
 from tests.conftest import REPO_ROOT
 from tests.ledger_support import project, vector
@@ -72,7 +73,8 @@ def test_wiring_keeps_comments(wired_repo: Path) -> None:
 
 def test_missing_marker_writes_nothing(wired_repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     pre_commit = wired_repo / PRE_COMMIT
-    pre_commit.write_text(pre_commit.read_text("utf-8").replace("# >>> datalab-new: gates\n", ""), encoding="utf-8")
+    marker = re.compile(r"^ *# >>> datalab-new: gates\n", re.MULTILINE)
+    pre_commit.write_text(marker.sub("", pre_commit.read_text("utf-8")), encoding="utf-8")
     before = (pre_commit.read_bytes(), (wired_repo / CI).read_bytes())
 
     assert main(["demo"], root=wired_repo, lock=_no_lock) == 1
@@ -155,3 +157,45 @@ def test_parity_reports_fail_fast_not_false(wired_repo: Path) -> None:
     problems = parity_problems(wired_repo)
 
     assert problems == ["jobs.projects.strategy.fail-fast must be false"]
+
+
+_CI_WITHOUT_PROJECTS_JOB = (
+    "jobs:\n  other:\n    strategy:\n      matrix:\n        project:\n"
+    "          # >>> datalab-new: matrix\n          - mini-rag\n          # <<< datalab-new: matrix\n"
+)
+
+
+def test_plan_rejects_ci_without_projects_matrix(wired_repo: Path) -> None:
+    (wired_repo / CI).write_text(_CI_WITHOUT_PROJECTS_JOB, encoding="utf-8")
+    before = ((wired_repo / PRE_COMMIT).read_bytes(), (wired_repo / CI).read_bytes())
+
+    with pytest.raises(ProjectError, match="unexpected shape"):
+        plan(wired_repo, "demo")
+
+    assert ((wired_repo / PRE_COMMIT).read_bytes(), (wired_repo / CI).read_bytes()) == before
+
+
+def test_main_cleans_tmp_dir_when_wiring_shape_is_unexpected(
+    wired_repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (wired_repo / CI).write_text(_CI_WITHOUT_PROJECTS_JOB, encoding="utf-8")
+
+    assert main(["demo"], root=wired_repo, lock=_no_lock) == 1
+
+    assert sorted(p.name for p in (wired_repo / "projects").iterdir()) == ["mini-rag", "voice-arch"]
+    assert "unexpected shape" in capsys.readouterr().err
+
+
+def test_plan_rejects_matrix_that_is_not_a_list() -> None:
+    with pytest.raises(ProjectError, match="unexpected shape"):
+        wiring.matrix_entries({"jobs": {"projects": {"strategy": {"matrix": {"project": "demo"}}}}})
+
+
+def test_duplicate_hook_id_in_region_rejected(wired_repo: Path) -> None:
+    pre_commit = wired_repo / PRE_COMMIT
+    text = pre_commit.read_text("utf-8")
+    block = declared_deps_block("voice-arch")
+    pre_commit.write_text(text.replace(block, block + block, 1), encoding="utf-8")
+
+    with pytest.raises(ProjectError, match="duplicate hook id 'declared-deps-voice-arch'"):
+        plan(wired_repo, "demo")

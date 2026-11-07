@@ -94,7 +94,7 @@ def test_no_args_scans_every_project(tmp_path: Path) -> None:
 
 
 def test_paths_outside_projects_are_ignored(tmp_path: Path) -> None:
-    (tmp_path / "projects").mkdir()
+    (tmp_path / "projects" / "demo" / "configs").mkdir(parents=True)
 
     assert _load().project_roots(["packages/datalab/src/x.py", "README.md"], tmp_path) == []
 

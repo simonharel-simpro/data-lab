@@ -7,6 +7,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
@@ -20,6 +21,12 @@ _BLOCK_ID: Final = re.compile(r"^ {6}- id: (\S+)$")
 _MATRIX_ITEM: Final = re.compile(r"^ {10}- (\S+)$")
 _HYDRA_STEP: Final = "tools/pre_commit_checks/hydra_gate.py projects/${{ matrix.project }}"
 _LEDGER_STEP: Final = "python -m datalab.ledger validate projects/${{ matrix.project }}"
+
+
+class Region(StrEnum):
+    DECLARED_DEPS = "declared-deps"
+    GATES = "gates"
+    MATRIX = "matrix"
 
 
 @dataclass(frozen=True)
@@ -52,7 +59,7 @@ def gates_block(name: str) -> str:
     )
 
 
-def _region(text: str, label: str) -> tuple[int, int]:
+def _region(text: str, label: Region) -> tuple[int, int]:
     """Offsets of the body between the open and close marker lines; each marker must occur exactly once."""
     opens = list(re.finditer(rf"^ *# >>> datalab-new: {re.escape(label)}\n", text, re.MULTILINE))
     closes = list(re.finditer(rf"^ *# <<< datalab-new: {re.escape(label)}$", text, re.MULTILINE))
@@ -61,7 +68,7 @@ def _region(text: str, label: str) -> tuple[int, int]:
     return opens[0].end(), closes[0].start()
 
 
-def _splice(text: str, label: str, merge: Callable[[str], str]) -> str:
+def _splice(text: str, label: Region, merge: Callable[[str], str]) -> str:
     start, end = _region(text, label)
     return text[:start] + merge(text[start:end]) + text[end:]
 
@@ -73,6 +80,8 @@ def _merge_blocks(body: str, block: str) -> str:
         found = _BLOCK_ID.match(line.rstrip("\n"))
         if found:
             current = found.group(1)
+            if current in blocks:
+                raise ProjectError(f"duplicate hook id {current!r} in a datalab-new region")
             blocks[current] = ""
         elif current is None:
             raise ProjectError(f"unexpected text before the first hook in a datalab-new region: {line.strip()!r}")
@@ -101,6 +110,23 @@ def _checked(text: str, path: Path) -> None:
         raise ProjectError(f"{path}: wiring would produce invalid YAML: {err}") from err
 
 
+def _hook_ids(config: object) -> set[str]:
+    try:
+        return {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}  # pyright: ignore[reportIndexIssue]
+    except (KeyError, TypeError, AttributeError) as err:
+        raise ProjectError(f"wiring target has an unexpected shape: .pre-commit-config.yaml {err!r}") from err
+
+
+def matrix_entries(ci: object) -> list[object]:
+    try:
+        matrix = ci["jobs"]["projects"]["strategy"]["matrix"]["project"]  # pyright: ignore[reportIndexIssue]
+    except (KeyError, TypeError, AttributeError) as err:
+        raise ProjectError(f"wiring target has an unexpected shape: ci.yml {err!r}") from err
+    if not isinstance(matrix, list):
+        raise ProjectError(f"wiring target has an unexpected shape: ci.yml matrix is {type(matrix).__name__}")
+    return matrix  # pyright: ignore[reportUnknownVariableType]
+
+
 def plan(root: Path, name: str) -> WiringPlan:
     pc_path, ci_path = root / PRE_COMMIT, root / CI
     try:
@@ -108,13 +134,13 @@ def plan(root: Path, name: str) -> WiringPlan:
         ci_old = ci_path.read_text(encoding="utf-8")
     except OSError as err:
         raise ProjectError(f"cannot read wiring target: {err}") from err
-    pc_new = _splice(pc_old, "declared-deps", lambda body: _merge_blocks(body, declared_deps_block(name)))
-    pc_new = _splice(pc_new, "gates", lambda body: _merge_blocks(body, gates_block(name)))
-    ci_new = _splice(ci_old, "matrix", lambda body: _merge_matrix(body, name))
+    pc_new = _splice(pc_old, Region.DECLARED_DEPS, lambda body: _merge_blocks(body, declared_deps_block(name)))
+    pc_new = _splice(pc_new, Region.GATES, lambda body: _merge_blocks(body, gates_block(name)))
+    ci_new = _splice(ci_old, Region.MATRIX, lambda body: _merge_matrix(body, name))
     for path, text in ((pc_path, pc_new), (ci_path, ci_new)):
         _checked(text, path)
-    hooks = {hook["id"] for repo in yaml.safe_load(pc_new)["repos"] for hook in repo["hooks"]}
-    matrix = yaml.safe_load(ci_new)["jobs"]["projects"]["strategy"]["matrix"]["project"]
+    hooks = _hook_ids(yaml.safe_load(pc_new))
+    matrix = matrix_entries(yaml.safe_load(ci_new))
     if not {f"declared-deps-{name}", f"gates-{name}"} <= hooks or name not in matrix:
         raise ProjectError(f"wiring for {name} did not land in the hook ids or the CI matrix")
     changed = tuple((p, new) for p, old, new in ((pc_path, pc_old, pc_new), (ci_path, ci_old, ci_new)) if new != old)
