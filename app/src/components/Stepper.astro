@@ -1,0 +1,39 @@
+---
+import type { LedgerState } from '../lib/ledger.ts';
+
+interface Props {
+  state: LedgerState;
+}
+const { state } = Astro.props;
+// No hyperlinks: the static export has no route to files under projects/ (see Metric.astro).
+---
+{state.kind === 'invalid' && <p class="badge">run.json : {state.reason}</p>}
+{state.kind === 'ok' && (
+  <ol class="stepper">
+    {state.steps.map((step) => (
+      <li aria-current={step.current ? 'step' : undefined}>
+        <strong>{step.id}</strong> <span class="muted">{step.agent}</span> <span class="status">{step.status}</span>
+        {step.decision && <span class="muted"> · {step.decision}</span>}
+        {step.artifacts.length > 0 && (
+          <div>
+            {step.artifacts.map((a) => (
+              <>
+                <code>{a.path}</code>{!a.exists && <> <span class="badge">missing</span></>}{' '}
+              </>
+            ))}
+          </div>
+        )}
+        {step.notes.length > 0 && (
+          <ul>
+            {step.notes.map((n) => <li>{n.decision} — {n.note}</li>)}
+          </ul>
+        )}
+      </li>
+    ))}
+  </ol>
+)}
+<style>
+  .stepper { padding-left:1.5rem; }
+  .stepper > li { margin:6px 0; }
+  .stepper > li[aria-current='step'] { border-left:3px solid var(--ok); padding-left:8px; }
+</style>

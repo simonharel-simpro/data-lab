@@ -2,13 +2,16 @@
 import type { Card, Metric } from './card.ts';
 import { METRIC_KEY_RE } from './card.ts';
 import { isValidName } from './name.ts';
-import { post, parseExperiments, parseRuns, TransientError, type MlflowExperiment, type MlflowRun } from './mlflow-rest.ts';
+import { post, parseExperiments, searchAllRuns, TransientError, type MlflowExperiment, type MlflowRun } from './mlflow-rest.ts';
 import { reportUnavailable } from './report.ts';
 import { mlflowUri, type Env } from './config.ts';
 import { runCollection } from './weavit.ts';
+import { eligibleForBest, pickBest, type BestFilter, type PickedRun } from './best.ts';
+import { groupRuns, type RunGroup } from './run-groups.ts';
 
 export type { MlflowRun } from './mlflow-rest.ts';
 export { readReport, reportUnavailable } from './report.ts';
+export { pickBest } from './best.ts';
 
 export type BestRun =
   | {
@@ -25,7 +28,7 @@ export type BestRun =
   | { kind: 'metric-not-logged'; runCount: number }
   | { kind: 'unavailable'; reason: string };
 export type MetricState = BestRun | { kind: 'no-metric' };
-export type PickedRun = { kind: 'picked'; run: MlflowRun; value: number; runCount: number };
+export type ProjectView = { state: MetricState; groups: RunGroup[] };
 
 const warmUps = new WeakMap<typeof fetch, Promise<void>>();
 
@@ -56,31 +59,6 @@ async function poll(url: string, fetchImpl: typeof fetch, deadline: number): Pro
   }
 }
 
-/** Latest finite value of exactly `metric.key` (U-6, U-1, D-15), best per goal, ties: newest, then run_id (U-5). */
-export function pickBest(
-  runs: readonly MlflowRun[],
-  metric: Metric,
-): PickedRun | { kind: 'no-runs' } | { kind: 'metric-not-logged'; runCount: number } {
-  if (runs.length === 0) return { kind: 'no-runs' };
-  const carrying = runs.flatMap((run) => {
-    const m = run.data.metrics.find((x) => x.key === metric.key);
-    return m ? [{ run, value: m.value }] : [];
-  });
-  if (carrying.length === 0) return { kind: 'metric-not-logged', runCount: runs.length };
-  const finite = carrying.filter((c): c is { run: MlflowRun; value: number } => Number.isFinite(c.value));
-  if (finite.length === 0) return { kind: 'no-runs' };
-  const sign = metric.goal === 'max' ? -1 : 1;
-  finite.sort(
-    (a, b) =>
-      sign * (a.value - b.value) ||
-      b.run.info.start_time - a.run.info.start_time ||
-      (a.run.info.run_id < b.run.info.run_id ? -1 : a.run.info.run_id > b.run.info.run_id ? 1 : 0),
-  );
-  const best = finite[0];
-  if (!best) return { kind: 'no-runs' };
-  return { kind: 'picked', run: best.run, value: best.value, runCount: finite.length };
-}
-
 /** Experiments `<project>` and `<project>/<sub>`; the first search is retried once on timeout/5xx (F-1). */
 async function projectExperiments(base: string, project: string, fetchImpl: typeof fetch): Promise<MlflowExperiment[]> {
   // Default view_type is active-only: soft-deleted experiments (datalab-test/*) never show.
@@ -94,22 +72,15 @@ async function projectExperiments(base: string, project: string, fetchImpl: type
   return parseExperiments(raw).filter((e) => e.name === project || e.name.startsWith(`${project}/`));
 }
 
-async function searchRuns(
-  base: string,
-  project: string,
-  metric: Metric,
-  experimentIds: string[],
-  fetchImpl: typeof fetch,
-): Promise<MlflowRun[]> {
-  return parseRuns(
-    await post(base, 'runs/search', {
-      experiment_ids: experimentIds,
-      filter: `tags.project = '${project}' AND attributes.status = 'FINISHED'`,
-      order_by: [`metrics.\`${metric.key}\` ${metric.goal === 'max' ? 'DESC' : 'ASC'}`, 'attributes.start_time DESC'],
-      max_results: 1000,
-      run_view_type: 'ACTIVE_ONLY',
-    }, fetchImpl),
-  );
+/** Every run tagged `project=<project>`, any status (F-19: unfinished parents and children are shown too). */
+function searchRuns(base: string, project: string, experimentIds: string[], fetchImpl: typeof fetch): Promise<MlflowRun[]> {
+  return searchAllRuns(base, {
+    experiment_ids: experimentIds,
+    filter: `tags.project = '${project}'`,
+    order_by: ['attributes.start_time DESC'],
+    max_results: 1000,
+    run_view_type: 'ACTIVE_ONLY',
+  }, fetchImpl);
 }
 
 function toOk(pick: PickedRun, experiments: readonly MlflowExperiment[], base: string): BestRun {
@@ -126,13 +97,15 @@ function toOk(pick: PickedRun, experiments: readonly MlflowExperiment[], base: s
   };
 }
 
-/** Best finished run tagged exactly `project=<project>`. Throws only on a programming error (invalid input). */
-export async function bestRun(
+type Fetched = { kind: 'fetched'; experiments: MlflowExperiment[]; runs: MlflowRun[] };
+
+/** One experiments + runs fetch for both the card best and the run groups; failures are reported, never thrown. */
+async function fetchProject(
   project: string,
   metric: Metric,
-  fetchImpl: typeof fetch = fetch,
-  env: Env = process.env,
-): Promise<BestRun> {
+  fetchImpl: typeof fetch,
+  env: Env,
+): Promise<Fetched | { kind: 'no-runs' } | { kind: 'unavailable'; reason: string }> {
   // Both values are interpolated into MLflow filters: validation, not escaping, keeps them safe (F-7, D-13).
   if (!isValidName(project)) throw new Error(`bestRun: invalid project name ${JSON.stringify(project)}`);
   if (!METRIC_KEY_RE.test(metric.key)) throw new Error(`bestRun: invalid metric key ${JSON.stringify(metric.key)}`);
@@ -140,10 +113,8 @@ export async function bestRun(
   try {
     const experiments = await projectExperiments(base, project, fetchImpl);
     if (experiments.length === 0) return { kind: 'no-runs' };
-    const ids = experiments.map((e) => e.experiment_id);
-    const pick = pickBest(await searchRuns(base, project, metric, ids, fetchImpl), metric);
-    if (pick.kind !== 'picked') return pick;
-    return toOk(pick, experiments, base);
+    const runs = await searchRuns(base, project, experiments.map((e) => e.experiment_id), fetchImpl);
+    return { kind: 'fetched', experiments, runs };
   } catch (err) {
     const reason = (err as Error).message;
     reportUnavailable(project, reason);
@@ -151,13 +122,45 @@ export async function bestRun(
   }
 }
 
-/** The one call pages make: no `metric` → no MLflow request at all (U-8). */
+function bestOf(fetched: Fetched, metric: Metric, filter: BestFilter, env: Env): BestRun {
+  const pick = pickBest(eligibleForBest(fetched.runs, filter), metric);
+  return pick.kind === 'picked' ? toOk(pick, fetched.experiments, mlflowUri(env)) : pick;
+}
+
+/** Best eligible run tagged exactly `project=<project>` (see `eligibleForBest`). Throws only on invalid input. */
+export async function bestRun(
+  project: string,
+  metric: Metric,
+  fetchImpl: typeof fetch = fetch,
+  env: Env = process.env,
+  filter: BestFilter = { kind: 'legacy' },
+): Promise<BestRun> {
+  const fetched = await fetchProject(project, metric, fetchImpl, env);
+  return fetched.kind === 'fetched' ? bestOf(fetched, metric, filter, env) : fetched;
+}
+
+/** What a page shows for a card: the best run and the run groups. No `metric` → no MLflow request at all (U-8). */
+export async function projectView(
+  card: Pick<Card, 'name' | 'metric'>,
+  filter: BestFilter,
+  fetchImpl: typeof fetch = fetch,
+  env: Env = process.env,
+): Promise<ProjectView> {
+  if (!card.metric) return { state: { kind: 'no-metric' }, groups: [] };
+  await warmUp(fetchImpl, 30_000, env);
+  const fetched = await fetchProject(card.name, card.metric, fetchImpl, env);
+  if (fetched.kind !== 'fetched') return { state: fetched, groups: [] };
+  return {
+    state: bestOf(fetched, card.metric, filter, env),
+    groups: groupRuns(fetched.runs, fetched.experiments, card.metric, filter),
+  };
+}
+
 export async function metricState(
   card: Pick<Card, 'name' | 'metric'>,
   fetchImpl: typeof fetch = fetch,
   env: Env = process.env,
+  filter: BestFilter = { kind: 'legacy' },
 ): Promise<MetricState> {
-  if (!card.metric) return { kind: 'no-metric' };
-  await warmUp(fetchImpl, 30_000, env);
-  return bestRun(card.name, card.metric, fetchImpl, env);
+  return (await projectView(card, filter, fetchImpl, env)).state;
 }

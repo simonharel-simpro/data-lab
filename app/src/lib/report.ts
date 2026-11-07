@@ -11,3 +11,11 @@ export function reportUnavailable(project: string, reason: string): void {
 export function readReport(): Map<string, string> {
   return (globalThis.__datalabBuildReport ??= new Map<string, string>());
 }
+
+/** Record that `project`'s run.json is invalid, under its own key so it never overwrites the MLflow entry (F-20). */
+export function reportInvalidLedger(project: string, reason: string): void {
+  const report = readReport();
+  const key = `run.json:${project}`;
+  if (report.get(key) !== reason) console.warn(`[ledger] ${project}: ${reason}`);
+  report.set(key, reason);
+}

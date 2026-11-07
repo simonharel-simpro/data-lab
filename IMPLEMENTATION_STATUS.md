@@ -96,3 +96,53 @@ context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller mus
 - ⏳ Full sweeps, `decide` into PROJECT.md, human ratings — deferred to the user (approved)
 
 Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall; likely coupled with ESC-2-1 unpinned route).
+
+# experiment — trouvetou experiment methodology (`IMPLEMENTATION_PLAN_EXPERIMENT*.md`, loop on `feat/experiment`)
+
+| Phase | Title | Status | Branch |
+|---|---|---|---|
+| 1 | Contract + ledger, split, tags, trial helpers | ✅ landed on feat/experiment (/check clean, fix-check 1 iter) | `phase-1-contract-ledger` |
+| 2 | Hydra gate, ledger hook, wiring, CI matrix | ✅ landed on feat/experiment @ 24a40a0 (/check clean, fix-check 3 iter) | `phase-2-gates-wiring` |
+| 3 | Hydra template, package name, scaffold-and-gate | ✅ landed on feat/experiment @ a46c76e (/check clean, fix-check 1 iter) | `phase-3-hydra-template` |
+| 4 | `/experiment` skill | ✅ landed on feat/experiment @ 8480b2b (/check clean first pass) | `phase-4-experiment-skill` |
+| 5 | App stepper + run groups + card best | ✅ landed on feat/experiment @ f75d686 (/check clean first pass) | `phase-5-app-stepper` |
+
+## experiment Phase 1 — Contract + ledger, split, tags, trial helpers
+
+**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ gate exit 0 (pre-push hooks, pyright 0, ruff, lint-imports 1 kept, pytest 174 passed, coverage 94 %)
+- New: `contracts/{EXPERIMENT.md,milestones.json,mlflow_tags.json,run_ledger_vectors.json}`, `datalab/{split,ledger_model,ledger_rules,ledger_ops,ledger_checks,ledger,tags,tracking_queries}.py`, tests `test_split`, `test_ledger`, `test_ledger_io`, `ledger_support`.
+- Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
+- Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
+- Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).
+
+## experiment Phase 5 — App stepper + run groups + ledger-aware card best (read-only)
+
+**Implemented:** 2026-11-07 · **Agent:** general-purpose (Astro/TS) · **Tooling (verified):** `npm run check` 0/0/0, `npm test` 114/114, line coverage 99.75 % (floor 70), pre-commit pre-push green, CI build steps run locally (fixture build, strict export refuses the invalid ledger)
+- New: `app/src/lib/{ledger,run-groups,best,tags}.ts` + tests, `components/{Stepper,RunGroups}.astro`, `test-fixtures/ledger/{valid,invalid}`.
+- Modified: `mlflow-rest.ts` (tags, status, paging), `mlflow.ts` (`projectView`, all-status query), `report.ts`, `export-guard.ts`, pages, `.pre-commit-config.yaml` (gates-app files), `ci.yml` (2 build steps), ARCHITECTURE.md.
+- Tests: every planned test seen red; mutation sweep 28/29 (the survivor is equivalent). Existing `mlflow.test.ts` order_by assertion changed as planned.
+- Decision: `Step.decision` admits `redo` (only Python's I-3 refuses it); nested-run children shown as orphans.
+
+## experiment Phase 4 — `/experiment` skill
+
+**Implemented:** 2026-11-07 · **Agent:** general-purpose (+ python-fastapi for the eval hint fix) · **Acceptance:** dry-run walkthrough 19/19 pass (scratch `projects/exp-dryrun`, isolated sqlite MLflow, torn down; config files restored)
+- New: `.claude/skills/experiment/SKILL.md` (204 lines), `references/dispatch-briefs.md` (9 briefs, return citations checked), `references/agent-overrides.md`.
+- Also fixed (user decision, recorded deviation): template eval rerun hint printed `python -m <pkg>` instead of `<pkg>.eval`; `test_u_27` now asserts the full command (seen red).
+- ESC-4-1 settled by the user: on archive, `split.json` moves with `run.json`; the new experiment re-freezes.
+- Gaps for a later cycle (IMPLEMENTATION_NOTES.md): no ledger op sets `dataset`/`features` (the skill goes through `ledger.parse` on a merged dump), so a `set_dataset`/`set_features` op would remove that workaround.
+
+## experiment Phase 3 — Hydra template, package name, scaffold-and-gate
+
+**Implemented:** 2026-11-07 · **Agent:** python-fastapi · **Tooling (agent run, verified by /check):** pre-commit pre-push green, datalab pytest 207 passed (cov 94.1 %), pyright 0, scaffold test (`-m scaffold`, real `uv lock`) 1 passed, template tests 37 passed (cov 87.7 %)
+- New: the template `configs/` (train, eval + 4 groups), `src/__DATALAB_PACKAGE__/{paths,candidates,split,scoring,grid,prepare,train,eval}.py`, template tests + fixtures, `.gitignore`, `packages/datalab/tests/test_scaffold.py`.
+- Modified: `project.py` (`package_name`), `new_project.py` (package rename, path leftover scan), template `pyproject.toml`/`PROJECT.md`/`README.md`, datalab `pyproject.toml` (scaffold marker), `ruff.toml`, `ci.yml` (scaffold step), ARCHITECTURE.md.
+- Tests: all planned tests red first (missing module); 11 also mutation-checked. `test_u_3` tightened (`data.score_on=train`), `test_grid_expand_sorts_param_names_before_the_product` added; `test_model_override_dropped_per_candidate` cannot fail (Hydra keeps the last `model=`), kept as specified.
+- Deviations (IMPLEMENTATION_NOTES.md): scaffold test copies `ruff.toml`; `# isort: split` in template tests; eval hint = family defaults + winner params; a very long project name may re-wrap a template line under `ruff format`.
+
+## experiment Phase 2 — Hydra gate, ledger hook, wiring, CI matrix
+
+**Implemented:** 2026-11-07 · **Agent:** python-fastapi · **Tooling (agent run):** pre-commit default + pre-push exit 0, pyright 0, ruff, lint-imports, pytest green (coverage 93.6 %)
+- New: `tools/check_hydra_project.py` (vendored, sha-checked), `tools/pre_commit_checks/hydra_gate.py`, `datalab/wiring.py`, tests `test_wiring`, `test_hydra_gate`.
+- Modified: `new_project.py` (wiring), `conftest.py` (`wired_repo`), `.pre-commit-config.yaml`, `.github/workflows/ci.yml` (matrix `projects`, fail-fast false), `ruff.toml`, ARCHITECTURE.md.
+- Tests: 17 of 21 seen red via targeted mutation; 4 not mutated (two-configs F-1 entry, outside-projects paths, voice-arch byte-equality, missing marker).
+- Follow-up for the user: rename required CI checks (`pilot`/`voice-arch` → `project (mini-rag)`/`project (voice-arch)`).

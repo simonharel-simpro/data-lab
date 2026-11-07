@@ -1,11 +1,14 @@
 """Project identity and naming. Pure: no weaviate/mlflow import, so it loads anywhere (app tooling, tests)."""
 
 import hashlib
+import importlib.metadata
 import json
+import keyword
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 import yaml
 
@@ -16,6 +19,8 @@ NAME_RE: Final = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 RESERVED: Final = frozenset(
     {"test", "datalab", "datalab-test", "template", "y", "n", "yes", "no", "on", "off", "true", "false", "null"}
 )
+# Identical literal in app/src/lib/card.ts; read with fullmatch for the same "$" reason as NAME_RE.
+METRIC_KEY_RE: Final = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 _UNSAFE: Final = re.compile(r"[^0-9A-Za-z]")  # Demo-RAG index.py: Weaviate class names are [A-Z][_0-9A-Za-z]*
 _FRONTMATTER: Final = re.compile(r"\A---[ \t]*\n(.*?)^---[ \t]*$", re.DOTALL | re.MULTILINE)
 
@@ -38,6 +43,19 @@ def validate_name(name: object) -> str:
     if name in RESERVED:
         raise ProjectError(f"project name {name!r} is reserved")
     return name
+
+
+def package_name(name: str) -> str:
+    """The import name of a project: `name` with dashes as underscores, refused when it would shadow something (U-25).
+
+    Refused: a Python keyword, a stdlib module, an import name installed in this env (where `datalab-new` runs), or
+    one of the template's Hydra deps (`hydra`, `omegaconf`, `antlr4`).
+    """
+    pkg = validate_name(name).replace("-", "_")
+    taken = set(importlib.metadata.packages_distributions()) | {"hydra", "omegaconf", "antlr4"}
+    if keyword.iskeyword(pkg) or pkg in sys.stdlib_module_names or pkg in taken:
+        raise ProjectError(f"project name {name!r} gives the package {pkg!r}, which shadows a keyword or module")
+    return pkg
 
 
 def repo_root(start: Path | None = None) -> Path:
@@ -75,6 +93,29 @@ def _frontmatter(card: Path) -> dict[object, object]:
     if not isinstance(data, dict):
         raise ProjectError(f"{card}: frontmatter must be a mapping, got {type(data).__name__}")
     return data
+
+
+@dataclass(frozen=True)
+class CardMetric:
+    key: str
+    goal: Literal["max", "min"]
+
+
+def card_metric(project_dir: Path) -> CardMetric:
+    """The `metric: {key, goal}` of the project card; anything else is a `ProjectError` naming the card."""
+    card = project_dir / "PROJECT.md"
+    try:
+        metric = _frontmatter(card).get("metric")
+    except OSError as err:
+        raise ProjectError(f"{card}: cannot read: {err}") from err
+    if not isinstance(metric, dict):
+        raise ProjectError(f"{card}: frontmatter needs metric: {{key, goal}}")
+    key, goal = metric.get("key"), metric.get("goal")
+    if not isinstance(key, str) or not METRIC_KEY_RE.fullmatch(key):
+        raise ProjectError(f"{card}: metric.key must match {METRIC_KEY_RE.pattern}, got {key!r}")
+    if goal not in ("max", "min"):
+        raise ProjectError(f"{card}: metric.goal must be 'max' or 'min', got {goal!r}")
+    return CardMetric(key=key, goal=goal)
 
 
 def load(start: Path | None = None, *, root: Path | None = None) -> Project:

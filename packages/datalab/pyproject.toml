@@ -36,9 +36,18 @@ root_package = "datalab"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "project.py stays pure (no weaviate/mlflow)"
+name = "pure modules stay pure (no weaviate/mlflow)"
 type = "forbidden"
-source_modules = ["datalab.project"]
+source_modules = [
+    "datalab.project",
+    "datalab.split",
+    "datalab.ledger_model",
+    "datalab.ledger_rules",
+    "datalab.ledger_ops",
+    "datalab.ledger_checks",
+    "datalab.ledger",
+    "datalab.tags",
+]
 forbidden_modules = ["weaviate", "mlflow"]
 
 [tool.ruff]
@@ -49,8 +58,11 @@ extend-select = ["S"]        # already selected at the root; restated so the gat
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: needs the live data-lab stack or uv + a populated cache"]
-addopts = "-ra --strict-markers -m 'not integration'"
+markers = [
+    "integration: needs the live data-lab stack or uv + a populated cache",
+    "scaffold: scaffolds a project with a real uv lock (network); the CI checks job runs it",
+]
+addopts = "-ra --strict-markers -m 'not integration and not scaffold'"
 
 [tool.coverage.run]
 branch = true

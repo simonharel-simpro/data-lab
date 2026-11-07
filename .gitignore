@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .coverage
+# datalab.ledger.write_atomic temp files (F-6)
+*.json.tmp
 
 # Local config (keep .env.example tracked)
 .env

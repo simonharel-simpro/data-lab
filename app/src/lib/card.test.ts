@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardSchema } from './card.ts';
+import { readFileSync } from 'node:fs';
+import { cardSchema, METRIC_KEY_RE } from './card.ts';
 
 const base = { name: 'p', title: 'T', status: 'idée' };
 
@@ -34,4 +35,11 @@ test('unknown status rejected', () => {
 test('reserved or malformed name rejected', () => {
   assert.equal(cardSchema.safeParse({ ...base, name: 'no' }).success, false);
   assert.equal(cardSchema.safeParse({ ...base, name: 'Bad_Name' }).success, false);
+});
+
+test('F-18: METRIC_KEY_RE matches the Python literal', () => {
+  const py = readFileSync(new URL('../../../packages/datalab/src/datalab/project.py', import.meta.url), 'utf8');
+  const m = /METRIC_KEY_RE: Final = re\.compile\(r"(.+)"\)/.exec(py);
+  assert.ok(m, 'METRIC_KEY_RE literal not found in project.py');
+  assert.equal(m[1], METRIC_KEY_RE.source);
 });

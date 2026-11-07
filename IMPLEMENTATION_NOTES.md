@@ -223,6 +223,67 @@
   and C ended `timeout` in a loop where the caller's STT garbles the agent's read-back (`512-550-148`); the 420 s
   limit and the long Markdown read-backs decide the sweep, not the architecture.
 
+## experiment Phase 1
+
+- Plan assumed: `ledger.py` holds the V-1..V-3 checks and `tests/test_ledger.py` holds every ledger test.
+  Territory was: `ledger.py` reached 215 lines (cap 200) and the ledger tests exceed the 300-line test-file convention.
+  I did: moved the V checks to a new `datalab/ledger_checks.py` (added to the import-linter "pure" list), split the tests into `test_ledger.py` + `test_ledger_io.py` and a shared `tests/ledger_support.py`.
+  One-off or pattern?: one-off (the plan's file list under-sized `ledger.py`).
+- Plan assumed: `schema_version: Literal[1]` refuses `true` (vector `schema-version-true`).
+  Territory was: pydantic's `Literal[1]` accepts `True` even in strict mode (`True == 1`).
+  I did: a `mode="before"` field validator that refuses a bool.
+  One-off or pattern?: likely recurs: any `Literal[int]` field guarded by a "bool refused" vector.
+- Plan assumed: `produce`, `redo`, `decide` are specified only for the listed cases.
+  Territory was: silent on `produce` of a validated milestone, `redo` of a milestone that has not started, `redo_from` with a non-redo decision, and a winner passed outside "validate modeling".
+  I did: refuse each with a `LedgerError` (a silent un-validation or a dropped argument would corrupt the ledger); none is exercised by a planned test, `test_produce_refuses_*` / `test_decide_*` match the messages.
+  One-off or pattern?: one-off.
+- Plan assumed: "`GroupBound` => `grouped` + `group_key`" only.
+  Territory was: the planned test `test_grouped_without_group_key_rejected` gives a grouped split with index lists.
+  I did: `strategy: grouped` always needs a `group_key` (not only with group bounds).
+  One-off or pattern?: one-off.
+- Plan assumed: `test_trial_slot_freed_when_cost_log_fails` ("a new trial opens, and the parent still gets `n_children` "1"").
+  Territory was: ambiguous: a second trial under the same parent would make it "2".
+  I did: read it as two parents: the first parent (error propagating through `tracked_run`) still tags `n_children "1"`, and a second parent opens its own trial, so the slot is proven free.
+  One-off or pattern?: one-off.
+- Plan assumed: the functions `test_access_problem` / `test_access_allowed` are plain helpers.
+  Territory was: their `test_` prefix makes pytest collect them when imported into a test module.
+  I did: set `__test__ = False` on both; the tests call them through `datalab.ledger`.
+  One-off or pattern?: likely recurs (any helper named `test_*` in a contract).
+- Plan assumed: `project_spend`, `stale_runs`, `close_runs` need nothing beyond the Settings URI.
+  Territory was: `tracking._bound_http_retries` (outage bounding) lives in `tracking`, which imports `tracking_queries`; importing it back would be circular.
+  I did: left the three queries on MLflow's own HTTP defaults; the skill calls `preflight` first.
+  One-off or pattern?: one-off; flagged for Phase 4.
+- Plan assumed: `produce(scoping)` -> `decide(CORRECT)` -> `produce(scoping)` -> `decide(REDO)` is the sequence that trips I-8 (the `/check` finding).
+  Territory was: `produce` after CORRECT is legal and resets the decision to null, so that sequence always passed; the bug is `decide(REDO)` directly after `decide(CORRECT)` (the milestone still held `correct` when `_revalidate` ran).
+  I did: `decide` clears the milestone decision before `_revalidate` for REDO; added `test_redo_directly_after_correct_resets_milestones` (red before the fix) next to the requested `test_redo_after_correct_resets_milestones` (green both before and after, a regression guard).
+  One-off or pattern?: one-off.
+- Plan assumed: the I-12 empty-artifact check is a new vector plus a direct test.
+  Territory was: `checked_by` on every other I-12 vector is `["python"]` (the app does not check I-12 yet).
+  I did: added `artifact-empty` with `checked_by: ["python"]`; I-12 also refuses a path normalizing to `.` (`""`, `.`, `./`).
+  One-off or pattern?: one-off.
+- Plan assumed: `test_f_6` injects the failure by patching `json.dumps`.
+  Territory was: the global patch fired inside `_revalidate`, before any file was touched, so the test proved nothing.
+  I did: patch `os.replace` and `os.fsync` instead (both fire after the tmp file is written); renamed it `test_f_6_write_failure_leaves_run_json_byte_identical_and_no_tmp`; red when the `tmp.unlink` cleanup is removed.
+  One-off or pattern?: one-off.
+- Plan assumed: the tracking tests fit in `tests/test_tracking.py`.
+  Territory was: 332 lines (cap 300).
+  I did: moved the trial tests (and `_parent`, `_children`, `_fail`) to `tests/test_tracking_trials.py`, shared builders in `tests/tracking_support.py`; names and assertions unchanged.
+  One-off or pattern?: one-off.
+
+## experiment Phase 2
+
+- Plan assumed: `plan()` can index the parsed YAML directly after the marker splice.
+  Territory was: a YAML that parses but lacks `jobs.projects` (or `repos`) raised a bare `KeyError`/`TypeError`, escaping `main`'s `except ProjectError`.
+  I did: `_hook_ids` / `matrix_entries` convert those to `ProjectError("wiring target has an unexpected shape: ...")` and require the matrix to be a list; `matrix_entries` is public so the non-list branch is unit-tested (it cannot be reached through marker text, which would be invalid YAML).
+  One-off or pattern?: pattern — any parsed-config lookup at a trust boundary.
+- Plan assumed: a duplicate hook id inside a datalab-new region is merged silently.
+  Territory was: `_merge_blocks` overwrote the first block.
+  I did: raise `ProjectError("duplicate hook id ...")`.
+  One-off or pattern?: one-off.
+- The two `# pyright: ignore[reportIndexIssue]` lines (and a third on `matrix_entries`' return) in `wiring.py` were removed in the /check follow-up: `_at` walks the parsed YAML with `isinstance` narrowing (one justified `cast` for `dict[Unknown, Unknown]`) and raises `ProjectError` on a wrong shape.
+- Plan assumed: `wiring.py` keeps the parity checks. Territory was: the typed helpers pushed it to 217 lines (limit 200). I did: moved `parity_problems` / `_ci_problems` / `_project_names` into `wiring_parity.py`, made `hook_ids` public for it, and switched the test import. One-off or pattern?: one-off.
+- Plan assumed: `_ci_problems` could still default a missing matrix to `[]`. Territory was: a string matrix then became a substring check. I did: use `matrix_entries`; on `ProjectError` report its message as a problem (plus the per-project missing lines) instead of raising. One-off or pattern?: one-off.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [resolved] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller. => User 2026-11-06: caller = anthropic/claude-haiku-5.5 @ temperature 0.7 (agent = google/gemini-3.5-flash-lite).
@@ -230,3 +291,71 @@
 - ESCALATION(ESC-2-2) [resolved] phase=2 tier=reversible :: OpenRouter provider pin (deepinfra,gmicloud,parasail fp8, no fallback) serves no google/gemini-3.5-flash-lite endpoint (404). Provisional A: worker LLM unpinned like the stage-1 bench (routing not reproducible). B: pick a pinned-served agent model and re-bench. C: pin to Google providers. User decides before Phase 3 sweeps. => Duplicate of ESC-2-1 (recorded twice: subagent + orchestrator); tracked there.
 - ESCALATION(ESC-3-1) [resolved] phase=3 tier=reversible :: `Outcome.PROVIDER_ERROR` is in the plan's enum but no rule assigns it, and it is outside the `exact_rate` denominator (scored + timeout + agent_lost). Provisional: never emitted; a result that carries `error` / a non-auth `http_status` is `scored` by its record (an unfinished record is simply not exact). Option A keep (provider failures count against the arch) / B emit it for a result with a non-auth HTTP status (excluded from the rate, flattering an arch whose provider path failed). User decides before the sweeps. => User 2026-11-06: option A — provider errors mid-call count against the arch (PROVIDER_ERROR not emitted).
 - ESCALATION(ESC-3-2) [resolved] phase=3 tier=reversible :: Both live calls (arch A, `self_correction`, unpinned worker LLM) ended `timeout` at the same point: the agent never answers the address turn ("88 Cedar Lane, Austin, TX 78701"): the user turn is committed, a preemptive generation starts, then no tool call, no reply, no error event for 3 minutes. Text mode with the same turns answers at once (so not the prompt or tools). Suspects: an LLM stream that hangs or comes back empty on the unpinned OpenRouter route (ESC-2-1), or a LiveKit preemptive-generation race. If it recurs a full sweep is mostly timeouts. User decides: investigate with LLM request logging, pin a route, or disable `preemptive_generation` in `TURN_HANDLING` before the sweeps. => Root cause (evidence from a temporary LLM/TTS/session-state diagnostic, since removed): the LLM stream ended with `text=0, tools=0, chunks=1, completion_tokens=0` (an empty completion, also on the Google-pinned route); LiveKit treats that as a finished turn, so the agent goes idle (`agent=listening`, no speech task, no error) until the caller gives up. Seen 2 of 2 diagnosed calls, always on a turn right after the caller's self-correction. Not preemptive generation (disabled in a first test: still stalled). Fixed by `llm_guard.retry_on_empty_completion` (retryable `APIConnectionError`, LiveKit's own retry, then a loud error). Also kept: preemptive generation explicitly off.
+- ESCALATION(ESC-4-1) [resolved] phase=4 tier=reversible :: U-17: on run.json archive, is split.json moved alongside (new experiment must re-freeze; provisional, SKILL.md §11) or left in place (re-freeze resets the test-look counter on an already-read test set)? => user 2026-11-07: split.json is archived with run.json; the new experiment re-freezes (SKILL.md §11)
+
+## Experiment Phase 3
+
+- Plan assumed: the scaffold test needs `fake_repo` + the real `packages/datalab`, `tools/`, `contracts/`.
+  Territory was: the template's `[tool.ruff] extend = "../../ruff.toml"` fails (`ruff check .`) without the repo-root `ruff.toml`, which `fake_repo` does not copy.
+  I did: `test_scaffold._build_repo` also copies `ruff.toml`.
+  One-off or pattern?: one-off.
+- Plan assumed: `known-first-party = ["__DATALAB_PACKAGE__"]` keeps import order stable between the template and a generated project.
+  Territory was: ruff also treats `datalab` as first-party (the `src` roots), so `datalab` vs the package sorts differently per project name (`__DATALAB_PACKAGE__` < `datalab` < `dev`); `tests` is first-party inside a project but third-party from the repo root.
+  I did: in the template tests, `datalab` imports come first, then a `# isort: split` line, then the package imports; shared test helpers are imported relatively (`from .conftest import ...`). Trailing-comma/short-line habits keep `ruff format --check` stable for names up to about 25 characters; a longer name can still re-wrap a template line.
+  One-off or pattern?: likely recurs — candidate for a rule on any template with a renamed package.
+- Plan assumed: `test_u_3_train_entry_refuses_test_partition` (`data.partitions=[train,test]` -> 2) proves the test-partition guard.
+  Territory was: that input also leaves the default `score_on` (`val`) outside the partitions, so it exits 2 with the guard removed.
+  I did: kept the planned case and added `data.score_on=train`, which only the guard can refuse (seen red with the guard removed).
+  One-off or pattern?: likely recurs — a refusal test whose input trips two refusals.
+- Plan assumed: eval's `config_sha256` hint lists "the winner's family and params" from the winner run.
+  Territory was: train logs only the grid params (`log_params(combo.params)`), so a winner without a grid has none, yet U-27 expects `model=dummy model.value=`.
+  I did: the hint is the family's current composed defaults overridden by the winner child's logged params, keys sorted (`model=offset model.offset=...` is contiguous as U-27 expects). If a default changed since training the hint shows the new default; the hash check still refuses a wrong rerun.
+  One-off or pattern?: one-off (logging all model params on the child would make the hint exact).
+- Plan assumed: dropping the user's `model=` override per candidate changes the result (`test_model_override_dropped_per_candidate`).
+  Territory was: Hydra takes the last `model=` override, so with the candidate's choice appended the test is green even without the filter.
+  I did: kept the filter and the planned test as specified; the test cannot distinguish them.
+  One-off or pattern?: one-off.
+
+## Experiment Phase 4
+
+- Plan assumed: the MLflow twin calls `tracking.project_spend(p, s)` / `stale_runs(p, ...)` / `close_runs(p, ...)` with `p = load(...)`.
+  Territory was: all three take `project: str` (`tracking_queries.py`); a `Project` fails the name check.
+  I did: the snippet passes `p.name`.
+  One-off or pattern?: one-off.
+- Plan assumed: `ledger.Winner(candidate, run_id)`.
+  Territory was: `Winner` is a strict pydantic model; positional arguments raise `TypeError`.
+  I did: the skill uses `ledger.Winner(candidate="<family>", run_id="<id>")`.
+  One-off or pattern?: one-off.
+- Plan assumed: the ops produce / decide / freeze_split / record_data / redo cover every ledger change.
+  Territory was: no op sets `dataset` or `features`, and I-11 refuses `decide(l, "dataset", VALIDATE, ...)` while `dataset` is null (seen in the dry run). The dataset is validated before it is acquired, so its hash cannot be a file hash.
+  I did: the skill sets them with the public `ledger.parse(json.dumps(l.model_dump(mode="json") | {...}))` (re-checks every invariant, no `model_copy`); `dataset.hash` = the Hub revision sha that `dataset.md` records and the acquisition downloads.
+  One-off or pattern?: likely recurs: a `set_dataset` / `set_features` op in `ledger_ops` would remove the workaround.
+- Plan assumed: deliverables only for scoping, dataset, eda, audit, tracking, report.
+  Territory was: `produce` needs at least one existing artifact (I-4, V-1) for cleaning, features and modeling too, and their specialists may not write `src/`.
+  I did: `cleaning.md` (+ `data/clean/data.jsonl` after the code route), `features.md`, `modeling.md` (+ the experiment and grid YAML).
+  One-off or pattern?: one-off.
+- Plan assumed: the ledger snippet is `python -c "..."`.
+  Territory was: the expert's words go into the snippet as the note; inside a double-quoted shell string a `$`, a backtick or a `"` is expanded or breaks the command (French notes carry apostrophes too).
+  I did: the same body in a quoted heredoc (`python - <<'PY'`) with triple-quoted notes; the dry run passed a note with `'`, `$` and `"` verbatim.
+  One-off or pattern?: likely recurs: any skill that pastes user text into a shell command.
+- Plan assumed: `python tools/pre_commit_checks/hydra_gate.py projects/<name>`.
+  Territory was: this machine has only `python3` on PATH (the hook runs in pre-commit's own venv).
+  I did: the skill says `python3`.
+  One-off or pattern?: one-off.
+- Plan assumed: eval's refusal prints the exact rerun form.
+  Territory was: `templates/project/src/__DATALAB_PACKAGE__/eval.py:112` prints `python -m <pkg> model=...` (`__package__`, no `.eval`); seen in the dry run as `python -m exp_dryrun model=dummy model.value=1.0`.
+  I did: the skill takes the overrides from the hint and always runs `python -m <pkg>.eval`; the template is not changed in this Markdown-only phase.
+  One-off or pattern?: one-off (a one-word template fix: `{__package__}.eval`).
+- Plan assumed: the acquired data lands where the split and `paths.data_file` expect it.
+  Territory was: the plan names no acquisition path, and a comparison has no cleaning milestone to write `data/clean/data.jsonl`.
+  I did: acquisition writes `data/raw/data.jsonl`; a comparison also copies it unchanged to `data/clean/data.jsonl`.
+  One-off or pattern?: one-off.
+- The eval hint bug (deviation 1: `python -m <pkg>` instead of `python -m <pkg>.eval`) is fixed in phase 4 at the user's request; `test_u_27` asserts the full command.
+- ESC-4-1 was settled by the user (2026-11-07): on archive, `split.json` is moved with `run.json`, and the new experiment freezes its own split.
+
+## Experiment Phase 5 (app stepper + run groups)
+
+- Plan assumed: `Step.decision: 'validate' | 'correct' | null` (I-3: a milestone's decision is never `redo`).
+  Territory was: the app checks only schema + U-13 + I-1, and the schema admits `redo` on a milestone, so a ledger that breaks only Python's I-3 (vector `produced-with-redo`) parses as valid in the app.
+  I did: widened `Step.decision` to `Decision | null` and render the value as is, rather than coercing `redo` to `null` (a silent fallback); display-only.
+  One-off or pattern?: likely recurs — any app type narrowed by a Python-only invariant has the same gap.

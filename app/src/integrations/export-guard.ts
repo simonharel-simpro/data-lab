@@ -2,12 +2,20 @@ import type { AstroIntegration } from 'astro';
 import { readReport } from '../lib/report.ts';
 import { isStrictExport, type Env } from '../lib/config.ts';
 
-/** Log one line per card whose metrics were unavailable; with DATALAB_STRICT_EXPORT=1 any such card fails (F-1). */
+const LEDGER_KEY = 'run.json:';
+
+/**
+ * Log one line per card whose metrics were unavailable (F-1) or whose run.json is invalid (F-20); with
+ * DATALAB_STRICT_EXPORT=1 any entry fails the export.
+ */
 export function checkReport(report: ReadonlyMap<string, string>, env: Env, log: (line: string) => void = console.warn): void {
-  for (const [project, reason] of report) log(`metrics unavailable for '${project}': ${reason}`);
+  for (const [key, reason] of report) {
+    if (key.startsWith(LEDGER_KEY)) log(`run.json invalid for '${key.slice(LEDGER_KEY.length)}': ${reason}`);
+    else log(`metrics unavailable for '${key}': ${reason}`);
+  }
   if (isStrictExport(env) && report.size > 0) {
     const names = [...report.keys()].join(', ');
-    throw new Error(`DATALAB_STRICT_EXPORT=1: export refused, MLflow metrics unavailable for ${names}`);
+    throw new Error(`DATALAB_STRICT_EXPORT=1: export refused, metrics unavailable or run.json invalid for ${names}`);
   }
 }
 

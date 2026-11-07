@@ -40,9 +40,16 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 compose.yaml            shared infra: weaviate, t2v-transformers, mlflow, livekit (profile `voice`; 127.0.0.1 only)
 infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys: `LIVEKIT_KEYS` from the env)
 .env.example            DATALAB_* connection settings (ports, tracking URI)
-contracts/              cross-side contracts (name_vectors.json) read by the Python and app test suites
-packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A)
-templates/project/      template copied by `datalab-new` (Phase 2A)
+contracts/              cross-side contracts read by the Python and app test suites: name_vectors.json, EXPERIMENT.md,
+                        milestones.json, run_ledger_vectors.json, mlflow_tags.json
+packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A); experiment ledger:
+                        split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries,
+                        wiring (text-level hook + CI matrix wiring for `datalab-new`)
+                        wiring_parity (test-time check that every projects/* has its hook stanzas + CI matrix entry)
+templates/project/      template copied by `datalab-new` (Phase 2A; Hydra experiment code since experiment Phase 3):
+                        configs/{train,eval}.yaml + groups paths/ data/ model/ experiment/ (hparams_search/ optional),
+                        src/__DATALAB_PACKAGE__/{paths,candidates,split,scoring,grid,prepare,train,eval}.py (renamed to
+                        the project's package), tests/ (+ fixtures/), .gitignore, PROJECT.md, README.md
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
@@ -54,10 +61,13 @@ app/                    read-only Astro presentation app (Phase 2B): src/lib (pu
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
 tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
-tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
+tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency;
+                        hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root
+tools/check_hydra_project.py  vendored verbatim from trouvetou (sha256 in its header): Hydra is wired, not just shaped
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
-                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); voice-arch gates + pip-audit (job `voice-arch`); Python gates `--locked`
+                        fixtures (job `app`); one matrix job `projects` (fail-fast off; mini-rag, voice-arch): gates + pip-audit, Hydra gate, ledger
+                        validate; Python gates `--locked`
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
@@ -110,6 +120,31 @@ def collection_name(project: str, *parts: str) -> str:
 ### Project (`projects/<name>/`)
 - **Does:** owns its data, code, env and `PROJECT.md` card; talks to the infra only through `datalab`.
 - **Must NOT:** hardcode ports or URIs; write into another project's collections or experiments.
+
+### Project template (`templates/project`, experiment Phase 3)
+- **Does:** `train` and `eval` (`python -m <pkg>.train|eval`, each `@hydra.main`) own all I/O: config, split.json,
+  data file, MLflow. `scoring`, `candidates`, `grid` are pure (an import-linter contract forbids mlflow, datalab, hydra,
+  omegaconf there); `split` cuts the data by the frozen split and refuses the test partition unless `eval` opts in;
+  `prepare` holds the pre-run checks. `<pkg>` is `package_name(name)`: the dashed name with underscores, refused when
+  it shadows a keyword, a stdlib module or an installed import name.
+- **Must NOT:** log `metric.key` or `cost_usd` on a parent run; read the test partition from `train`; run
+  `--multirun` (the grid runs in-process, D-4); use `${oc.env:...}` or JSON in `configs/`.
+- **`train.run` order:** (1) project + card metric, (2) experiment name (`audit` reserved), (3) resolve the config,
+  (4) ledger and `score_on`, (5) candidates, grid and one composed model per combination (config_sha256), (6) rows,
+  split, scored partition, hashes; steps 1-6 end in exit 2 with no MLflow run. (7) settings + preflight, (8) one
+  parent run, one child per combination (a failing candidate fails its child only; an MLflow error aborts),
+  (9) metric-key rules over the finished children, (10) exit 1 if a child failed.
+- **`datalab-new` generates and gates it:** `test_f_3_scaffolded_project_passes_its_gates` (marker `scaffold`, network,
+  run by the CI `checks` job) scaffolds a project with a real lock and runs its gates.
+
+```python
+@hydra.main(version_base=None, config_path="../../configs", config_name="train")
+def main(cfg: DictConfig) -> None:
+    refuse_multirun("train")
+    code = run(cfg, tuple(HydraConfig.get().overrides.task))
+    if code:
+        raise SystemExit(code)
+```
 
 ### Voice architectures (`projects/voice-arch`, Phase 2)
 - **Does:** books a US service appointment by voice (name, phone, address, problem type, slot, read-back) in three
@@ -177,15 +212,19 @@ return _row(persona, rep, room, _classify(handle, result), result)
   transition model, each call is classified once from what the handle reports.
 
 ### App (`app/`, Phase 2B)
-- **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`) and MLflow runs
-  (REST, D-1), renders an index and one page per project.
+- **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`), each project's
+  `run.json` (optional) and MLflow runs (REST, D-1), renders an index and one page per project.
 - **Must NOT:** write anything — the app only calls MLflow's `experiments/search`, `runs/search` and `/health`; no
-  Weaviate access, no card edits; never launch runs (#4). Pages never import MLflow code other than `metricState()`.
+  Weaviate access, no card edits, no run.json writes; never launch runs (#4). Pages never import MLflow code other
+  than `projectView()` (`metricState()` stays for callers that only need the card best).
 - **Two modes, one code base (no server adapter, S-2):** `astro dev` re-reads cards and metrics per request and
   links run names to MLflow; `astro build` is a static export with metrics frozen and no MLflow link or URI (D-14).
 - **Modules:** `lib/name.ts` (`NAME_RE`, same literal as Python), `lib/card.ts` (zod schema, statuses),
-  `lib/completeness.ts` (badge), `lib/mlflow.ts` + `lib/mlflow-rest.ts` (best run, zod-checked responses),
-  `lib/report.ts` (build report), `lib/config.ts` (the only module that names the app's `DATALAB_*` env vars),
+  `lib/completeness.ts` (badge), `lib/mlflow.ts` (`projectView`: one experiments + runs fetch → card best + run
+  groups) + `lib/mlflow-rest.ts` (zod-checked responses, `runs/search` pagination), `lib/best.ts` (`pickBest`,
+  `eligibleForBest`, `bestFilter`), `lib/run-groups.ts` (parent → children, orphans, counts), `lib/tags.ts` (the
+  `mlflow_tags.json` names), `lib/ledger.ts` (run.json reader: strict schema + I-1 in Python's check order, stepper
+  steps, artifact containment; no writes), `lib/report.ts` (build report), `lib/config.ts` (the only module that names the app's `DATALAB_*` env vars),
   `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
   Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
 - **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.
@@ -193,9 +232,19 @@ return _row(persona, rep, room, _classify(handle, result), result)
   not the max over steps. Only exactly `metric.key` counts (a `smoke_score` never stands in for `score`, D-15).
 - **Build report on `globalThis` (B-1):** during `astro build` the pages and the integration load separate module
   instances, so `reportUnavailable()` writes to `globalThis.__datalabBuildReport`; the `astro:build:done` hook logs
-  it and, with `DATALAB_STRICT_EXPORT=1`, fails the build when any card's metrics were unavailable (F-1).
+  it and, with `DATALAB_STRICT_EXPORT=1`, fails the build when any card's metrics were unavailable (F-1) or its
+  run.json is invalid (key `run.json:<project>`, F-20).
+- **run.json in the app (F-18):** checked are the schema, U-13 (`kind` missing) and I-1 (milestone keys = the kind's
+  sequence, which also orders the stepper); I-2..I-15 and V-1..V-3 are Python-only (the `ledger` hook and the CI
+  `projects` step), so a ledger that breaks only those renders as valid. `checked_by` in the shared vectors says
+  which side checks what. An artifact shows `missing` unless it exists inside the project's real path (U-15).
+- **Card best (F-13, U-9, U-27):** `eligibleForBest` drops `split=test` runs; a child counts only if it and its
+  parent FINISHED; with a run.json the parent's `split_sha256`/`data_sha256` tags must equal the ledger's (a null
+  ledger hash → no best); without one a parentless FINISHED run still counts (legacy); an invalid run.json → no best.
+  The index card and the project page use the same filter, so they show the same best.
 
 ```ts
+// lib/best.ts
 export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
   if (runs.length === 0) return { kind: 'no-runs' };
   const carrying = runs.flatMap((run) => {
@@ -225,8 +274,20 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 2. Ingest: documents go to a collection named `<Pascal>_<parts>_<hash8>`; Weaviate calls `t2v-transformers` to
    embed them when the collection opts in to the module.
 3. Experiments: each run is logged to the experiment `<name>` or `<name>/<sub>` with tag `project=<name>`.
-4. The app reads `projects/*/PROJECT.md`, queries MLflow for runs with exactly `tags.project = '<name>'`, picks the
-   best run by the card's `metric {key, goal}` and renders it (links only in dev, D-14).
+4. The app reads `projects/*/PROJECT.md` and `projects/<name>/run.json` (stepper), queries MLflow for runs of any
+   status with exactly `tags.project = '<name>'` (all pages), groups them parent → children, picks the best eligible
+   run by the card's `metric {key, goal}` — on the frozen split when a run.json exists — and renders it (links only
+   in dev, D-14).
+5. `datalab-new <name>` copies the template, locks it, then `wiring.plan` computes the new text of
+   `.pre-commit-config.yaml` (declared-deps + gates stanzas) and `ci.yml` (matrix entry) between the
+   `# >>> datalab-new` markers; both are written only after the project folder is published, and
+   `wiring_parity.parity_problems` (a test) fails if any project is unwired.
+6. Experiment (template project): `train` logs one parent run (tags `entry`, `split_sha256`, `data_sha256`,
+   `score_on`; no metric) and one child per candidate x grid combination (`metric.key`, `cost_usd`, tags `candidate`,
+   `config_sha256`); the expert validates modeling with a winner child in `run.json`. At the audit `eval` checks
+   run.json (`test_access_problem`), the data hash, that the winner's parent was trained on the frozen split and data,
+   and that the composed model hashes to the winner's `config_sha256`; it then records the test look in run.json
+   and logs `test_<metric.key>` on a child of `<project>/audit`.
 
 ### Concrete example: the `mini-rag` pilot (Phase 3)
 
@@ -268,6 +329,9 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 - **Card** — `projects/<name>/PROJECT.md`: YAML frontmatter (`name`, `title`, `status`, `tags`, `data`,
   `metric {key, goal}`) plus `##` sections. Schema single-sourced in the app (D-3).
 - **Run** — an MLflow run tagged `project=<name>` in experiment `<name>` or `<name>/<sub>`.
+- **Experiment ledger** — `projects/<name>/run.json` (a `RunLedger`, kind `training|comparison`): one status per
+  milestone, the expert's decisions log, the frozen `split_sha256`, the winner and the test looks. Guarded by
+  invariants I-1..I-15 (`datalab.ledger_rules`) and checks V-1..V-3; `split.json` is its frozen split.
 - **Collection** — a Weaviate collection named from the project name + parts, hashed to avoid collisions.
 
 ## State Machines
@@ -282,6 +346,19 @@ idée ──► en cours ──► conclu
 
 Valid transitions: `idée → en cours`, `en cours → conclu`, any → `abandonné`. The required card sections grow with
 the status (enforced by the app, Phase 2B).
+
+### Experiment milestone (`run.json`, per milestone)
+
+```
+todo ──► produced ──► validated
+            │  ▲
+            └──┘  correct          (produced → produced, decision `correct`)
+```
+
+`produce` moves the current milestone `todo → produced`; `decide` validates it (current advances) or corrects it. A
+`redo` of milestone m sets m and every later milestone back to `todo` and clears the fields they fed (split, dataset,
+features, winner, data hash). Order is strict (a milestone starts only after every earlier one is validated) and
+there is no `skipped` status. Transitions live in `datalab.ledger_ops`; the log and test looks are append-only.
 
 ## Cross-phase contracts
 
@@ -300,3 +377,11 @@ the status (enforced by the app, Phase 2B).
   suites; ports → G-10 parity test (`.env.example` = Python `Settings` = compose) + an app test (`.env.example` =
   `mlflowUri({})`); the fork's `DATALAB_PORTS` (another repo) has no copy-check on purpose: drift fails safe (the
   profile is refused with `skip: ports`, nothing connects to the wrong Weaviate).
+- **Experiment methodology** (`contracts/EXPERIMENT.md`): `run.json` + `split.json` per project, validated by
+  `python -m datalab.ledger validate PATH...`. Three JSON contracts: `milestones.json` (ids, sequences, `freeze_after`),
+  `run_ledger_vectors.json` (shared valid/invalid cases) and `mlflow_tags.json` (the 11 tag names). Check order: JSON,
+  `kind` present, field errors, I-1..I-15. MLflow: one parent per invocation, one nested child per grid combination
+  via `tracked_trial` (the parent's experiment, tags `project` and `candidate` not overridable, one open trial at a
+  time); only children log `metric.key` and `cost_usd`; parents get `n_children`, `n_failed`, `failed_candidates`
+  from the `_OUTCOMES` registry. Naming: experiment `<project>/<experiment.name>`, eval in `<project>/audit`. The
+  budget (`project_spend`, RUNNING included) is shown, never enforced.

@@ -1,0 +1,2 @@
+{"strategy": "random", "seed": 0, "target": "y", "group_key": null, "time_col": null,
+ "splits": {"train": [0, 1, 2], "val": [3, 4], "test": [5, 6]}}

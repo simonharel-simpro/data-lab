@@ -10,3 +10,11 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
 
 [lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106"]
+
+[format]
+# Vendored verbatim (sha256 in its header); the hooks pass --force-exclude.
+exclude = ["tools/check_hydra_project.py"]
+
+[lint.isort]
+# The template package is a placeholder until `datalab-new` renames it: sort it as first-party like the generated one.
+known-first-party = ["__DATALAB_PACKAGE__"]

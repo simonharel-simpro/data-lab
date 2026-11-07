@@ -98,3 +98,53 @@
 | VA-26 | Human rating | `rate --rating 0` / `6`; `--rating 4` | refused before MLflow; run `voice-arch/human` with `human_rating`, never `exact_rate` | 🆕 New | voice-arch P3 |
 | VA-27 | One live call | worker + LiveKit up, `self_correction`, arch A | one `CallRow` (scored or timeout); the report holds the keys `naturalness` reads | 🆕 New | voice-arch P3 |
 | VA-28 | Full sweeps (user) | `runner --arch` a, b, c | three FINISHED full runs, `decide` table in PROJECT.md, app card shows `exact_rate` | 🆕 New (user) | voice-arch P3 |
+
+## Experiment methodology — ledger, split, trials (experiment Phase 1)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| EXP-01 | Valid ledger at scoping | `new_ledger(kind=comparison, metric="score (max)")` then `python -m datalab.ledger validate projects/<p>` | exit 0, every milestone `todo`, dataset/split_summary `null` | 🆕 New | exp Phase 1 |
+| EXP-02 | Milestone produced before its predecessor is validated | hand-edited run.json, `eda: produced` while `dataset: todo` | validate exits 1, message starts `I-` (strict order) | 🆕 New | exp Phase 1 |
+| EXP-03 | Redo resets later milestones | `decide(eda, redo)` with modeling validated | eda and every later milestone back to `todo`, decision logged | 🆕 New | exp Phase 1 |
+| EXP-04 | Frozen split edited after the freeze | change one index in split.json after modeling produced | validate exits 1 (split_sha256 mismatch) | 🆕 New | exp Phase 1 |
+| EXP-05 | Overlapping split partitions | same group in train and test | `SplitError` | 🆕 New | exp Phase 1 |
+| EXP-06 | Trouvetou-format run.json | run.json without `kind` | validate exits 1, `schema` rule | 🆕 New | exp Phase 1 |
+| EXP-07 | Nested trial runs | parent `tracked_run` + 2 `tracked_trial` children, one failing | children in the parent's experiment, failed child still logs `cost_usd`, parent tags `n_children`, `n_failed`, `failed_candidates` | 🆕 New | exp Phase 1 |
+| EXP-08 | Trial without a parent / inside a trial | `tracked_trial` with no active run, or nested | `TrialError` | 🆕 New | exp Phase 1 |
+| EXP-09 | Project spend | runs of every status incl. RUNNING in `<p>/*` | `project_spend` sums all `cost_usd`; no experiment → 0.0 | 🆕 New | exp Phase 1 |
+
+#### Test Data Dependencies
+- `contracts/run_ledger_vectors.json` (valid + invalid run.json cases), `contracts/milestones.json`, `contracts/mlflow_tags.json`; MLflow through the `sqlite_uri` fixture (no server).
+
+## Experiment methodology — gates and wiring (experiment Phase 2)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| EXP-10 | New project is wired automatically | `datalab-new foo` | `.pre-commit-config.yaml` gains `declared-deps-foo` + `gates-foo` between the `# >>> datalab-new` markers, ci.yml matrix gains `foo`; parity check passes | 🆕 New | exp Phase 2 |
+| EXP-11 | Wiring is idempotent and keeps comments | run the wiring twice | files byte-identical after the 2nd run; YAML comments preserved | 🆕 New | exp Phase 2 |
+| EXP-12 | Hydra gate on a half-migrated project | project with `configs/` but no `@hydra.main` | hydra hook fails (exit non-zero) | 🆕 New | exp Phase 2 |
+| EXP-13 | Legacy project without configs | mini-rag / voice-arch | Hydra gate skips them; ledger hook finds no run.json | 🆕 New | exp Phase 2 |
+| EXP-14 | Secret interpolation in a config | `${oc.env:X}` in a YAML under configs/ | hydra hook fails | 🆕 New | exp Phase 2 |
+| EXP-15 | CI matrix covers every project | parity check on ci.yml | `fail-fast: false`, one matrix entry per `projects/*`, ledger-validate + Hydra steps present | 🆕 New | exp Phase 2 |
+| EXP-16 | Fresh project is green on its gates | `datalab-new demo-app` | `uv sync --locked`, lint-imports, pyright, pytest --cov ≥ 70, pip-audit, ruff, Hydra gate all pass | 🆕 New | exp Phase 3 |
+| EXP-17 | Package name collides | `datalab-new json` / `hydra` / `class` | exit 2, nothing written, config files untouched | 🆕 New | exp Phase 3 |
+| EXP-18 | Grid search | `train hparams_search=g` with 3 values | one parent, 3 children `dummy-0..2`, distinct `config_sha256` | 🆕 New | exp Phase 3 |
+| EXP-19 | Grid names an unknown candidate or param | `{ghost: …}` / `{dummy: {offset: …}}` | exit 2 before any MLflow run | 🆕 New | exp Phase 3 |
+| EXP-20 | One candidate crashes | candidates `[dummy, boom]` | exit 1, `boom-0` FAILED, parent lists it | 🆕 New | exp Phase 3 |
+| EXP-21 | `--multirun` | `train --multirun` | exit 2, no run | 🆕 New | exp Phase 3 |
+| EXP-22 | Eval outside the audit | no run.json / before audit / audit validated | exit 2, no MLflow run | 🆕 New | exp Phase 3 |
+| EXP-23 | Second test look | eval twice on one split | 2nd needs `look_note`; tagged `test_look=2`; 2 looks in run.json | 🆕 New | exp Phase 3 |
+| EXP-24 | Eval with a different model config | `eval model.value=0.5` | exit 2, hint `model=<family> model.<k>=<v>` | 🆕 New | exp Phase 3 |
+| EXP-25 | Split or data changed since modeling | edit split.json / append data | eval exit 2 | 🆕 New | exp Phase 3 |
+| EXP-26 | Milestone stop | `/experiment` on a new project | each milestone ends at ⏸️ with validate / correct / redo; the metric is restated | 🆕 New | exp Phase 4 |
+| EXP-27 | Redo demotes downstream | redo at eda | eda…report back to todo, split + dataset kept | 🆕 New | exp Phase 4 |
+| EXP-28 | Kind change | expert switches training → comparison after scoping | run.json + split.json archived, new ledger at scoping | 🆕 New | exp Phase 4 |
+| EXP-29 | Hydra not wired at the BOX | gate fails | modeling redone, BOX re-runs | 🆕 New | exp Phase 4 |
+| EXP-30 | Stale RUNNING runs | crashed runs older than N days | listed; only the ones the expert names are closed | 🆕 New | exp Phase 4 |
+| EXP-31 | Stepper renders a ledger | project with a valid run.json | steps in kind order, current marked, decision notes shown | 🆕 New | exp Phase 5 |
+| EXP-32 | Invalid run.json | trouvetou-format ledger | reported in the build report; strict export fails | 🆕 New | exp Phase 5 |
+| EXP-33 | Missing artifact | run.json lists a file that is absent, or `../` | flagged missing | 🆕 New | exp Phase 5 |
+| EXP-34 | Run groups | parents with FINISHED/FAILED children, orphans, legacy runs | counts per parent, orphans grouped, legacy standalone | 🆕 New | exp Phase 5 |
+| EXP-35 | Card best | test-split runs, running parents, another split | none eligible; only children of the frozen split + data count | 🆕 New | exp Phase 5 |
+
+> ⚠️ After merge: required CI checks are renamed `project (mini-rag)` / `project (voice-arch)` (were `pilot` / `voice-arch`) — update branch protection.
