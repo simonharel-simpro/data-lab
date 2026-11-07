@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Callable
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final
 
 from datalab.ledger_model import Decision, Kind, Status, contract
@@ -99,10 +100,16 @@ def _i11(lg: "RunLedger") -> str | None:
     return None
 
 
+def _bad_artifact(path: str) -> bool:
+    if path.startswith("/") or "\\" in path or _DRIVE.match(path) or ".." in path.split("/"):
+        return True
+    return PurePosixPath(path).as_posix() == "."
+
+
 def _i12(lg: "RunLedger") -> str | None:
     for m, e in lg.milestones.items():
         for path in e.artifacts:
-            if path.startswith("/") or "\\" in path or _DRIVE.match(path) or ".." in path.split("/"):
+            if _bad_artifact(path):
                 return f"I-12: {m} artifact {path!r} must be a relative POSIX path inside the project"
     return None
 

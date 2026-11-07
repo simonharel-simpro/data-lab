@@ -253,6 +253,22 @@
   Territory was: `tracking._bound_http_retries` (outage bounding) lives in `tracking`, which imports `tracking_queries`; importing it back would be circular.
   I did: left the three queries on MLflow's own HTTP defaults; the skill calls `preflight` first.
   One-off or pattern?: one-off; flagged for Phase 4.
+- Plan assumed: `produce(scoping)` -> `decide(CORRECT)` -> `produce(scoping)` -> `decide(REDO)` is the sequence that trips I-8 (the `/check` finding).
+  Territory was: `produce` after CORRECT is legal and resets the decision to null, so that sequence always passed; the bug is `decide(REDO)` directly after `decide(CORRECT)` (the milestone still held `correct` when `_revalidate` ran).
+  I did: `decide` clears the milestone decision before `_revalidate` for REDO; added `test_redo_directly_after_correct_resets_milestones` (red before the fix) next to the requested `test_redo_after_correct_resets_milestones` (green both before and after, a regression guard).
+  One-off or pattern?: one-off.
+- Plan assumed: the I-12 empty-artifact check is a new vector plus a direct test.
+  Territory was: `checked_by` on every other I-12 vector is `["python"]` (the app does not check I-12 yet).
+  I did: added `artifact-empty` with `checked_by: ["python"]`; I-12 also refuses a path normalizing to `.` (`""`, `.`, `./`).
+  One-off or pattern?: one-off.
+- Plan assumed: `test_f_6` injects the failure by patching `json.dumps`.
+  Territory was: the global patch fired inside `_revalidate`, before any file was touched, so the test proved nothing.
+  I did: patch `os.replace` and `os.fsync` instead (both fire after the tmp file is written); renamed it `test_f_6_write_failure_leaves_run_json_byte_identical_and_no_tmp`; red when the `tmp.unlink` cleanup is removed.
+  One-off or pattern?: one-off.
+- Plan assumed: the tracking tests fit in `tests/test_tracking.py`.
+  Territory was: 332 lines (cap 300).
+  I did: moved the trial tests (and `_parent`, `_children`, `_fail`) to `tests/test_tracking_trials.py`, shared builders in `tests/tracking_support.py`; names and assertions unchanged.
+  One-off or pattern?: one-off.
 
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.

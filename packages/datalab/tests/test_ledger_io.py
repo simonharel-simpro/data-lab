@@ -1,7 +1,7 @@
 import hashlib
 import json
-import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -29,7 +29,7 @@ from tests.test_split import _split
 _BOM = "\N{ZERO WIDTH NO-BREAK SPACE}"
 
 
-def _text(run: dict) -> str:  # pyright: ignore[reportMissingTypeArgument]
+def _text(run: dict[str, Any]) -> str:
     return json.dumps(run)
 
 
@@ -101,7 +101,6 @@ def test_u_15_missing_artifact_fails_validate(tmp_path: Path) -> None:
         validate_dir(folder)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 def test_artifact_symlink_escape_rejected(tmp_path: Path) -> None:
     folder = project(tmp_path, vector("training-mid-run"))
     outside = tmp_path / "outside.md"
@@ -121,8 +120,8 @@ def test_metric_not_matching_card_fails_validate(tmp_path: Path) -> None:
         validate_dir(project(tmp_path, run))
 
 
-@pytest.mark.parametrize("target", ["datalab.ledger.json.dumps", "datalab.ledger.os.fsync"])
-def test_f_6_serializer_failure_leaves_run_json_byte_identical_and_no_tmp(tmp_path: Path, target: str) -> None:
+@pytest.mark.parametrize("target", ["datalab.ledger.os.replace", "datalab.ledger.os.fsync"])
+def test_f_6_write_failure_leaves_run_json_byte_identical_and_no_tmp(tmp_path: Path, target: str) -> None:
     folder = project(tmp_path, vector("fresh-comparison"))
     before = (folder / "run.json").read_bytes()
     nxt = ledger.produce(read(folder), "scoping", ["scope.md"])

@@ -77,6 +77,33 @@ def test_decide_correct_then_produce_resets_decision() -> None:
     assert produce(corrected, "scoping", ["scope.md"]).milestones["scoping"].decision is None
 
 
+def test_redo_after_correct_resets_milestones() -> None:
+    corrected = decide(_scoping_produced(), "scoping", Decision.CORRECT, "narrow it")
+    again = produce(corrected, "scoping", ["scope.md"])
+
+    result = decide(again, "scoping", Decision.REDO, "start over")
+
+    scoping = result.milestones["scoping"]
+    assert (scoping.status, scoping.decision) == (Status.TODO, None)
+    assert result.decisions_log[-1].decision is Decision.REDO
+
+
+def test_redo_directly_after_correct_resets_milestones() -> None:
+    corrected = decide(_scoping_produced(), "scoping", Decision.CORRECT, "narrow it")
+
+    result = decide(corrected, "scoping", Decision.REDO, "start over")
+
+    scoping = result.milestones["scoping"]
+    assert (scoping.status, scoping.decision) == (Status.TODO, None)
+    assert [e.decision for e in result.decisions_log] == [Decision.CORRECT, Decision.REDO]
+
+
+def test_produce_with_empty_artifact_rejected() -> None:
+    for bad in ("", ".", "./", "a/.."):
+        with pytest.raises(LedgerError, match="I-12"):
+            produce(vec_ledger("fresh-comparison"), "scoping", [bad])
+
+
 def test_decide_redo_from_modeling_at_audit() -> None:
     result = decide(vec_ledger("audit-first-look"), "audit", Decision.REDO, "leak", redo_from="modeling")
 

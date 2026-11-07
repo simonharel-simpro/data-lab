@@ -104,8 +104,8 @@ def decide(
     _check_decide_options(lg, milestone, decision, redo_from, winner)
     data = _dump(lg)
     data["decisions_log"].append({"milestone": milestone, "decision": decision.value, "note": note})
-    if decision is Decision.CORRECT:
-        data["milestones"][milestone]["decision"] = "correct"
+    if decision is not Decision.VALIDATE:  # a redo clears a prior `correct` so I-8 sees the log's redo entry
+        data["milestones"][milestone]["decision"] = "correct" if decision is Decision.CORRECT else None
     if decision is Decision.VALIDATE:
         seq = lg.sequence()
         data["milestones"][milestone].update(status="validated", decision="validate")
