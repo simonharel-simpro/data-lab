@@ -98,3 +98,20 @@
 | VA-26 | Human rating | `rate --rating 0` / `6`; `--rating 4` | refused before MLflow; run `voice-arch/human` with `human_rating`, never `exact_rate` | 🆕 New | voice-arch P3 |
 | VA-27 | One live call | worker + LiveKit up, `self_correction`, arch A | one `CallRow` (scored or timeout); the report holds the keys `naturalness` reads | 🆕 New | voice-arch P3 |
 | VA-28 | Full sweeps (user) | `runner --arch` a, b, c | three FINISHED full runs, `decide` table in PROJECT.md, app card shows `exact_rate` | 🆕 New (user) | voice-arch P3 |
+
+## Experiment methodology — ledger, split, trials (experiment Phase 1)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| EXP-01 | Valid ledger at scoping | `new_ledger(kind=comparison, metric="score (max)")` then `python -m datalab.ledger validate projects/<p>` | exit 0, every milestone `todo`, dataset/split_summary `null` | 🆕 New | exp Phase 1 |
+| EXP-02 | Milestone produced before its predecessor is validated | hand-edited run.json, `eda: produced` while `dataset: todo` | validate exits 1, message starts `I-` (strict order) | 🆕 New | exp Phase 1 |
+| EXP-03 | Redo resets later milestones | `decide(eda, redo)` with modeling validated | eda and every later milestone back to `todo`, decision logged | 🆕 New | exp Phase 1 |
+| EXP-04 | Frozen split edited after the freeze | change one index in split.json after modeling produced | validate exits 1 (split_sha256 mismatch) | 🆕 New | exp Phase 1 |
+| EXP-05 | Overlapping split partitions | same group in train and test | `SplitError` | 🆕 New | exp Phase 1 |
+| EXP-06 | Trouvetou-format run.json | run.json without `kind` | validate exits 1, `schema` rule | 🆕 New | exp Phase 1 |
+| EXP-07 | Nested trial runs | parent `tracked_run` + 2 `tracked_trial` children, one failing | children in the parent's experiment, failed child still logs `cost_usd`, parent tags `n_children`, `n_failed`, `failed_candidates` | 🆕 New | exp Phase 1 |
+| EXP-08 | Trial without a parent / inside a trial | `tracked_trial` with no active run, or nested | `TrialError` | 🆕 New | exp Phase 1 |
+| EXP-09 | Project spend | runs of every status incl. RUNNING in `<p>/*` | `project_spend` sums all `cost_usd`; no experiment → 0.0 | 🆕 New | exp Phase 1 |
+
+#### Test Data Dependencies
+- `contracts/run_ledger_vectors.json` (valid + invalid run.json cases), `contracts/milestones.json`, `contracts/mlflow_tags.json`; MLflow through the `sqlite_uri` fixture (no server).

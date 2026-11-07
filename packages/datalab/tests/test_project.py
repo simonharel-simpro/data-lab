@@ -5,8 +5,11 @@ from pathlib import Path
 import pytest
 
 from datalab.project import (
+    METRIC_KEY_RE,
+    CardMetric,
     Project,
     ProjectError,
+    card_metric,
     collection_name,
     experiment_name,
     load,
@@ -177,3 +180,28 @@ def test_f_10_non_editable_install_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ProjectError, match="repo root not found"):
         repo_root(start=fake_module)
+
+
+def test_card_metric_reads_frontmatter(tmp_path: Path) -> None:
+    folder = tmp_path / "demo"
+    _card(folder, "---\nname: demo\nmetric:\n  key: score\n  goal: max\n---\n")
+
+    assert card_metric(folder) == CardMetric("score", "max")
+    bad_cards = [
+        "---\nname: demo\n---\n",
+        "---\nname: demo\nmetric: {key: a b, goal: max}\n---\n",
+        "---\nname: demo\nmetric: {key: score, goal: up}\n---\n",
+    ]
+    for text in bad_cards:
+        _card(folder, text)
+        with pytest.raises(ProjectError, match=r"PROJECT\.md"):
+            card_metric(folder)
+
+
+def test_metric_key_re_matches_app_literal() -> None:
+    card_ts = (REPO_ROOT / "app" / "src" / "lib" / "card.ts").read_text(encoding="utf-8")
+
+    match = re.search(r"METRIC_KEY_RE = /(.+)/;", card_ts)
+
+    assert match is not None
+    assert match.group(1) == METRIC_KEY_RE.pattern

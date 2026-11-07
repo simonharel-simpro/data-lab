@@ -36,9 +36,18 @@ root_package = "datalab"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "project.py stays pure (no weaviate/mlflow)"
+name = "pure modules stay pure (no weaviate/mlflow)"
 type = "forbidden"
-source_modules = ["datalab.project"]
+source_modules = [
+    "datalab.project",
+    "datalab.split",
+    "datalab.ledger_model",
+    "datalab.ledger_rules",
+    "datalab.ledger_ops",
+    "datalab.ledger_checks",
+    "datalab.ledger",
+    "datalab.tags",
+]
 forbidden_modules = ["weaviate", "mlflow"]
 
 [tool.ruff]

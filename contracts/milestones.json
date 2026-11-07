@@ -1,0 +1,9 @@
+{"schema_version": 1,
+ "milestones": [{"id": "scoping", "agent": "ds-scoper"}, {"id": "dataset", "agent": "ds-dataset-finder"},
+  {"id": "cleaning", "agent": "ds-data-cleaner"}, {"id": "eda", "agent": "ds-eda"},
+  {"id": "features", "agent": "ds-feature-engineer"}, {"id": "modeling", "agent": "ds-modeler"},
+  {"id": "audit", "agent": "ds-validator"}, {"id": "tracking", "agent": "ds-mlflow-tracker"},
+  {"id": "report", "agent": "ds-reporter"}],
+ "sequences": {"training": ["scoping", "dataset", "cleaning", "eda", "features", "modeling", "audit", "tracking", "report"],
+  "comparison": ["scoping", "dataset", "eda", "modeling", "audit", "tracking", "report"]},
+ "freeze_after": "dataset"}

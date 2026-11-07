@@ -158,3 +158,21 @@ httpx adapter for audio from the start (more code than the plugins' `base_url`).
 **Consequences:** Cost figures include any concurrent use of the shared key, so they are upper bounds. The
 software budget only counts MLflow runs that logged `cost_usd`; a crashed process that never logged is invisible to
 it. Stage-2 latency is the sum of four network round trips per turn.
+
+## 2026-11-06 — Experiment methodology: trouvetou in data-lab
+
+**Status:** accepted
+**Context:** voice-arch, built by an autonomous loop, tuned fixes on the eval persona, had a metric dominated by STT
+garble, unlogged one-off calls, candidate names inside metric keys and knobs in code. Every data-lab experiment
+should follow trouvetou's methodology instead.
+**Decision:** Hydra in the template; shared MLflow on 5050, not trouvetou's per-project sqlite (D-1); metric and
+`cost_usd` on children only (D-5); experiment `<project>/<experiment.name>`, eval in `<project>/audit`; the grid runs
+in-process (D-4); `run.json` + PROJECT.md with strict milestone order, a `redo` that resets later milestones and no
+`skipped` status; the test partition is gated and every look counted; the winner lives in run.json and the card's
+best is ranked on the frozen split and full data; the budget is shown, not enforced (D-6); one sweep at a time per
+server (F-16: parallel sweeps would race on one sqlite-backed MLflow, and a logging failure surfaces as a tracking
+error); `project_spend` counts RUNNING runs, unlike `voice_arch/budget.py`, so a crashed sweep's money is not hidden.
+**Alternatives considered:** a per-project sqlite store, a role tag instead of nested runs, a `ledger.md` instead of
+`run.json`, `--multirun` with Postgres, a hard budget stop.
+**Consequences:** one sweep per server at a time; legacy runs stay flat (no parent/child) and keep today's card rule.
+

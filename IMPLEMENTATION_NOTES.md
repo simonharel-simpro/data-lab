@@ -223,6 +223,37 @@
   and C ended `timeout` in a loop where the caller's STT garbles the agent's read-back (`512-550-148`); the 420 s
   limit and the long Markdown read-backs decide the sweep, not the architecture.
 
+## experiment Phase 1
+
+- Plan assumed: `ledger.py` holds the V-1..V-3 checks and `tests/test_ledger.py` holds every ledger test.
+  Territory was: `ledger.py` reached 215 lines (cap 200) and the ledger tests exceed the 300-line test-file convention.
+  I did: moved the V checks to a new `datalab/ledger_checks.py` (added to the import-linter "pure" list), split the tests into `test_ledger.py` + `test_ledger_io.py` and a shared `tests/ledger_support.py`.
+  One-off or pattern?: one-off (the plan's file list under-sized `ledger.py`).
+- Plan assumed: `schema_version: Literal[1]` refuses `true` (vector `schema-version-true`).
+  Territory was: pydantic's `Literal[1]` accepts `True` even in strict mode (`True == 1`).
+  I did: a `mode="before"` field validator that refuses a bool.
+  One-off or pattern?: likely recurs: any `Literal[int]` field guarded by a "bool refused" vector.
+- Plan assumed: `produce`, `redo`, `decide` are specified only for the listed cases.
+  Territory was: silent on `produce` of a validated milestone, `redo` of a milestone that has not started, `redo_from` with a non-redo decision, and a winner passed outside "validate modeling".
+  I did: refuse each with a `LedgerError` (a silent un-validation or a dropped argument would corrupt the ledger); none is exercised by a planned test, `test_produce_refuses_*` / `test_decide_*` match the messages.
+  One-off or pattern?: one-off.
+- Plan assumed: "`GroupBound` => `grouped` + `group_key`" only.
+  Territory was: the planned test `test_grouped_without_group_key_rejected` gives a grouped split with index lists.
+  I did: `strategy: grouped` always needs a `group_key` (not only with group bounds).
+  One-off or pattern?: one-off.
+- Plan assumed: `test_trial_slot_freed_when_cost_log_fails` ("a new trial opens, and the parent still gets `n_children` "1"").
+  Territory was: ambiguous: a second trial under the same parent would make it "2".
+  I did: read it as two parents: the first parent (error propagating through `tracked_run`) still tags `n_children "1"`, and a second parent opens its own trial, so the slot is proven free.
+  One-off or pattern?: one-off.
+- Plan assumed: the functions `test_access_problem` / `test_access_allowed` are plain helpers.
+  Territory was: their `test_` prefix makes pytest collect them when imported into a test module.
+  I did: set `__test__ = False` on both; the tests call them through `datalab.ledger`.
+  One-off or pattern?: likely recurs (any helper named `test_*` in a contract).
+- Plan assumed: `project_spend`, `stale_runs`, `close_runs` need nothing beyond the Settings URI.
+  Territory was: `tracking._bound_http_retries` (outage bounding) lives in `tracking`, which imports `tracking_queries`; importing it back would be circular.
+  I did: left the three queries on MLflow's own HTTP defaults; the skill calls `preflight` first.
+  One-off or pattern?: one-off; flagged for Phase 4.
+
 ## Escalations
 - ESCALATION(ESC-1-1) [resolved] phase=1 tier=reversible :: STT winner depends on address number scoring: nova-3 writes street numbers as words (15 of its 19 errors); normalize_address maps no number words. Option A keep plan scoring (assemblyai wins) / B add number-word mapping and re-run (nova-3 likely wins on latency). => Kept the plan's U-4 scoring (option A): normalize_address is specified without number words, and changing scoring after seeing results would bias the bench. assemblyai/universal-3-6-pro stays the STT winner. Revisit if Phase 2 exact-booking fails on number-word addresses.
 - ESCALATION(ESC-1-2) [resolved] phase=1 tier=reversible :: LLM bench winner google/gemini-3.5-flash-lite equals the caller model default, but D-17 requires caller != agent. Provisional: agent = gemini-3.5-flash-lite (bench winner), caller = anthropic/claude-haiku-5.5 (also 20/20) at temperature 0.7. User to confirm which model plays the caller. => User 2026-11-06: caller = anthropic/claude-haiku-5.5 @ temperature 0.7 (agent = google/gemini-3.5-flash-lite).
