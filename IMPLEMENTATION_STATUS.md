@@ -104,7 +104,7 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 | 1 | Contract + ledger, split, tags, trial helpers | ✅ landed on feat/experiment (/check clean, fix-check 1 iter) | `phase-1-contract-ledger` |
 | 2 | Hydra gate, ledger hook, wiring, CI matrix | ✅ landed on feat/experiment @ 24a40a0 (/check clean, fix-check 3 iter) | `phase-2-gates-wiring` |
 | 3 | Hydra template, package name, scaffold-and-gate | ✅ landed on feat/experiment @ a46c76e (/check clean, fix-check 1 iter) | `phase-3-hydra-template` |
-| 4 | `/experiment` skill | 🔄 implemented, awaiting /check | `phase-4-experiment-skill` |
+| 4 | `/experiment` skill | ✅ landed on feat/experiment @ 8480b2b (/check clean first pass) | `phase-4-experiment-skill` |
 | 5 | App stepper + run groups + card best | ⏳ pending | — |
 
 ## experiment Phase 1 — Contract + ledger, split, tags, trial helpers
