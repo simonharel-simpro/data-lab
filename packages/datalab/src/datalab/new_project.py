@@ -10,6 +10,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from datalab import wiring
 from datalab.project import ProjectError, repo_root, validate_name
 
 _IGNORE = shutil.ignore_patterns(".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".env", "uv.lock")
@@ -74,10 +75,19 @@ def main(argv: list[str] | None = None, *, root: Path | None = None, lock: Calla
         shutil.copytree(template, tmp, ignore=_IGNORE)
         _rewrite(tmp, name, args.title or name)
         lock(tmp)
+        wiring_plan = wiring.plan(root, name)
         os.rename(tmp, target)
     except (OSError, ProjectError) as err:
         shutil.rmtree(tmp, ignore_errors=True)
         print(f"datalab-new: failed, nothing written: {err}", file=sys.stderr)
+        return 1
+    try:
+        wiring.apply(wiring_plan)
+    except OSError as err:
+        print(
+            f"created {target}, but hook/CI wiring failed: {err}; the parity test fails until it is fixed",
+            file=sys.stderr,
+        )
         return 1
     print(f"created {target}\nnext: cd projects/{name} && uv sync")
     return 0

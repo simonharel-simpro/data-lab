@@ -102,7 +102,7 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 | Phase | Title | Status | Branch |
 |---|---|---|---|
 | 1 | Contract + ledger, split, tags, trial helpers | ✅ landed on feat/experiment (/check clean, fix-check 1 iter) | `phase-1-contract-ledger` |
-| 2 | Hydra gate, ledger hook, wiring, CI matrix | ⏳ pending | — |
+| 2 | Hydra gate, ledger hook, wiring, CI matrix | 🔄 implemented, awaiting /check | `phase-2-gates-wiring` |
 | 3 | Hydra template, package name, scaffold-and-gate | ⏳ pending | — |
 | 4 | `/experiment` skill | ⏳ pending | — |
 | 5 | App stepper + run groups + card best | ⏳ pending | — |
@@ -114,3 +114,11 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 - Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
 - Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
 - Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).
+
+## experiment Phase 2 — Hydra gate, ledger hook, wiring, CI matrix
+
+**Implemented:** 2026-11-07 · **Agent:** python-fastapi · **Tooling (agent run):** pre-commit default + pre-push exit 0, pyright 0, ruff, lint-imports, pytest green (coverage 93.6 %)
+- New: `tools/check_hydra_project.py` (vendored, sha-checked), `tools/pre_commit_checks/hydra_gate.py`, `datalab/wiring.py`, tests `test_wiring`, `test_hydra_gate`.
+- Modified: `new_project.py` (wiring), `conftest.py` (`wired_repo`), `.pre-commit-config.yaml`, `.github/workflows/ci.yml` (matrix `projects`, fail-fast false), `ruff.toml`, ARCHITECTURE.md.
+- Tests: 17 of 21 seen red via targeted mutation; 4 not mutated (two-configs F-1 entry, outside-projects paths, voice-arch byte-equality, missing marker).
+- Follow-up for the user: rename required CI checks (`pilot`/`voice-arch` → `project (mini-rag)`/`project (voice-arch)`).

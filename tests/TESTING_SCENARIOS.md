@@ -115,3 +115,16 @@
 
 #### Test Data Dependencies
 - `contracts/run_ledger_vectors.json` (valid + invalid run.json cases), `contracts/milestones.json`, `contracts/mlflow_tags.json`; MLflow through the `sqlite_uri` fixture (no server).
+
+## Experiment methodology — gates and wiring (experiment Phase 2)
+
+| ID | Scenario | Input | Expected Output | Status | Last Modified |
+|----|----------|-------|-----------------|--------|---------------|
+| EXP-10 | New project is wired automatically | `datalab-new foo` | `.pre-commit-config.yaml` gains `declared-deps-foo` + `gates-foo` between the `# >>> datalab-new` markers, ci.yml matrix gains `foo`; parity check passes | 🆕 New | exp Phase 2 |
+| EXP-11 | Wiring is idempotent and keeps comments | run the wiring twice | files byte-identical after the 2nd run; YAML comments preserved | 🆕 New | exp Phase 2 |
+| EXP-12 | Hydra gate on a half-migrated project | project with `configs/` but no `@hydra.main` | hydra hook fails (exit non-zero) | 🆕 New | exp Phase 2 |
+| EXP-13 | Legacy project without configs | mini-rag / voice-arch | Hydra gate skips them; ledger hook finds no run.json | 🆕 New | exp Phase 2 |
+| EXP-14 | Secret interpolation in a config | `${oc.env:X}` in a YAML under configs/ | hydra hook fails | 🆕 New | exp Phase 2 |
+| EXP-15 | CI matrix covers every project | parity check on ci.yml | `fail-fast: false`, one matrix entry per `projects/*`, ledger-validate + Hydra steps present | 🆕 New | exp Phase 2 |
+
+> ⚠️ After merge: required CI checks are renamed `project (mini-rag)` / `project (voice-arch)` (were `pilot` / `voice-arch`) — update branch protection.

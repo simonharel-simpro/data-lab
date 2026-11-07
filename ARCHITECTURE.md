@@ -43,7 +43,9 @@ infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys
 contracts/              cross-side contracts read by the Python and app test suites: name_vectors.json, EXPERIMENT.md,
                         milestones.json, run_ledger_vectors.json, mlflow_tags.json
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A); experiment ledger:
-                        split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries
+                        split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries,
+                        wiring (text-level hook + CI matrix wiring for `datalab-new`)
+                        wiring_parity (test-time check that every projects/* has its hook stanzas + CI matrix entry)
 templates/project/      template copied by `datalab-new` (Phase 2A)
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
@@ -56,10 +58,13 @@ app/                    read-only Astro presentation app (Phase 2B): src/lib (pu
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
 tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
-tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency
+tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency;
+                        hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root
+tools/check_hydra_project.py  vendored verbatim from trouvetou (sha256 in its header): Hydra is wired, not just shaped
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
-                        fixtures (job `app`); mini-rag gates + pip-audit (job `pilot`); voice-arch gates + pip-audit (job `voice-arch`); Python gates `--locked`
+                        fixtures (job `app`); one matrix job `projects` (fail-fast off; mini-rag, voice-arch): gates + pip-audit, Hydra gate, ledger
+                        validate; Python gates `--locked`
 tests/                  root tests (compose contract), run with `uvx pytest tests/`
 ruff.toml               single ruff config for every Python tree
 ```
@@ -229,6 +234,10 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 3. Experiments: each run is logged to the experiment `<name>` or `<name>/<sub>` with tag `project=<name>`.
 4. The app reads `projects/*/PROJECT.md`, queries MLflow for runs with exactly `tags.project = '<name>'`, picks the
    best run by the card's `metric {key, goal}` and renders it (links only in dev, D-14).
+5. `datalab-new <name>` copies the template, locks it, then `wiring.plan` computes the new text of
+   `.pre-commit-config.yaml` (declared-deps + gates stanzas) and `ci.yml` (matrix entry) between the
+   `# >>> datalab-new` markers; both are written only after the project folder is published, and
+   `wiring_parity.parity_problems` (a test) fails if any project is unwired.
 
 ### Concrete example: the `mini-rag` pilot (Phase 3)
 

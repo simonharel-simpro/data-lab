@@ -43,4 +43,16 @@ def fake_repo(tmp_path: Path) -> Path:
     (template / ".venv" / "bin" / "python").write_text("decoy\n", encoding="utf-8")
     (template / ".env").write_text("DATALAB_MLFLOW_TRACKING_URI=http://decoy\n", encoding="utf-8")
     (template / "uv.lock").write_text("decoy\n", encoding="utf-8")
+    for relative in (".pre-commit-config.yaml", ".github/workflows/ci.yml"):
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relative, root / relative)
     return root
+
+
+@pytest.fixture
+def wired_repo(fake_repo: Path) -> Path:
+    """fake_repo plus the two existing projects, so the wiring parity check starts clean."""
+    for name in ("mini-rag", "voice-arch"):
+        (fake_repo / "projects" / name).mkdir()
+        (fake_repo / "projects" / name / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    return fake_repo
