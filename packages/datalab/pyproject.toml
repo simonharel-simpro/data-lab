@@ -58,8 +58,11 @@ extend-select = ["S"]        # already selected at the root; restated so the gat
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: needs the live data-lab stack or uv + a populated cache"]
-addopts = "-ra --strict-markers -m 'not integration'"
+markers = [
+    "integration: needs the live data-lab stack or uv + a populated cache",
+    "scaffold: scaffolds a project with a real uv lock (network); the CI checks job runs it",
+]
+addopts = "-ra --strict-markers -m 'not integration and not scaffold'"
 
 [tool.coverage.run]
 branch = true

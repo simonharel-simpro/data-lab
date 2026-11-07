@@ -13,6 +13,7 @@ from datalab.project import (
     collection_name,
     experiment_name,
     load,
+    package_name,
     repo_root,
     validate_name,
 )
@@ -205,3 +206,11 @@ def test_metric_key_re_matches_app_literal() -> None:
 
     assert match is not None
     assert match.group(1) == METRIC_KEY_RE.pattern
+
+
+def test_package_name_maps_dashes_and_refuses_deps() -> None:
+    assert package_name("mini-rag") == "mini_rag"
+    assert package_name("a") == "a"
+    for taken in ("pydantic", "antlr4", "omegaconf"):
+        with pytest.raises(ProjectError, match=taken):
+            package_name(taken)

@@ -1,0 +1,14 @@
+defaults:
+  - paths: default
+  - data: default
+  - model: dummy # a `model` node, so a CLI `model.value=0.5` parses at @hydra.main
+  - _self_
+
+candidate: null # null: the winner recorded in run.json
+look_note: null # required from the second test look on one split
+
+hydra:
+  run:
+    dir: ${project_dir:}/logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: false

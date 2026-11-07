@@ -46,7 +46,10 @@ packages/datalab/       shared Python package: settings, project naming, trackin
                         split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries,
                         wiring (text-level hook + CI matrix wiring for `datalab-new`)
                         wiring_parity (test-time check that every projects/* has its hook stanzas + CI matrix entry)
-templates/project/      template copied by `datalab-new` (Phase 2A)
+templates/project/      template copied by `datalab-new` (Phase 2A; Hydra experiment code since experiment Phase 3):
+                        configs/{train,eval}.yaml + groups paths/ data/ model/ experiment/ (hparams_search/ optional),
+                        src/__DATALAB_PACKAGE__/{paths,candidates,split,scoring,grid,prepare,train,eval}.py (renamed to
+                        the project's package), tests/ (+ fixtures/), .gitignore, PROJECT.md, README.md
 projects/<name>/        one project per folder: own env, PROJECT.md card (projects/.gitkeep: zero is valid)
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
@@ -117,6 +120,31 @@ def collection_name(project: str, *parts: str) -> str:
 ### Project (`projects/<name>/`)
 - **Does:** owns its data, code, env and `PROJECT.md` card; talks to the infra only through `datalab`.
 - **Must NOT:** hardcode ports or URIs; write into another project's collections or experiments.
+
+### Project template (`templates/project`, experiment Phase 3)
+- **Does:** `train` and `eval` (`python -m <pkg>.train|eval`, each `@hydra.main`) own all I/O: config, split.json,
+  data file, MLflow. `scoring`, `candidates`, `grid` are pure (an import-linter contract forbids mlflow, datalab, hydra,
+  omegaconf there); `split` cuts the data by the frozen split and refuses the test partition unless `eval` opts in;
+  `prepare` holds the pre-run checks. `<pkg>` is `package_name(name)`: the dashed name with underscores, refused when
+  it shadows a keyword, a stdlib module or an installed import name.
+- **Must NOT:** log `metric.key` or `cost_usd` on a parent run; read the test partition from `train`; run
+  `--multirun` (the grid runs in-process, D-4); use `${oc.env:...}` or JSON in `configs/`.
+- **`train.run` order:** (1) project + card metric, (2) experiment name (`audit` reserved), (3) resolve the config,
+  (4) ledger and `score_on`, (5) candidates, grid and one composed model per combination (config_sha256), (6) rows,
+  split, scored partition, hashes; steps 1-6 end in exit 2 with no MLflow run. (7) settings + preflight, (8) one
+  parent run, one child per combination (a failing candidate fails its child only; an MLflow error aborts),
+  (9) metric-key rules over the finished children, (10) exit 1 if a child failed.
+- **`datalab-new` generates and gates it:** `test_f_3_scaffolded_project_passes_its_gates` (marker `scaffold`, network,
+  run by the CI `checks` job) scaffolds a project with a real lock and runs its gates.
+
+```python
+@hydra.main(version_base=None, config_path="../../configs", config_name="train")
+def main(cfg: DictConfig) -> None:
+    refuse_multirun("train")
+    code = run(cfg, tuple(HydraConfig.get().overrides.task))
+    if code:
+        raise SystemExit(code)
+```
 
 ### Voice architectures (`projects/voice-arch`, Phase 2)
 - **Does:** books a US service appointment by voice (name, phone, address, problem type, slot, read-back) in three
@@ -238,6 +266,12 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
    `.pre-commit-config.yaml` (declared-deps + gates stanzas) and `ci.yml` (matrix entry) between the
    `# >>> datalab-new` markers; both are written only after the project folder is published, and
    `wiring_parity.parity_problems` (a test) fails if any project is unwired.
+6. Experiment (template project): `train` logs one parent run (tags `entry`, `split_sha256`, `data_sha256`,
+   `score_on`; no metric) and one child per candidate x grid combination (`metric.key`, `cost_usd`, tags `candidate`,
+   `config_sha256`); the expert validates modeling with a winner child in `run.json`. At the audit `eval` checks
+   run.json (`test_access_problem`), the data hash, that the winner's parent was trained on the frozen split and data,
+   and that the composed model hashes to the winner's `config_sha256`; it then records the test look in run.json
+   and logs `test_<metric.key>` on a child of `<project>/audit`.
 
 ### Concrete example: the `mini-rag` pilot (Phase 3)
 

@@ -1,0 +1,15 @@
+defaults:
+  - paths: default
+  - data: default
+  - model: dummy
+  - hparams_search: null
+  - experiment: default
+  - _self_
+
+seed: 0
+
+hydra:
+  run:
+    dir: ${project_dir:}/logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: false
