@@ -145,7 +145,13 @@ class LiveCaller:
         return self._result
 
     async def interject(self, text: str) -> None:
-        self._session.say(text, allow_interruptions=False)
+        if not self._started or self.caller_error is not None:
+            return
+        try:
+            self._session.say(text, allow_interruptions=False)
+        except RuntimeError as err:  # `say` raises it when the session is not running or is closing
+            logger.warning("the interjection failed", exc_info=True)
+            self.caller_error = f"interjection failed: {type(err).__name__}"
 
     def agent_speaking_for(self) -> float:
         return 0.0 if self._speaking_since is None else time.monotonic() - self._speaking_since

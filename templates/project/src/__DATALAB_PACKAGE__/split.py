@@ -47,12 +47,25 @@ def _when(row: Row, column: str) -> datetime:
         raise SplitError(f"row has no ISO 8601 value in {column!r}: {row!r}") from err
 
 
+def check_time_kinds(split: Split, rows: Sequence[Row]) -> None:
+    """A temporal split compares rows with the bounds: both sides must be timezone-aware, or both naive."""
+    column = split.time_col or ""
+    specs = [partition(split, which) for which in Partition]
+    bounds = [datetime.fromisoformat(s.time_max) for s in specs if isinstance(s, TimeBound)]
+    if not bounds:
+        return
+    aware = bounds[0].tzinfo is not None
+    if any((_when(row, column).tzinfo is not None) != aware for row in rows):
+        raise SplitError(f"{column!r} mixes timezone-aware and naive values with time_max")
+
+
 def _pick(split: Split, which: Partition, spec: PartitionSpec, rows: Sequence[Row]) -> list[Row]:
     if isinstance(spec, tuple):
         return [rows[i] for i in spec]
     if isinstance(spec, GroupBound):
         key = split.group_key or ""
         return [r for r in rows if str(r.get(key)) in spec.groups]
+    check_time_kinds(split, rows)
     column = split.time_col or ""
     # A bound is read as that instant: a date-only time_max "2024-01-31" is midnight, so later rows of that day
     # fall in the next partition.

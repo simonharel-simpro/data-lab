@@ -24,7 +24,7 @@ from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracke
 from .candidates import Row, config_sha256
 from .grid import Combo, GridError, expand
 from .paths import PROJECT_DIR, register_resolvers
-from .prepare import PrepareError, compose_model, file_sha256, read_ledger, refuse_multirun, resolve_config, score_on
+from .prepare import PrepareError, compose_model, file_sha256, frozen_score_on, refuse_multirun, resolve_config
 from .scoring import label, metric_key_problems, score
 from .split import SplitAccessError, load_split, read_rows
 
@@ -117,7 +117,7 @@ def _prepare(cfg: DictConfig, overrides: Sequence[str]) -> _Plan:
     if sub == "audit":
         raise PrepareError("experiment.name 'audit' is reserved for eval")
     resolved = resolve_config(cfg)  # (3)
-    on = score_on(cfg, read_ledger(Path(cfg.paths.experiment_dir)))  # (4)
+    on = frozen_score_on(cfg)  # (4) before anything is composed: the ledger's split and data must be unchanged
     candidates = _candidates(cfg)  # (5)
     children = _children(resolved, overrides, candidates)
     eval_rows, labels, tags = _eval_part(cfg, on)  # (6)

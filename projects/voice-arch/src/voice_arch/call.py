@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 AUTH_STATUSES: Final = frozenset({401, 402})
 INTERJECT_AFTER_S: Final = 1.0
+STEP_TIMEOUT_S: Final = 30.0
 _POLL_S: Final = 0.25
 _LAST_RESULT_GRACE_S: Final = 2.0  # the result is sent before the agent leaves, but its stream may still be arriving
 
@@ -34,6 +36,10 @@ class Outcome(StrEnum):
 
 class AgentNeverJoined(Exception):
     pass
+
+
+class LiveKitUnresponsive(RuntimeError):
+    """A LiveKit step accepted the connection but never answered; the sweep aborts rather than hang (P-4)."""
 
 
 class ProviderAuthStop(Exception):
@@ -114,9 +120,11 @@ async def _wait_for_result(handle: CallerHandle, persona: Persona, timeout_s: fl
 
 
 def _classify(handle: CallerHandle, result: CallResult | None) -> Outcome:
+    if handle.caller_error is not None:  # first: a caller that never started yields no result either
+        return Outcome.CALLER_FAULT
     if result is None:
         return Outcome.AGENT_LOST if handle.agent_left else Outcome.TIMEOUT
-    return Outcome.CALLER_FAULT if handle.caller_error is not None else Outcome.SCORED
+    return Outcome.SCORED
 
 
 def _stop_on_auth(handle: CallerHandle, result: CallResult | None) -> None:
@@ -125,14 +133,21 @@ def _stop_on_auth(handle: CallerHandle, result: CallResult | None) -> None:
         raise ProviderAuthStop(f"OpenRouter refused the call (HTTP {sorted(statuses & AUTH_STATUSES)[0]})")
 
 
+async def _bounded[T](step: str, aw: Awaitable[T]) -> T:
+    try:
+        return await asyncio.wait_for(aw, STEP_TIMEOUT_S)
+    except TimeoutError as err:
+        raise LiveKitUnresponsive(f"{step} did not answer within {STEP_TIMEOUT_S:.0f} s") from err
+
+
 async def _cleanup(env: CallEnv, handle: CallerHandle | None, room: str) -> None:
     try:
         if handle is not None:
-            await handle.close()
+            await asyncio.wait_for(handle.close(), STEP_TIMEOUT_S)
     except Exception:
-        logger.exception("closing the caller of room %s failed", room)
+        logger.warning("closing the caller of room %s failed", room, exc_info=True)
     try:
-        await env.delete_room(room)
+        await asyncio.wait_for(env.delete_room(room), STEP_TIMEOUT_S)
     except Exception:  # the room may never have been created (dispatch failed): nothing left to delete
         logger.warning("deleting room %s failed", room, exc_info=True)
 
@@ -150,8 +165,8 @@ async def run_one_call(  # the plan fixes this signature
     room = f"va-{run_id[:8]}-{arch.value}-{persona.id}-{rep}-{uuid4().hex[:6]}"
     handle: CallerHandle | None = None
     try:
-        await env.create_dispatch(room, arch, run_id)
-        handle = await env.connect_caller(room, persona, arch)
+        await _bounded("create_dispatch", env.create_dispatch(room, arch, run_id))
+        handle = await _bounded("connect_caller", env.connect_caller(room, persona, arch))
         if not await handle.wait_agent(join_timeout_s):
             raise AgentNeverJoined(f"no booking agent joined {room} within {join_timeout_s:.0f} s")
         result = await _wait_for_result(handle, persona, call_timeout_s)

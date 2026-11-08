@@ -17,6 +17,7 @@ from mlflow.exceptions import MlflowException
 from datalab.project import Project, experiment_name
 from datalab.settings import Settings
 from datalab.tags import Tag
+from datalab.tracking_outcome import _OUTCOMES, _after_failure, _Outcome, _tag_outcome
 from datalab.tracking_queries import StaleRun, close_runs, project_spend, stale_runs
 
 __all__ = [
@@ -53,19 +54,11 @@ class Trial:
 
 
 @dataclass
-class _Outcome:
-    children: int = 0
-    failed: list[str] = field(default_factory=list)
-
-
-@dataclass
 class _Slot:
     lock: threading.Lock = field(default_factory=threading.Lock)
     open_trial: str | None = None
 
 
-# Outcomes of the trials of each open parent run, keyed by parent run id; popped by `tracked_run` when it closes.
-_OUTCOMES: dict[str, _Outcome] = {}
 _SLOT: Final = _Slot()
 
 
@@ -111,21 +104,11 @@ def tracked_run(
         mlflow.set_tags({"project": project.name} | extra)
         try:
             yield run.info.run_id
-        finally:
+        except BaseException as err:
+            _after_failure(err, "tagging the outcome", lambda: _tag_outcome(run.info.run_id))
+            raise
+        else:
             _tag_outcome(run.info.run_id)
-
-
-def _tag_outcome(parent_id: str) -> None:
-    outcome = _OUTCOMES.pop(parent_id, None)
-    if outcome is None:
-        return
-    mlflow.set_tags(
-        {
-            Tag.N_CHILDREN.value: str(outcome.children),
-            Tag.N_FAILED.value: str(len(outcome.failed)),
-            Tag.FAILED_CANDIDATES.value: ",".join(sorted(outcome.failed)),
-        }
-    )
 
 
 def _claim_slot(run_name: str) -> None:
@@ -170,10 +153,11 @@ def tracked_trial(
             trial = Trial(child.info.run_id, candidate or run_name)
             try:
                 yield trial
-            except BaseException:
+            except BaseException as err:
                 failed = True
+                _after_failure(err, "logging the trial cost", lambda: mlflow.log_metric("cost_usd", trial.cost_usd))
                 raise
-            finally:
+            else:
                 mlflow.log_metric("cost_usd", trial.cost_usd)
     finally:
         _release_slot()

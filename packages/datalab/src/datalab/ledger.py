@@ -43,10 +43,10 @@ from datalab.split import Partition, Split, SplitError, SplitStrategy, partition
 
 __all__ = [
     "Contract", "Dataset", "Decision", "Kind", "LedgerError", "LogEntry", "MilestoneEntry", "Partition",
-    "RunLedger", "Split", "SplitError", "SplitStrategy", "Status", "TestLook", "Winner", "contract", "decide",
-    "freeze_split", "look_number", "main", "new_ledger", "parse", "partition", "produce", "read", "read_split",
-    "record_data", "record_test_look", "redo", "split_sha256", "test_access_allowed", "test_access_problem",
-    "validate_dir", "write_atomic",
+    "RunLedger", "Split", "SplitError", "SplitStrategy", "Status", "TestLook", "Winner", "check_split_hash",
+    "contract", "decide", "freeze_split", "look_number", "main", "new_ledger", "parse", "partition", "produce",
+    "read", "read_split", "record_data", "record_test_look", "redo", "split_sha256", "test_access_allowed",
+    "test_access_problem", "validate_dir", "write_atomic",
 ]  # fmt: skip
 
 RUN_JSON: Final = "run.json"

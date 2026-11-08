@@ -13,6 +13,7 @@ from hydra.utils import instantiate
 from mlflow import MlflowClient
 from mlflow.entities import Run
 from mlflow.exceptions import MlflowException
+from mlflow.protos.databricks_pb2 import RESOURCE_DOES_NOT_EXIST, ErrorCode
 from omegaconf import DictConfig, OmegaConf
 from omegaconf.errors import OmegaConfBaseException
 
@@ -20,20 +21,21 @@ from datalab import ledger
 from datalab.ledger import LedgerError, RunLedger, Winner
 from datalab.project import CardMetric, Project, ProjectError, card_metric, load
 from datalab.settings import Settings
-from datalab.split import Partition, SplitError, split_sha256
+from datalab.split import Partition, SplitError, read_split, split_sha256
 from datalab.tags import Tag
 from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracked_trial
 
 from .candidates import config_sha256
 from .paths import PROJECT_DIR, register_resolvers
-from .prepare import PrepareError, compose_model, file_sha256, refuse_multirun
+from .prepare import PrepareError, check_data_hash, compose_model, refuse_multirun
 from .scoring import label, score
-from .split import SplitAccessError, load_split, read_rows
+from .split import SplitAccessError, check_time_kinds, load_split, read_rows
 
 register_resolvers()
 
 _REFUSALS = (PrepareError, ProjectError, SplitError, SplitAccessError, OSError, OmegaConfBaseException)
 _PARENT = "mlflow.parentRunId"
+_NOT_FOUND = ErrorCode.Name(RESOURCE_DOES_NOT_EXIST)
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,15 @@ def _read_ledger(folder: Path) -> RunLedger:
         raise PrepareError(f"eval runs at the audit only: /experiment ({err})") from err
 
 
+def _check_time_kinds(folder: Path, data_file: Path) -> None:
+    """Before the look is recorded: a split whose bounds and rows disagree on timezones cannot be cut."""
+    try:
+        rows = read_rows(data_file)
+    except ValueError as err:
+        raise PrepareError(str(err)) from err
+    check_time_kinds(read_split(folder / "split.json"), rows)
+
+
 def _gate(cfg: DictConfig, overrides: Sequence[str]) -> _Gate:
     project = load(PROJECT_DIR)  # (1)
     metric = card_metric(project.root)
@@ -69,8 +80,10 @@ def _gate(cfg: DictConfig, overrides: Sequence[str]) -> _Gate:
     problem = ledger.test_access_problem(lg, split_sha, note)
     if problem is not None:
         raise PrepareError(problem)
-    if file_sha256(data_file) != lg.data_sha256:
+    if lg.data_sha256 is None:
         raise PrepareError("data_file changed since modeling: its hash differs from run.json data_sha256")
+    check_data_hash(lg.data_sha256, data_file)
+    _check_time_kinds(folder, data_file)
     if lg.winner is None:
         raise PrepareError("run.json has no winner")
     candidate = str(cfg.candidate or lg.winner.candidate)  # (4)
@@ -96,12 +109,25 @@ def _cli_form(family: str, logged: dict[str, str]) -> str:
     return " ".join([f"model={family}", *(f"model.{k}={_cli_value(params[k])}" for k in sorted(params))])
 
 
+def _live_run(client: MlflowClient, run_id: str, role: str) -> Run:
+    """The run, or a refusal naming it: a missing or deleted run is a fact about the ledger, not an outage."""
+    try:
+        run = client.get_run(run_id)
+    except MlflowException as err:
+        if err.error_code != _NOT_FOUND:
+            raise
+        raise PrepareError(f"the {role} run {run_id} does not exist in MLflow") from err
+    if run.info.lifecycle_stage == "deleted":
+        raise PrepareError(f"the {role} run {run_id} is deleted")
+    return run
+
+
 def _check_winner(gate: _Gate, client: MlflowClient) -> None:
-    child: Run = client.get_run(gate.winner.run_id)
+    child = _live_run(client, gate.winner.run_id, "winner")
     parent_id = child.data.tags.get(_PARENT)
     if parent_id is None:
         raise PrepareError(f"the winner run {gate.winner.run_id} has no parent run")
-    tags = client.get_run(parent_id).data.tags
+    tags = _live_run(client, parent_id, "winner's parent").data.tags
     if tags.get(Tag.SPLIT_SHA256.value) != gate.ledger.split_sha256 or tags.get(Tag.DATA_SHA256.value) != (
         gate.ledger.data_sha256
     ):
