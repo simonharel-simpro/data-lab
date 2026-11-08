@@ -18,6 +18,8 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
   web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
+  Projection tab: `weavit-projector` Rust sidecar (umap-rs 0.4.5, ndarray, rayon), deck.gl 9.3.11 canvas; Rust gates
+  `cargo xtask lint` (pre-push + CI) and `deny.toml` (`cargo deny` local only, not yet in CI).
 - **Voice stack (`projects/voice-arch`, own env):** self-hosted LiveKit server `livekit/livekit-server:v1.13.10`
   (compose profile `voice`, 127.0.0.1 only: 7880, 7881/tcp, 7882/udp), `livekit-agents` 1.8.8 with the `openai` and
   `silero` plugins, `livekit-api` 1.2.2; every STT / TTS / LLM call goes to OpenRouter (`/audio/transcriptions`,
@@ -59,7 +61,9 @@ projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (se
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
-tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY)
+tools/weavit-ui/native/projector/  `weavit-projector` Rust sidecar (PCA, exact kNN, UMAP; NDJSON on stdout)
+tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY,
+                        builds the projector incrementally; serves even if cargo is missing or the build fails)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency;
                         hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root
@@ -210,6 +214,11 @@ return _row(persona, rep, room, _classify(handle, result), result)
   logged at the end; `cost_usd` (caller included) is logged when the tracker exits, even for a FAILED run.
 - **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
   transition model, each call is classified once from what the handle reports.
+
+### Projection (Weavit fork, `tools/weavit-ui`)
+- **Does:** the host reads vectors (lean cursor loop, `src/main/projection/readVectors.ts`) → sidecar stdin →
+  NDJSON frames → one session slot, polled by the renderer's Projection tab.
+- **Must NOT:** read through `exportObjects`; import `child_process` outside `src/main/projection/sidecar.ts`.
 
 ### App (`app/`, Phase 2B)
 - **Does:** reads cards (content collection `projects`, glob `*/PROJECT.md`, schema `cardSchema`), each project's
