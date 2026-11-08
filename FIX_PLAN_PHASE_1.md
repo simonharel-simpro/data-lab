@@ -1,5 +1,6 @@
 # Fix Plan — Phase 1: Run integrity (empty index, #12 build race, voice-arch budget)
 
+**Status:** ✅ Complete — branch fix-phase-1-run-integrity, 2026-11-08
 **Severity:** 🔴
 **Agent:** python-fastapi. This is generic Python: ignore the FastAPI layering rules (routers/services/repositories).
 **Depends on:** none
