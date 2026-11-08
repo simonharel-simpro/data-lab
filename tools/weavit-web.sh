@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Weavit UI in the browser (web mode) on the data-lab stack: http://127.0.0.1:3080
 #   tools/weavit-web.sh            build once if needed, then serve
-#   tools/weavit-web.sh --rebuild  rebuild first (after updating the tools/weavit-ui submodule)
+#   tools/weavit-web.sh --rebuild  reinstall and rebuild first (after updating the tools/weavit-ui submodule)
+# The projector sidecar (Projection tab) is rebuilt incrementally on every start; without cargo, or if it fails
+# to compile, the server still starts and the tab says the binary is missing.
 # The data-lab connection profile is created on first start (auto-connect). OPENROUTER_API_KEY from the
 # root .env, if set, is handed to the server for the RAG tab's OpenRouter preset; it stays in memory.
 set -euo pipefail
@@ -15,9 +17,16 @@ fi
 
 cd "$root/tools/weavit-ui"
 pnpm_() { pnpm --config.verify-deps-before-run=false "$@"; }
-[ -d node_modules ] || pnpm_ install --frozen-lockfile
+if [ "${1:-}" = "--rebuild" ] || [ ! -d node_modules ]; then
+  pnpm_ install --frozen-lockfile
+fi
 if [ "${1:-}" = "--rebuild" ] || [ ! -f out/web/server/main.js ]; then
   pnpm_ run web:build
+fi
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "weavit-web: cargo not found: the Projection tab will say the binary is missing"
+elif ! pnpm_ run projector:build; then
+  echo "weavit-web: projector build failed (see the cargo output above): the Projection tab will say the binary is missing" >&2
 fi
 
 key=""
