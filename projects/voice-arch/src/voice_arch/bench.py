@@ -12,7 +12,6 @@ from typing import Final
 
 import httpx
 import mlflow
-from mlflow import MlflowClient
 
 from datalab.project import Project, load
 from datalab.settings import Settings
@@ -20,7 +19,7 @@ from datalab.tracking import preflight, tracked_run
 from voice_arch import audio
 from voice_arch.bench_record import Emit, Outcome, appender, record_outcome, select, slug
 from voice_arch.bench_runs import LlmCase, load_llm_cases, run_llm, run_stt, run_tts
-from voice_arch.budget import check_budget, spent_so_far
+from voice_arch.budget import ESTIMATES_USD, check_budget, spent_so_far
 from voice_arch.candidates import (
     CORPUS_TTS_MODEL,
     CORPUS_VOICE,
@@ -39,7 +38,6 @@ from voice_arch.winners import (
     pick_tts,
 )
 
-ESTIMATE_USD: Final = 2.0  # what one component run may cost; F-4b refuses to start when it would reach the budget
 TTS_REPS: Final = 3
 
 
@@ -56,8 +54,7 @@ async def _logged_run(
     env: BenchEnv, component: str, params: Mapping[str, str | int], measure: Callable[[Emit], Awaitable[Outcome]]
 ) -> str:
     """Budget gate, then one run with the spend tracker inside it; a 401/402 propagates: run FAILED (F-4, F-4b)."""
-    client = MlflowClient(env.dl.mlflow_tracking_uri)
-    check_budget(spent_so_far(client), ESTIMATE_USD, env.voice.experiment_budget_usd)
+    check_budget(spent_so_far(env.dl), ESTIMATES_USD["bench"], env.voice.experiment_budget_usd)
     key = env.voice.openrouter_api_key.get_secret_value()
     on_exit = lambda cost: mlflow.log_metric("cost_usd", cost)  # noqa: E731
     with (

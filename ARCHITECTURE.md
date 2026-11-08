@@ -211,7 +211,12 @@ return _row(persona, rep, room, _classify(handle, result), result)
   (it joins the room and starts listening; B and C only after the agent's greeting, see `LiveCaller`), wait for the
   agent's `CallResult` on `voice-arch.result` (firing the persona's interjections while the agent talks), classify,
   delete the room. Rows are appended to `results/<run_id>.jsonl`; metrics, params and `per_conversation.json` are
-  logged at the end; `cost_usd` (caller included) is logged when the tracker exits, even for a FAILED run.
+  logged at the end. `cost_usd` (caller included) is the key's cumulative usage: logged after every call
+  (`step=index`, so a killed sweep loses at most one call) and once more on tracker exit (`step=len(rows)`), even for
+  a FAILED run; an unreadable key tags the run `cost_unknown=true` and the sweep carries on (F-12).
+- **Budget:** `budget.spent_so_far` is `datalab.tracking_queries.project_spend("voice-arch")` (every run, whatever its
+  status, RUNNING included) plus P-2: a `voice-arch/<sub>` run that is not FINISHED and logged no `cost_usd` counts
+  at `ESTIMATES_USD[sub]` (conversations 15 $, bench 2 $), with a warning.
 - **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
   transition model, each call is classified once from what the handle reports.
 
@@ -310,7 +315,9 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
    20-word overlap); `main()` computes `index.corpus_hash` once; `index.ensure_collection` reuses or builds
    `MiniRag_t2v_bge_small_en_v1_5_w120o20_c<corpus_hash12>_<hash8>` (vectorizer `text2vec-transformers`, embedder
    id and corpus hash in the hashed parts, U-13): reuse is keyed on corpus content, so a corpus edit gets a new
-   collection, never stale vectors; the count check stays a completeness check, with one rebuild (F-13).
+   collection, never stale vectors; a collection is reused only if its count matches AND a `near_text` probe answers
+   (an index that holds objects but answers nothing is rebuilt), with one rebuild, then `IndexBuildError` (F-13).
+   Index builds are serialized per collection by a host-local file lock, #12.
 3. `run.run` takes a frozen `RunConfig` (retrieval, k, n, size, overlap, collection, corpus_hash), logged as params
    and covered by `config_hash`; it opens `tracked_run(..., sub="retrieval")` → experiment `mini-rag/retrieval`,
    tags `project`, `config_hash` (and `smoke=true` for `--n`); per question: `index.search` (`bm25` or
@@ -319,8 +326,8 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
    Each scored answer is appended as it is produced to `projects/<project>/results/<run_id>.jsonl` (gitignored
    crash copy), so a kill, a `GenerationError` or an MLflow outage keeps the answers computed so far.
 4. Metrics and the artifact are logged only after every question is scored: `score = accuracy − hallucination`
-   (or `smoke_*`) and `per_question.json` (the canonical artifact); a `GenerationError` leaves a FAILED run without
-   metrics (F-13).
+   (or `smoke_*`) and `per_question.json` (the canonical artifact); a `GenerationError`, or a question whose search
+   returns no passages (`EmptyRetrieval`), leaves a FAILED run without metrics (F-13).
 5. The app shows the card with the best FINISHED run by `score` (`max`).
 
 ```python

@@ -20,7 +20,7 @@ from datalab.project import Project, load
 from datalab.settings import Settings
 from datalab.tracking import preflight, tracked_run
 from voice_arch.arch import Arch
-from voice_arch.budget import BudgetExceeded, check_budget, spent_so_far
+from voice_arch.budget import ESTIMATES_USD, BudgetExceeded, check_budget, spent_so_far
 from voice_arch.call import CallRow, Outcome, run_one_call
 from voice_arch.call_env import CallEnv
 from voice_arch.livekit_env import LiveKitCallEnv
@@ -32,7 +32,6 @@ from voice_arch.sweep_log import append_row, static_params, worker_params
 from voice_arch.sweep_query import last_full_sweep_cost
 
 logger = logging.getLogger(__name__)
-FALLBACK_ESTIMATE_USD: Final = 15.0  # a full sweep costs about this until one has finished and measured it
 MAX_CALLER_FAULT_PERCENT: Final = 10
 
 
@@ -65,11 +64,14 @@ class _Sweep:
     spent: float
     rows: list[CallRow] = field(default_factory=list)
 
-    def _check_spend(self, tracker: Tracker) -> None:
+    def _check_spend(self, tracker: Tracker, index: int, *, last: bool) -> None:
         now = tracker.spent_now()
         if now is None:
             logger.warning("OpenRouter key usage unreadable: the budget cannot be checked after this call")
-        elif self.spent + now >= self.settings.experiment_budget_usd:
+            mlflow.set_tag("cost_unknown", "true")
+            return
+        mlflow.log_metric("cost_usd", now, step=index)  # cumulative: a killed sweep loses at most one call's cost
+        if not last and self.spent + now >= self.settings.experiment_budget_usd:  # a finished sweep is never failed
             raise BudgetExceeded(self.spent + now, self.settings.experiment_budget_usd)
 
     async def calls(self, run_id: str, tracker: Tracker) -> None:
@@ -82,8 +84,7 @@ class _Sweep:
             self.rows.append(row)
             append_row(self.results, row)
             logger.info("%s rep %d: %s exact=%s", persona.id, rep, row.outcome.value, row.exact)
-            if index + 1 < len(plan):  # a finished sweep is never failed for money already spent
-                self._check_spend(tracker)
+            self._check_spend(tracker, index, last=index + 1 == len(plan))
 
     def log_summary(self, full: bool) -> None:
         mlflow.log_params(worker_params(self.rows))
@@ -109,13 +110,15 @@ async def run_sweep(  # the plan fixes this signature
 ) -> str:
     """Budget gate (F-4b), then the whole sweep inside one run; any raise leaves the run FAILED, rows kept."""
     estimate = last_full_cost()
-    check_budget(spent, FALLBACK_ESTIMATE_USD if estimate is None else estimate, settings.experiment_budget_usd)
+    check_budget(
+        spent, ESTIMATES_USD["conversations"] if estimate is None else estimate, settings.experiment_budget_usd
+    )
     sweep = _Sweep(env, personas, arch, reps, settings, project.root / "results", spent)
     full = len({p.id for p in personas}) == len(Behaviour) and reps == FULL_REPS
     tags = {"full": str(full).lower(), "arch": arch.value}
 
     def on_exit(cost: float) -> None:
-        mlflow.log_metric("cost_usd", cost)
+        mlflow.log_metric("cost_usd", cost, step=len(sweep.rows))  # after every per-call step (S-15a)
         if (per_call := cost_per_call(cost, sweep.rows)) is not None:
             mlflow.log_metric("cost_per_call_usd", per_call)
 
@@ -171,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
             voice,
             project=project,
             dl_settings=dl,
-            spent=spent_so_far(client),
+            spent=spent_so_far(dl),
             last_full_cost=partial(last_full_sweep_cost, client),
             spend_tracker=SpendTracker,
         )

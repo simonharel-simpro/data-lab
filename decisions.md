@@ -290,3 +290,16 @@ compensates for the defect; it was not tuned to pass the test.
 **Alternatives considered:** the default 1.0 (smeared clusters); patching or forking umap-rs; another UMAP crate.
 **Consequences:** Layouts depend on a workaround for a crate bug. Revisit it if umap-rs fixes `step_epochs` or is
 replaced: the compensation would then halve repulsion for nothing.
+
+## 2026-11-08 — Serialize Weaviate index builds with a host-local flock
+
+**Status:** accepted (P-1, user 2026-11-08)
+**Context:** Two concurrent mini-rag runs racing `ensure_collection` (#12): B saw A's partial object count as
+"incomplete" and deleted A's collection mid-build.
+**Decision:** `ensure_collection` runs entirely under `fcntl.flock(LOCK_EX)` on `<tmp>/datalab-index-locks/<name>.lock`,
+one lock per collection name. Weaviate is local (127.0.0.1), so the host is the right scope. The reuse check runs
+under the lock, so B waits, then sees A's complete collection and reuses it.
+**Alternatives considered:** (b) the `filelock` package (also works on Windows; adds a dependency); (c) no lock:
+build into a uuid-suffixed collection, then point a Weaviate alias at it.
+**Consequences:** `fcntl` is POSIX-only, which is fine on Linux/WSL (ADR 3). Lock files in the OS temp dir are never
+removed, which is fine for a local lab. A holder that dies releases the lock with its file descriptor.

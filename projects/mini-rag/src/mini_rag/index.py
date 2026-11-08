@@ -1,9 +1,14 @@
 """The pilot's Weaviate collection: vectors computed by the `text2vec-transformers` module (D-5), no embedding here."""
 
+import fcntl  # POSIX-only: data-lab runs on Linux/WSL (ADR 3)
 import hashlib
 import json
 import logging
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from enum import StrEnum
+from pathlib import Path
 from typing import Final
 
 from weaviate import WeaviateClient
@@ -18,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Must match the compose vectorizer image (`baai-bge-small-en-v1.5-1.13.3`, D-5); a test guards it.
 EMBEDDER: Final = "bge-small-en-v1.5"
 INSERT_BATCH: Final = 64
+LOCK_DIR: Final = Path(tempfile.gettempdir()) / "datalab-index-locks"
 _PROPERTIES: Final = [
     Property(name="text", data_type=DataType.TEXT, tokenization=Tokenization.WORD),
     # ids: exact-match only, never BM25 terms nor part of the embedded text
@@ -32,7 +38,7 @@ class Retrieval(StrEnum):
 
 
 class IndexBuildError(RuntimeError):
-    """The collection's object count never matched the chunk count, even after one rebuild (F-13)."""
+    """The collection never held every chunk AND answered a vector search, even after one rebuild (F-13)."""
 
 
 def corpus_hash(chunks: list[Chunk]) -> str:
@@ -72,21 +78,55 @@ def _build(client: WeaviateClient, name: str, chunks: list[Chunk]) -> None:
         logger.warning("%d objects failed to import into %s: %s", len(failed), name, failed[0].message)
 
 
+def _searchable(client: WeaviateClient, name: str, probe: str) -> bool:
+    """No try/except: with the vectorizer down `near_text` raises, and a rebuild could not help (S-15b)."""
+    return bool(client.collections.get(name).query.near_text(query=probe, limit=1).objects)
+
+
+def _complete(client: WeaviateClient, name: str, chunks: list[Chunk]) -> bool:
+    if not client.collections.exists(name):
+        return False
+    found = _count(client, name)
+    if found != len(chunks):
+        logger.warning("collection %s holds %d objects, expected %d", name, found, len(chunks))
+        return False
+    if not _searchable(client, name, chunks[0].text):
+        logger.warning("collection %s holds every object but its vector search returns nothing", name)
+        return False
+    return True
+
+
+@contextmanager
+def _build_lock(name: str) -> Iterator[None]:
+    """One builder per collection name on this host; Weaviate is local (127.0.0.1), so the host is the scope."""
+    LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    with (LOCK_DIR / f"{name}.lock").open("w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+
+
 def ensure_collection(
     client: WeaviateClient, chunks: list[Chunk], *, size: int, overlap: int, corpus: str, embedder: str = EMBEDDER
 ) -> str:
-    """Reuse a complete collection; else build it, and rebuild once if the count is short, then raise (F-13)."""
+    """Reuse a complete collection; else build it, rebuild once, then raise (F-13).
+
+    Complete = the right count AND a vector probe answers (the HNSW-loss incident). Serialized per name (#12).
+    """
+    if not chunks:
+        raise IndexBuildError("no chunks to index")
     name = index_name(embedder, size, overlap, corpus)
-    if client.collections.exists(name) and _count(client, name) == len(chunks):
-        logger.info("reusing complete collection %s (%d chunks)", name, len(chunks))
-        return name
-    for attempt in (1, 2):
-        _build(client, name, chunks)
-        found = _count(client, name)
-        if found == len(chunks):
+    with _build_lock(name):
+        if _complete(client, name, chunks):
+            logger.info("reusing complete collection %s (%d chunks)", name, len(chunks))
             return name
-        logger.warning("collection %s holds %d objects, expected %d (attempt %d)", name, found, len(chunks), attempt)
-    raise IndexBuildError(f"collection {name} holds {found} objects after a rebuild, expected {len(chunks)}")
+        for _attempt in (1, 2):
+            _build(client, name, chunks)
+            if _complete(client, name, chunks):
+                return name
+    raise IndexBuildError(
+        f"collection {name} is incomplete after a rebuild: expected {len(chunks)} objects "
+        "and a vector search that returns them (vector search returns nothing, or the count is short)"
+    )
 
 
 def search(client: WeaviateClient, name: str, query: str, mode: Retrieval, k: int) -> list[Chunk]:
