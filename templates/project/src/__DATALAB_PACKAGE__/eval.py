@@ -11,7 +11,7 @@ import mlflow
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from mlflow import MlflowClient
-from mlflow.entities import Run
+from mlflow.entities import LifecycleStage, Run
 from mlflow.exceptions import MlflowException
 from mlflow.protos.databricks_pb2 import RESOURCE_DOES_NOT_EXIST, ErrorCode
 from omegaconf import DictConfig, OmegaConf
@@ -117,7 +117,7 @@ def _live_run(client: MlflowClient, run_id: str, role: str) -> Run:
         if err.error_code != _NOT_FOUND:
             raise
         raise PrepareError(f"the {role} run {run_id} does not exist in MLflow") from err
-    if run.info.lifecycle_stage == "deleted":
+    if run.info.lifecycle_stage == LifecycleStage.DELETED:
         raise PrepareError(f"the {role} run {run_id} is deleted")
     return run
 
