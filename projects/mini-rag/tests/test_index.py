@@ -35,8 +35,11 @@ def test_d_5_embedder_matches_compose_vectorizer_image() -> None:
 class _FakeCollections:
     """Records the calls `ensure_collection` makes; `counts` is what each aggregate returns, in order."""
 
-    def __init__(self, *, exists: bool, counts: list[int], failed: list[Any] | None = None) -> None:
+    def __init__(
+        self, *, exists: bool, counts: list[int], failed: list[Any] | None = None, empty_probes: int = 0
+    ) -> None:
         self._exists, self.counts, self.calls = exists, counts, []
+        self.empty_probes, self.probes = empty_probes, 0  # the first `empty_probes` vector probes find nothing
         self.failed = failed or []
         self.queries: list[tuple[str, dict[str, Any]]] = []
         self.hits: list[dict[str, str]] = []
@@ -88,7 +91,10 @@ class _FakeCollections:
                 @staticmethod
                 def near_text(query: str, limit: int) -> Any:
                     fake.queries.append(("near_text", {"query": query, "limit": limit}))
-                    return _response(fake.hits)
+                    if fake.hits:
+                        return _response(fake.hits)
+                    fake.probes += 1  # an index probe: answers with one hit once `empty_probes` are used up
+                    return _response([] if fake.probes <= fake.empty_probes else _HITS[:1])
 
         return _Collection()
 
@@ -186,3 +192,30 @@ def test_build_logs_failed_objects(caplog: pytest.LogCaptureFixture) -> None:
     assert len(warnings) == 1
     assert name in warnings[0]
     assert "t2v unreachable" in warnings[0]
+
+
+def test_reuse_with_matching_count_but_empty_vector_search_rebuilds() -> None:
+    fake = _FakeCollections(exists=True, counts=[3, 3], empty_probes=1)  # HNSW lost: objects intact, near_text empty
+    name = index_name(EMBEDDER, 120, 20, _CORPUS)
+
+    assert ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20, corpus=_CORPUS) == name
+    assert fake.calls == [("delete", name), ("create", name)]
+    assert [q["query"] for _, q in fake.queries] == [_CHUNKS[0].text] * 2  # the probe is the first chunk's text
+
+
+def test_rebuilt_collection_whose_vector_search_stays_empty_raises() -> None:
+    fake = _FakeCollections(exists=True, counts=[3, 3, 3], empty_probes=99)
+
+    with pytest.raises(IndexBuildError, match="vector search"):
+        ensure_collection(_client(fake), _CHUNKS, size=120, overlap=20, corpus=_CORPUS)
+
+    assert sum(op == "create" for op, _ in fake.calls) == 2
+
+
+def test_ensure_collection_without_chunks_is_refused() -> None:
+    fake = _FakeCollections(exists=True, counts=[0])
+
+    with pytest.raises(IndexBuildError, match="no chunks"):
+        ensure_collection(_client(fake), [], size=120, overlap=20, corpus="c0")
+
+    assert fake.calls == []

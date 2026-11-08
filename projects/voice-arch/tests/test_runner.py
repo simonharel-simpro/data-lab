@@ -194,6 +194,39 @@ async def test_cost_is_logged_with_cost_per_call(sweep: Sweep) -> None:
     assert metrics["cost_per_call_usd"] == pytest.approx(final / 2)
 
 
+async def test_sweep_logs_cumulative_cost_after_each_call(sweep: Sweep) -> None:
+    tracker = partial(FakeTracker, readings=[0.5, 1.25])
+
+    await sweep.run(FakeEnv(), ["self_correction"], reps=2, tracker=tracker)
+
+    history = sweep.client.get_metric_history(sweep.only_run().info.run_id, "cost_usd")
+    assert [(m.step, m.value) for m in sorted(history, key=lambda m: m.step)] == [(0, 0.5), (1, 1.25)]
+
+
+async def test_unreadable_key_tags_cost_unknown(sweep: Sweep) -> None:
+    tracker = partial(FakeTracker, readings=[None, None])
+
+    await sweep.run(FakeEnv(), ["self_correction"], reps=2, tracker=tracker)
+
+    run = sweep.only_run()
+    assert run.data.tags["cost_unknown"] == "true"
+    assert run.info.status == "FINISHED"
+
+
+async def test_readable_key_does_not_tag_cost_unknown(sweep: Sweep) -> None:
+    await sweep.run(FakeEnv(), ["self_correction"], reps=1, tracker=partial(FakeTracker, readings=[0.1]))
+
+    assert "cost_unknown" not in sweep.only_run().data.tags
+
+
+async def test_exit_cost_is_the_latest_metric_after_per_call_points(sweep: Sweep) -> None:
+    tracker = partial(FakeTracker, readings=[0.5, 1.25], final=1.3)
+
+    await sweep.run(FakeEnv(), ["self_correction"], reps=2, tracker=tracker)
+
+    assert sweep.only_run().data.metrics["cost_usd"] == 1.3
+
+
 async def test_f_12_cost_absent_when_key_read_fails(sweep: Sweep) -> None:
     reads = iter([200, 500, 500, 500])
 
