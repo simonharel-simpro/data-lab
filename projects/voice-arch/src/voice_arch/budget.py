@@ -4,7 +4,7 @@ import logging
 from typing import Final
 
 from mlflow import MlflowClient
-from mlflow.entities import ViewType
+from mlflow.entities import RunStatus, ViewType
 
 from datalab.project import experiment_name
 from datalab.settings import Settings
@@ -16,6 +16,7 @@ PROJECT: Final = "voice-arch"
 # logged any cost counts for (P-2). A finished sweep is measured instead (`last_full_sweep_cost`).
 ESTIMATES_USD: Final = {"conversations": 15.0, "bench": 2.0}
 _PAGE = 1000
+_FINISHED: Final = RunStatus.to_string(RunStatus.FINISHED)
 
 
 class BudgetExceeded(Exception):
@@ -42,7 +43,7 @@ def _unmeasured_estimates(client: MlflowClient) -> float:
                 page_token=token,
             )
             for run in page:
-                if run.info.status != "FINISHED" and "cost_usd" not in run.data.metrics:
+                if run.info.status != _FINISHED and "cost_usd" not in run.data.metrics:
                     logger.warning("run %s has no cost_usd: counted at the %.2f $ estimate", run.info.run_id, estimate)
                     total += estimate
             token = page.token
