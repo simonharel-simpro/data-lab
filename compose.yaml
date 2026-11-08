@@ -39,6 +39,9 @@ services:
       timeout: 5s
       retries: 12
     restart: unless-stopped
+    # The HNSW commit log is buffered: a hard kill (Docker's default 10 s) once left both MiniRag
+    # indexes empty while the objects survived (2026-11-07). Give Weaviate time to flush on stop.
+    stop_grace_period: 60s
 
   t2v-transformers:
     # English-only model, pinned (D-5); multilingual tracked in #6. No host port: only Weaviate calls it.
