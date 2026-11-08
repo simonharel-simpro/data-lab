@@ -8,7 +8,7 @@ A phase is complete only when merged into the integration branch AND marked here
 
 | Phase | Theme | Status | Branch | /check |
 |-------|-------|--------|--------|--------|
-| 1 | Run integrity: empty index, #12 build race, voice-arch budget | implemented (4/4), awaiting /check | fix-phase-1-run-integrity | — |
+| 1 | Run integrity: empty index, #12 build race, voice-arch budget | ✅ landed (4/4) | fix-phase-1-run-integrity | clean @ 2e50ef7 (1 fix-check iter) |
 | 2 | Resilience at the trust boundaries | pending | — | — |
 | 3 | Ledger contract, enum discipline & datalab test quality | pending | — | — |
 | 4 | Signatures, settings & error-handling style | pending | — | — |
