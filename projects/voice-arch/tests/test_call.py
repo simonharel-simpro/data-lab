@@ -1,11 +1,17 @@
+import asyncio
+import logging
+
 import pytest
 from livekit.agents import Agent
 
 from tests.call_fakes import FakeEnv, FakeHandle, persona, result_for
+from voice_arch import call
 from voice_arch.arch import Arch
 from voice_arch.booking.record import SCORED_FIELDS
-from voice_arch.call import AgentNeverJoined, Outcome, ProviderAuthStop, run_one_call
+from voice_arch.call import AgentNeverJoined, LiveKitUnresponsive, Outcome, ProviderAuthStop, run_one_call
+from voice_arch.call_env import CallerHandle
 from voice_arch.caller import CallerAgent
+from voice_arch.personas import Persona
 
 TIMEOUT_S = 0.1
 JOIN_S = 1.0
@@ -140,3 +146,58 @@ def test_f_8_caller_does_not_speak_before_first_agent_turn() -> None:
     assert CallerAgent.on_enter is Agent.on_enter
     assert "Never speak first." in agent.instructions
     assert who.instructions in agent.instructions
+
+
+class _HangingEnv(FakeEnv):
+    def __init__(self, hang: str, handles: list[FakeHandle] | None = None) -> None:
+        super().__init__(handles or [])
+        self._hang = hang
+
+    async def create_dispatch(self, room: str, arch: Arch, run_id: str) -> None:
+        if self._hang == "create_dispatch":
+            await asyncio.Event().wait()
+        await super().create_dispatch(room, arch, run_id)
+
+    async def connect_caller(self, room: str, who: Persona, arch: Arch) -> CallerHandle:
+        if self._hang == "connect_caller":
+            await asyncio.Event().wait()
+        return await super().connect_caller(room, who, arch)
+
+
+class _HangingCloseHandle(FakeHandle):
+    async def close(self) -> None:
+        await asyncio.Event().wait()
+
+
+@pytest.mark.parametrize("step", ["create_dispatch", "connect_caller"])
+async def test_run_one_call_bounds_a_step_that_never_returns(step: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(call, "STEP_TIMEOUT_S", 0.05)
+    env = _HangingEnv(step)
+
+    with pytest.raises(LiveKitUnresponsive, match=step):
+        await _call(env)
+
+    assert len(env.deleted) == 1  # _cleanup still ran
+
+
+async def test_cleanup_bounds_a_close_that_never_returns(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(call, "STEP_TIMEOUT_S", 0.05)
+    env = FakeEnv([_HangingCloseHandle(result_for(persona()))])
+
+    with caplog.at_level(logging.WARNING):
+        row = await asyncio.wait_for(_call(env), 1.0)
+
+    assert row.outcome is Outcome.SCORED
+    assert env.deleted == env.rooms
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+async def test_interject_on_unstarted_caller_yields_caller_fault_row() -> None:
+    handle = FakeHandle(result=None, caller_error="caller session failed to start: RuntimeError", speaking_for=1.2)
+    env = FakeEnv([handle])
+
+    row = await _call(env, "interrupter", timeout=0.3)
+
+    assert row.outcome is Outcome.CALLER_FAULT

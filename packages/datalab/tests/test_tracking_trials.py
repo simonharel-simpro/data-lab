@@ -149,6 +149,21 @@ def test_trial_slot_freed_when_cost_log_fails(sqlite_uri: str, tmp_path: Path) -
     assert client.get_run(second_id).data.tags["n_children"] == "1"
 
 
+def test_tracked_trial_surfaces_the_body_error_when_cost_log_fails(sqlite_uri: str, tmp_path: Path) -> None:
+    def failing(*args: Any, **kwargs: Any) -> None:  # stands in for mlflow.log_metric
+        raise OSError("log failed")
+
+    with (
+        patch("mlflow.log_metric", failing),
+        pytest.raises(KeyError, match="body") as caught,
+        _parent(sqlite_uri, tmp_path),
+        tracked_trial("a"),
+    ):
+        raise KeyError("body")
+
+    assert any("logging the trial cost failed" in note for note in caught.value.__notes__)
+
+
 def test_u_10_trial_name_and_candidate(sqlite_uri: str, tmp_path: Path) -> None:
     with _parent(sqlite_uri, tmp_path) as parent_id:
         with tracked_trial("hist-gb-0", candidate="hist-gb"):

@@ -113,3 +113,47 @@ async def test_wait_result_is_none_without_a_result() -> None:
     caller, _ = _caller(listen_after=0)
 
     assert await caller.wait_result(0.05) is None
+
+
+class _Session:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.said: list[str] = []
+        self._error = error
+
+    def say(self, text: str, *, allow_interruptions: bool) -> None:
+        if self._error is not None:
+            raise self._error
+        self.said.append(text)
+
+
+def _with_session(session: _Session, *, started: bool) -> LiveCaller:
+    caller, _ = _caller(listen_after=0)
+    caller._session = cast("AgentSession[None]", session)
+    caller._started = started
+    return caller
+
+
+async def test_interject_on_unstarted_caller_does_not_say() -> None:
+    session = _Session(RuntimeError("AgentSession isn't running"))
+    caller = _with_session(session, started=False)
+
+    await caller.interject("wait, actually")
+
+    assert session.said == []
+
+
+async def test_interject_that_raises_runtime_error_sets_caller_error() -> None:
+    caller = _with_session(_Session(RuntimeError("AgentSession is closing, cannot use say()")), started=True)
+
+    await caller.interject("wait, actually")
+
+    assert caller.caller_error == "interjection failed: RuntimeError"
+
+
+async def test_interject_on_started_caller_says_the_text() -> None:
+    session = _Session()
+    caller = _with_session(session, started=True)
+
+    await caller.interject("wait, actually")
+
+    assert session.said == ["wait, actually"]

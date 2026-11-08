@@ -8,6 +8,7 @@ from datalab.split import Partition, SplitError
 # The package name varies per project and would sort differently against `datalab`: sort the two apart.
 # isort: split
 from __DATALAB_PACKAGE__.grid import expand
+from __DATALAB_PACKAGE__.prepare import PrepareError, check_data_hash, file_sha256
 from __DATALAB_PACKAGE__.scoring import label, metric_key_problems, score
 from __DATALAB_PACKAGE__.split import load_split, read_rows
 
@@ -133,3 +134,38 @@ def test_metric_key_problems() -> None:
     assert "not allowed" in problems[1] and "b_acc" in problems[1]
     assert "candidate" in problems[2] and "b_acc" in problems[2]
     assert metric_key_problems({"core-0": frozenset({"score", "cost_usd"})}, "score", [], ["core"]) == []
+
+
+def test_check_data_hash_skips_when_nothing_is_frozen_and_refuses_a_mismatch(tmp_path: Path) -> None:
+    data = tmp_path / "d.jsonl"
+    data.write_text('{"x": 1}\n', encoding="utf-8")
+
+    check_data_hash(None, data)
+    check_data_hash(file_sha256(data), data)
+    with pytest.raises(PrepareError, match="data_file changed since modeling"):
+        check_data_hash("0" * 64, data)
+
+
+def _temporal(tmp_path: Path, bound: str) -> Path:
+    splits = {"train": {"time_max": bound}, "val": {"time_max": "2025-02-01"}, "test": {"time_max": "2025-03-01"}}
+    return _write(tmp_path / "t", {"strategy": "temporal", "time_col": "t", "splits": splits})
+
+
+def test_load_split_tz_aware_rows_with_naive_bound_raises_split_error(tmp_path: Path) -> None:
+    folder = _temporal(tmp_path, "2025-01-01")
+    rows = [{"t": "2024-12-15T00:00:00+00:00"}]
+
+    with pytest.raises(SplitError, match="timezone"):
+        load_split(folder, [Partition.TRAIN], rows=rows)
+
+
+def test_load_split_naive_rows_with_aware_bound_raises_split_error(tmp_path: Path) -> None:
+    splits = {
+        "train": {"time_max": "2025-01-01T00:00:00+00:00"},
+        "val": {"time_max": "2025-02-01T00:00:00+00:00"},
+        "test": {"time_max": "2025-03-01T00:00:00+00:00"},
+    }
+    folder = _write(tmp_path / "t", {"strategy": "temporal", "time_col": "t", "splits": splits})
+
+    with pytest.raises(SplitError, match="timezone"):
+        load_split(folder, [Partition.TRAIN], rows=[{"t": "2024-12-15"}])

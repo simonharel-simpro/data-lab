@@ -1,14 +1,17 @@
 import json
 import os
 import re
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import mlflow
 import pytest
 from mlflow import MlflowClient
 from mlflow.entities import Run
+from mlflow.exceptions import MlflowException
 
 from datalab.tags import Tag
 from datalab.tracking import (
@@ -18,6 +21,7 @@ from datalab.tracking import (
     project_spend,
     stale_runs,
     tracked_run,
+    tracked_trial,
 )
 from tests.conftest import REPO_ROOT
 from tests.tracking_support import make_project, make_settings
@@ -70,6 +74,40 @@ def test_tracked_run_exception_marks_failed(sqlite_uri: str, tmp_path: Path) -> 
         raise RuntimeError("boom")
 
     assert _only_run(sqlite_uri, "p").info.status == "FAILED"
+
+
+def _tagging_fails_after_project_tags() -> AbstractContextManager[object]:
+    real = mlflow.set_tags
+
+    def flaky(tags: dict[str, str], *args: Any, **kwargs: Any) -> None:  # forwards mlflow.set_tags' own signature
+        if Tag.N_CHILDREN.value in tags:
+            raise MlflowException("tagging down")
+        real(tags, *args, **kwargs)
+
+    return patch("mlflow.set_tags", flaky)
+
+
+def test_tracked_run_surfaces_the_body_error_when_tagging_fails(sqlite_uri: str, tmp_path: Path) -> None:
+    with (
+        _tagging_fails_after_project_tags(),
+        pytest.raises(KeyError, match="body") as caught,
+        tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r"),
+    ):
+        with tracked_trial("a"):
+            pass
+        raise KeyError("body")
+
+    assert any("tagging the outcome failed" in note for note in caught.value.__notes__)
+
+
+def test_tracked_run_still_raises_when_tagging_fails_after_a_good_body(sqlite_uri: str, tmp_path: Path) -> None:
+    with (
+        _tagging_fails_after_project_tags(),
+        pytest.raises(MlflowException, match="tagging down"),
+        tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r"),
+        tracked_trial("a"),
+    ):
+        pass
 
 
 def test_preflight_unreachable_raises_tracking_unavailable() -> None:
