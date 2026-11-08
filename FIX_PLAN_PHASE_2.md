@@ -1,5 +1,6 @@
 # Fix Plan — Phase 2: Resilience at the trust boundaries
 
+**Status:** ✅ Complete — branch fix-phase-2-trust-boundaries, 2026-11-08
 **Severity:** 🟡
 **Agent:** python-fastapi. This is generic Python: ignore the FastAPI layering rules. 2.7 is a bash script plus a pytest.
 **Depends on:** none
