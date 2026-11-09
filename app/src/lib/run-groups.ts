@@ -71,7 +71,8 @@ export function groupRuns(
     const children = kids.get(run.info.run_id) ?? [];
     kids.delete(run.info.run_id);
     const experiment = name(run.info.experiment_id);
-    const isParent = children.length > 0 || tag(run, TAGS.n_children) !== undefined || tag(run, TAGS.entry) !== undefined;
+    const isParent =
+      children.length > 0 || tag(run, TAGS.n_children) !== undefined || tag(run, TAGS.entry) !== undefined;
     return isParent ? parentGroup(run, children, experiment, metric, filter) : { kind: 'standalone', experiment, run };
   });
   // Children left over have no top-level parent in `runs`: shown, never hidden, never best (F-19).

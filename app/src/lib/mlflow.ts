@@ -2,7 +2,14 @@
 import type { Card, Metric } from './card.ts';
 import { METRIC_KEY_RE } from './card.ts';
 import { isValidName } from './name.ts';
-import { post, parseExperiments, searchAllRuns, TransientError, type MlflowExperiment, type MlflowRun } from './mlflow-rest.ts';
+import {
+  post,
+  parseExperiments,
+  searchAllRuns,
+  TransientError,
+  type MlflowExperiment,
+  type MlflowRun,
+} from './mlflow-rest.ts';
 import { reportUnavailable } from './report.ts';
 import { mlflowUri, type Env } from './config.ts';
 import { runCollection } from './weavit.ts';
@@ -73,14 +80,23 @@ async function projectExperiments(base: string, project: string, fetchImpl: type
 }
 
 /** Every run tagged `project=<project>`, any status (F-19: unfinished parents and children are shown too). */
-function searchRuns(base: string, project: string, experimentIds: string[], fetchImpl: typeof fetch): Promise<MlflowRun[]> {
-  return searchAllRuns(base, {
-    experiment_ids: experimentIds,
-    filter: `tags.project = '${project}'`,
-    order_by: ['attributes.start_time DESC'],
-    max_results: 1000,
-    run_view_type: 'ACTIVE_ONLY',
-  }, fetchImpl);
+function searchRuns(
+  base: string,
+  project: string,
+  experimentIds: string[],
+  fetchImpl: typeof fetch,
+): Promise<MlflowRun[]> {
+  return searchAllRuns(
+    base,
+    {
+      experiment_ids: experimentIds,
+      filter: `tags.project = '${project}'`,
+      order_by: ['attributes.start_time DESC'],
+      max_results: 1000,
+      run_view_type: 'ACTIVE_ONLY',
+    },
+    fetchImpl,
+  );
 }
 
 function toOk(pick: PickedRun, experiments: readonly MlflowExperiment[], base: string): BestRun {
@@ -113,7 +129,12 @@ async function fetchProject(
   try {
     const experiments = await projectExperiments(base, project, fetchImpl);
     if (experiments.length === 0) return { kind: 'no-runs' };
-    const runs = await searchRuns(base, project, experiments.map((e) => e.experiment_id), fetchImpl);
+    const runs = await searchRuns(
+      base,
+      project,
+      experiments.map((e) => e.experiment_id),
+      fetchImpl,
+    );
     return { kind: 'fetched', experiments, runs };
   } catch (err) {
     const reason = (err as Error).message;

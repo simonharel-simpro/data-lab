@@ -43,9 +43,7 @@ export function tag(run: MlflowRun, key: string): string | undefined {
  * `none`: run.json is invalid, so no run can be trusted to be on the frozen split.
  */
 export type BestFilter =
-  | { kind: 'legacy' }
-  | { kind: 'ledger'; splitSha256: string | null; dataSha256: string | null }
-  | { kind: 'none' };
+  { kind: 'legacy' } | { kind: 'ledger'; splitSha256: string | null; dataSha256: string | null } | { kind: 'none' };
 
 export function bestFilter(state: LedgerState): BestFilter {
   if (state.kind === 'absent') return { kind: 'legacy' };

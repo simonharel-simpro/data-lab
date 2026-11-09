@@ -14,27 +14,45 @@ const runName = (run: MlflowRun) => run.info.run_name ?? run.info.run_id;
 const runUrl = (run: MlflowRun) => `${mlflowUri()}/#/experiments/${run.info.experiment_id}/runs/${run.info.run_id}`;
 const experiments = [...new Set(groups.map((g) => g.experiment))];
 ---
+
 {experiments.map((experiment) => (
   <section class="run-groups">
     <h3>{experiment}</h3>
     <ul>
-      {groups.filter((g) => g.experiment === experiment).map((g) => (
-        <li>
-          {g.kind === 'parent' && (
-            <>
-              {linked ? <a href={runUrl(g.parent)}>{runName(g.parent)}</a> : <span>{runName(g.parent)}</span>}
-              {' · '}{g.finished} children ({g.failed} failed)
-              {g.best ? (
-                <> · best {linked ? <a href={runUrl(g.best.run)}>{runName(g.best.run)}</a> : <span>{runName(g.best.run)}</span>} {metricKey} = {g.best.value.toFixed(3)}</>
-              ) : <>, no best</>}
-            </>
-          )}
-          {g.kind === 'standalone' && (linked ? <a href={runUrl(g.run)}>{runName(g.run)}</a> : <span>{runName(g.run)}</span>)}
-          {g.kind === 'orphans' && (
-            <>children of a missing parent <code>{g.parentRunId}</code> · {g.children.length} runs</>
-          )}
-        </li>
-      ))}
+      {groups
+        .filter((g) => g.experiment === experiment)
+        .map((g) => (
+          <li>
+            {g.kind === 'parent' && (
+              <>
+                {linked ? <a href={runUrl(g.parent)}>{runName(g.parent)}</a> : <span>{runName(g.parent)}</span>}
+                {' · '}
+                {g.finished} children ({g.failed} failed)
+                {g.best ? (
+                  <>
+                    {' '}
+                    · best{' '}
+                    {linked ? (
+                      <a href={runUrl(g.best.run)}>{runName(g.best.run)}</a>
+                    ) : (
+                      <span>{runName(g.best.run)}</span>
+                    )}{' '}
+                    {metricKey} = {g.best.value.toFixed(3)}
+                  </>
+                ) : (
+                  <>, no best</>
+                )}
+              </>
+            )}
+            {g.kind === 'standalone' &&
+              (linked ? <a href={runUrl(g.run)}>{runName(g.run)}</a> : <span>{runName(g.run)}</span>)}
+            {g.kind === 'orphans' && (
+              <>
+                children of a missing parent <code>{g.parentRunId}</code> · {g.children.length} runs
+              </>
+            )}
+          </li>
+        ))}
     </ul>
   </section>
 ))}

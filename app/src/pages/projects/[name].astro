@@ -24,8 +24,11 @@ const gaps = missing(entry.data, entry.body ?? '');
 const ledger = ledgerState(entry.id, join(projectsDir(), entry.id));
 const view = await projectView(entry.data, bestFilter(ledger));
 ---
+
 <Base title={entry.data.title}>
-  <p><a href="/">← Projets</a> · <span class="status">{entry.data.status}</span></p>
+  <p>
+    <a href="/">← Projets</a> · <span class="status">{entry.data.status}</span>
+  </p>
   <h1>{entry.data.title}</h1>
   <Stepper state={ledger} />
   {entry.data.data && <p class="muted">Données : {entry.data.data}</p>}

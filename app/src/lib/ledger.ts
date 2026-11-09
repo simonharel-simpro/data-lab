@@ -54,7 +54,9 @@ export const runLedgerSchema = z
     current_milestone: z.string(),
     milestones: z.record(
       z.string(),
-      z.object({ status: z.enum(STATUSES), artifacts: z.array(z.string()), decision: z.enum(DECISIONS).nullable() }).strict(),
+      z
+        .object({ status: z.enum(STATUSES), artifacts: z.array(z.string()), decision: z.enum(DECISIONS).nullable() })
+        .strict(),
     ),
     dataset: z.object({ id: nonEmpty, hash: nonEmpty }).strict().nullable(),
     metric: nonEmpty,
@@ -72,7 +74,10 @@ export const runLedgerSchema = z
     const keys = Object.keys(lg.milestones);
     if (keys.length !== seq.length || !seq.every((m) => keys.includes(m))) {
       const got = pyList([...keys].sort());
-      ctx.addIssue({ code: 'custom', message: `I-1: milestones must be exactly ${pyList(seq)} for a ${lg.kind} ledger, got ${got}` });
+      ctx.addIssue({
+        code: 'custom',
+        message: `I-1: milestones must be exactly ${pyList(seq)} for a ${lg.kind} ledger, got ${got}`,
+      });
     }
   });
 export type RunLedger = z.infer<typeof runLedgerSchema>;
@@ -90,7 +95,14 @@ export type Step = {
 export type LedgerState =
   | { kind: 'absent' }
   | { kind: 'invalid'; reason: string }
-  | { kind: 'ok'; ledgerKind: Kind; metric: string; steps: Step[]; splitSha256: string | null; dataSha256: string | null };
+  | {
+      kind: 'ok';
+      ledgerKind: Kind;
+      metric: string;
+      steps: Step[];
+      splitSha256: string | null;
+      dataSha256: string | null;
+    };
 
 function describe(issue: z.core.$ZodIssue): string {
   if (issue.code === 'custom') return issue.message;
@@ -134,16 +146,18 @@ function toSteps(lg: RunLedger, projectDir: string, fs: LedgerFs): Step[] {
   return STEP_AGENTS[lg.kind].flatMap(({ id, agent }) => {
     const entry = lg.milestones[id];
     if (!entry) return []; // unreachable once I-1 holds; narrows the record lookup
-    return [{
-      id,
-      agent,
-      status: entry.status,
-      decision: entry.decision,
-      // The ledger keeps its pointer on the last milestone once all are validated (I-6): no step is current then.
-      current: id === lg.current_milestone && entry.status !== 'validated',
-      artifacts: entry.artifacts.map((path) => ({ path, exists: artifactExists(projectDir, path, fs) })),
-      notes: lg.decisions_log.filter((l) => l.milestone === id).map(({ decision, note }) => ({ decision, note })),
-    }];
+    return [
+      {
+        id,
+        agent,
+        status: entry.status,
+        decision: entry.decision,
+        // The ledger keeps its pointer on the last milestone once all are validated (I-6): no step is current then.
+        current: id === lg.current_milestone && entry.status !== 'validated',
+        artifacts: entry.artifacts.map((path) => ({ path, exists: artifactExists(projectDir, path, fs) })),
+        notes: lg.decisions_log.filter((l) => l.milestone === id).map(({ decision, note }) => ({ decision, note })),
+      },
+    ];
   });
 }
 

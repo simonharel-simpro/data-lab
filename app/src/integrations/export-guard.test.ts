@@ -18,7 +18,14 @@ test('strict mode passes when the report is empty', () => {
 
 test('one log line per unavailable project', () => {
   const lines: string[] = [];
-  checkReport(new Map([['a', 'r1'], ['b', 'r2']]), {}, (l) => lines.push(l));
+  checkReport(
+    new Map([
+      ['a', 'r1'],
+      ['b', 'r2'],
+    ]),
+    {},
+    (l) => lines.push(l),
+  );
   assert.equal(lines.length, 2);
   const first = lines[0];
   assert.ok(first !== undefined);
@@ -37,7 +44,25 @@ test('F-1: the astro:build:done hook reads the shared build report', async () =>
 
 test('F-20: ledger entries get their own line', () => {
   const lines: string[] = [];
-  checkReport(new Map([['run.json:p', 'x'], ['q', 'down']]), {}, (l) => lines.push(l));
+  checkReport(
+    new Map([
+      ['run.json:p', 'x'],
+      ['q', 'down'],
+    ]),
+    {},
+    (l) => lines.push(l),
+  );
   assert.deepEqual(lines, ["run.json invalid for 'p': x", "metrics unavailable for 'q': down"]);
-  assert.throws(() => checkReport(new Map([['run.json:p', 'x'], ['q', 'down']]), { DATALAB_STRICT_EXPORT: '1' }, quiet), /run\.json:p, q/);
+  assert.throws(
+    () =>
+      checkReport(
+        new Map([
+          ['run.json:p', 'x'],
+          ['q', 'down'],
+        ]),
+        { DATALAB_STRICT_EXPORT: '1' },
+        quiet,
+      ),
+    /run\.json:p, q/,
+  );
 });

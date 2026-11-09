@@ -80,7 +80,11 @@ export function parseRunsPage(res: unknown): { runs: MlflowRun[]; nextPageToken?
   const page = parse(RunsResponse, res);
   const runs = page.runs.map((run) => ({
     ...run,
-    data: { metrics: keep(Metric, run.data.metrics), params: keep(Param, run.data.params), tags: keep(Tag, run.data.tags) },
+    data: {
+      metrics: keep(Metric, run.data.metrics),
+      params: keep(Param, run.data.params),
+      tags: keep(Tag, run.data.tags),
+    },
   }));
   return page.next_page_token ? { runs, nextPageToken: page.next_page_token } : { runs };
 }
@@ -100,7 +104,9 @@ export async function searchAllRuns(
   const seen = new Set<string>();
   let token: string | undefined;
   for (let page = 0; page < maxPages; page++) {
-    const res = parseRunsPage(await post(base, 'runs/search', token ? { ...body, page_token: token } : body, fetchImpl));
+    const res = parseRunsPage(
+      await post(base, 'runs/search', token ? { ...body, page_token: token } : body, fetchImpl),
+    );
     runs.push(...res.runs);
     token = res.nextPageToken;
     if (!token) return runs;

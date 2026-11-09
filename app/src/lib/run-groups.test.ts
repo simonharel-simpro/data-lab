@@ -8,11 +8,22 @@ const legacy: BestFilter = { kind: 'legacy' };
 const score = { key: 'score', goal: 'max' } as const;
 const exps = [{ experiment_id: '1', name: 'p' }];
 
-function run(id: string, metrics: Record<string, number>, start = 1, exp = '1', params: Record<string, string> = {}, tags: Record<string, string> = {}, status = 'FINISHED'): MlflowRun {
+function run(
+  id: string,
+  metrics: Record<string, number>,
+  start = 1,
+  exp = '1',
+  params: Record<string, string> = {},
+  tags: Record<string, string> = {},
+  status = 'FINISHED',
+): MlflowRun {
   const m = Object.entries(metrics).map(([key, value]) => ({ key, value }));
   const p = Object.entries(params).map(([key, value]) => ({ key, value }));
   const t = Object.entries(tags).map(([key, value]) => ({ key, value }));
-  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status }, data: { metrics: m, params: p, tags: t } };
+  return {
+    info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status },
+    data: { metrics: m, params: p, tags: t },
+  };
 }
 const child = (id: string, parent: string, value: number, status = 'FINISHED') =>
   run(id, { score: value }, 1, '1', {}, { 'mlflow.parentRunId': parent }, status);
@@ -39,7 +50,12 @@ test('U-11: template parent before any child', () => {
 });
 
 test('U-11: counts finished and failed children', () => {
-  const runs = [run('p', {}, 1, '1', {}, { n_children: '3' }), child('a', 'p', 0.4), child('b', 'p', 0.7), child('c', 'p', 0.9, 'FAILED')];
+  const runs = [
+    run('p', {}, 1, '1', {}, { n_children: '3' }),
+    child('a', 'p', 0.4),
+    child('b', 'p', 0.7),
+    child('c', 'p', 0.9, 'FAILED'),
+  ];
   const g = only(groupRuns(runs, exps, score, legacy), 'parent');
   assert.equal(g.finished, 2);
   assert.equal(g.failed, 1);
@@ -50,7 +66,10 @@ test('U-11: counts finished and failed children', () => {
 test('U-12: parentless runs by start_time desc', () => {
   const runs = [run('one', { score: 1 }, 1), run('three', { score: 1 }, 3), run('two', { score: 1 }, 2)];
   const groups = groupRuns(runs, exps, score, legacy);
-  assert.deepEqual(groups.map((g) => (g.kind === 'standalone' ? g.run.info.run_id : g.kind)), ['three', 'two', 'one']);
+  assert.deepEqual(
+    groups.map((g) => (g.kind === 'standalone' ? g.run.info.run_id : g.kind)),
+    ['three', 'two', 'one'],
+  );
 });
 
 test('U-12: legacy run stays standalone', () => {
@@ -65,13 +84,27 @@ test('F-19: orphans form their own group', () => {
   const last = groups.at(-1);
   assert.ok(last && last.kind === 'orphans');
   assert.equal(last.parentRunId, 'gone');
-  assert.deepEqual(last.children.map((r) => r.info.run_id), ['c']);
+  assert.deepEqual(
+    last.children.map((r) => r.info.run_id),
+    ['c'],
+  );
 });
 
 test('experiments by name ascending; no metric means no best', () => {
   const runs = [run('x', {}, 1, '2', {}, { entry: 'train' }), child('c', 'x', 0.5), run('y', { score: 1 }, 1, '1')];
-  const groups = groupRuns(runs, [{ experiment_id: '1', name: 'p/z' }, { experiment_id: '2', name: 'p/a' }], undefined, legacy);
-  assert.deepEqual(groups.map((g) => g.experiment), ['p/a', 'p/z']);
+  const groups = groupRuns(
+    runs,
+    [
+      { experiment_id: '1', name: 'p/z' },
+      { experiment_id: '2', name: 'p/a' },
+    ],
+    undefined,
+    legacy,
+  );
+  assert.deepEqual(
+    groups.map((g) => g.experiment),
+    ['p/a', 'p/z'],
+  );
   const first = groups[0];
   assert.ok(first && first.kind === 'parent');
   assert.equal(first.best, undefined);

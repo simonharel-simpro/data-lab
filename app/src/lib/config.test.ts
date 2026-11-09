@@ -18,7 +18,10 @@ test('isStrictExport is true only for exactly 1', () => {
 
 test('F-2: resolves to 127.0.0.1:5050 and ignores MLFLOW_URL', () => {
   assert.equal(mlflowUri({}), 'http://127.0.0.1:5050');
-  assert.equal(mlflowUri({ MLFLOW_URL: 'http://x:5000', MLFLOW_TRACKING_URI: 'http://x:5000' }), 'http://127.0.0.1:5050');
+  assert.equal(
+    mlflowUri({ MLFLOW_URL: 'http://x:5000', MLFLOW_TRACKING_URI: 'http://x:5000' }),
+    'http://127.0.0.1:5050',
+  );
   assert.equal(mlflowUri({ DATALAB_MLFLOW_TRACKING_URI: 'http://h:1' }), 'http://h:1');
 });
 

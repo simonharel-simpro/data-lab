@@ -45,8 +45,8 @@ test('F-18: METRIC_KEY_RE matches the Python literal', () => {
 });
 
 test('goal value set matches contracts/value_sets.json', () => {
-  const contract = JSON.parse(
-    readFileSync(new URL('../../../contracts/value_sets.json', import.meta.url), 'utf8'),
-  ) as { goals: string[] };
+  const contract = JSON.parse(readFileSync(new URL('../../../contracts/value_sets.json', import.meta.url), 'utf8')) as {
+    goals: string[];
+  };
   assert.deepEqual([...GOALS], contract.goals);
 });

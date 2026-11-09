@@ -8,7 +8,11 @@ const LEDGER_KEY = 'run.json:';
  * Log one line per card whose metrics were unavailable (F-1) or whose run.json is invalid (F-20); with
  * DATALAB_STRICT_EXPORT=1 any entry fails the export.
  */
-export function checkReport(report: ReadonlyMap<string, string>, env: Env, log: (line: string) => void = console.warn): void {
+export function checkReport(
+  report: ReadonlyMap<string, string>,
+  env: Env,
+  log: (line: string) => void = console.warn,
+): void {
   for (const [key, reason] of report) {
     if (key.startsWith(LEDGER_KEY)) log(`run.json invalid for '${key.slice(LEDGER_KEY.length)}': ${reason}`);
     else log(`metrics unavailable for '${key}': ${reason}`);
