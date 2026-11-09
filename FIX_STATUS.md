@@ -12,7 +12,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 2 | Resilience at the trust boundaries | ✅ landed (7/7) | fix-phase-2-trust-boundaries | clean @ 2e1bc20 (1 fix-check iter) |
 | 3 | Ledger contract, enum discipline & datalab test quality | ✅ landed (9/9) | fix-phase-3-ledger-enums | clean @ 95ea6d2 (first pass) |
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
-| 5 | pyright strict on `src/` (#14) | implemented (8/8 + 5.9), awaiting /check | fix-phase-5-pyright-strict | — |
+| 5 | pyright strict on `src/` (#14) | ✅ landed (8/8 + 5.9) | fix-phase-5-pyright-strict | clean @ 31023ee (2 approved deviations) |
 | 6 | App formatter + linter (#13) | pending | — | — |
 | 7 | Docs & dependency hygiene | pending | — | — |
 | 8 | CI gates & tooling | pending | — | — |
