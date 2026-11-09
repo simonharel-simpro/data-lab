@@ -97,44 +97,57 @@ def _close_reason(close: CloseEvent | None, fatal: LLMError | None) -> str | Non
     return None if close is None else close.reason.value
 
 
-def build_result(  # the plan fixes this 7-argument signature
-    room: str,
-    arch: Arch,
-    run_id: str,
-    state: BookingState,
-    close: CloseEvent | None,
-    errors: int,
-    report_fn: Callable[[], dict[str, object]],
-    *,
-    summarize_chat_ctx: bool | None,
-    max_tool_steps: int,
-    fatal: LLMError | None = None,
-) -> CallResult:
-    """A report failure keeps the record and says why (F-3); the close error gives the HTTP status (F-4).
+@dataclass(frozen=True)
+class CallIdentity:
+    room: str
+    arch: Arch
+    run_id: str
 
-    `fatal` is the unrecoverable LLM error the worker ended the call for: it is reported like a close error and,
-    per ESC-3-1, the call stays scored by its record.
-    """
+
+@dataclass(frozen=True)
+class SessionOutcome:
+    state: BookingState
+    close: CloseEvent | None
+    errors: int
+    summarize_chat_ctx: bool | None
+    max_tool_steps: int
+    fatal: LLMError | None = None  # the unrecoverable LLM error the worker ended the call for
+
+
+def _problems(
+    report_fn: Callable[[], dict[str, object]], close: CloseEvent | None, fatal: LLMError | None
+) -> tuple[dict[str, object] | None, list[str]]:
+    """The report (None when it failed) and everything that went wrong, in the order they are reported."""
     report: dict[str, object] | None = None
     problems: list[str] = []
     try:
         report = report_fn()
-    except Exception as err:  # any failure to build the report must still yield a result
+    except Exception as err:  # noqa: BLE001  # any failure to build the report must still yield a result
         problems.append(f"report failed: {type(err).__name__}: {err}")
     if (close_problem := _close_error(close)) is not None:
         problems.append(close_problem)
     if fatal is not None:
         problems.append(f"unrecoverable LLM error: {fatal.error}")
+    return report, problems
+
+
+def build_result(call: CallIdentity, outcome: SessionOutcome, report_fn: Callable[[], dict[str, object]]) -> CallResult:
+    """A report failure keeps the record and says why (F-3); the close error gives the HTTP status (F-4).
+
+    `outcome.fatal` is reported like a close error and, per ESC-3-1, the call stays scored by its record.
+    """
+    close, fatal = outcome.close, outcome.fatal
+    report, problems = _problems(report_fn, close, fatal)
     return CallResult(
-        room=room,
-        arch=arch,
-        run_id=run_id,
-        record=state.record.model_copy(deep=True),
+        room=call.room,
+        arch=call.arch,
+        run_id=call.run_id,
+        record=outcome.state.record.model_copy(deep=True),
         report=report,
         close_reason=_close_reason(close, fatal),
         error="; ".join(problems) or None,
         http_status=http_status_of(fatal if close is None or close.error is None else close.error),
-        session_errors=errors,
-        summarize_chat_ctx=summarize_chat_ctx,
-        max_tool_steps=max_tool_steps,
+        session_errors=outcome.errors,
+        summarize_chat_ctx=outcome.summarize_chat_ctx,
+        max_tool_steps=outcome.max_tool_steps,
     )

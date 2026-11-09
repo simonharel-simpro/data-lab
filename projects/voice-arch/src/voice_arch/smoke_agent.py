@@ -7,10 +7,11 @@ from livekit.agents.voice.events import ConversationItemAddedEvent
 from livekit.plugins import silero
 
 from voice_arch.audio import make_llm, make_stt, make_tts
-from voice_arch.settings import VoiceSettings
+from voice_arch.settings import load_settings
 
 logger = logging.getLogger("voice_arch.smoke")
-settings = VoiceSettings()  # pyright: ignore[reportCallIssue]
+# Module level: LiveKit pickles the entrypoint by module reference, so `server` cannot be built in a function.
+settings = load_settings()
 server = AgentServer(
     ws_url=settings.livekit_url,
     api_key=settings.livekit_api_key.get_secret_value(),

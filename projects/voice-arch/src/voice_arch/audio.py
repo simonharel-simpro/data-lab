@@ -30,7 +30,7 @@ def make_tts(settings: VoiceSettings, model: str | None = None, voice: str | Non
     )
 
 
-def make_llm(
+def make_llm(  # noqa: PLR0913  # all options but settings are defaulted (#39)
     settings: VoiceSettings,
     model: str | None = None,
     temperature: float = 0.0,
@@ -54,7 +54,7 @@ def make_llm(
         provider=provider,
         reasoning_effort=NOT_GIVEN if reasoning_effort is None else reasoning_effort,
     )
-    return retry_on_empty_completion(model_llm) if retry_empty else model_llm
+    return retry_on_empty_completion(model_llm, settings.dump_empty_dir) if retry_empty else model_llm
 
 
 def make_agent_llm(settings: VoiceSettings) -> llm.LLM:

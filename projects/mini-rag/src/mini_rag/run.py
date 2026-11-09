@@ -65,7 +65,7 @@ def _sha256(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def _answer_all(
+def _answer_all(  # noqa: PLR0913  # one step of run(): selection, retrieval, k, answer, search, sink (#39)
     selected: list[Question], retrieval: Retrieval, k: int, answer: Answer, find: Search, sink: Path
 ) -> list[Result]:
     """Each scored answer is appended to `sink` at once: the crash copy survives a kill or an MLflow outage."""
@@ -84,7 +84,7 @@ def _answer_all(
     return results
 
 
-def run(
+def run(  # noqa: PLR0913  # grouped by role on 2026-11-04, S-10 (#39)
     project: Project,
     settings: Settings,
     pilot: PilotSettings,
@@ -99,12 +99,7 @@ def run(
     """Returns the run id. Metrics are logged once, after every question is scored (F-13)."""
     selected = _select(questions, config.n)
     partial = len(selected) < len(questions)  # D-15: a subset logs smoke_* only, never `score`
-    params = {"retrieval": str(config.retrieval), "k": config.k, "n": config.n}
-    params |= {"questions_hash": _sha256([q.id for q in selected])}
-    params |= {"llm_base_url": public_url(pilot.llm_base_url), "llm_providers": _routing(pilot)}
-    params |= {"gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
-    params |= {"size": config.size, "overlap": config.overlap, "collection": config.collection}
-    params |= {"corpus_hash": config.corpus_hash}
+    params = _params(config, pilot, selected)
     tags = {"config_hash": _sha256(params)} | ({"smoke": "true"} if partial else {})
     name = f"{config.retrieval}-k{config.k}"
     with tracked_run(project, settings, run_name=name, sub="retrieval", tags=tags) as run_id:
@@ -116,6 +111,16 @@ def run(
         if served_by is not None and (counts := served_by()):
             mlflow.set_tag("llm_served_by", json.dumps(dict(counts), sort_keys=True))
     return run_id
+
+
+def _params(config: RunConfig, pilot: PilotSettings, selected: list[Question]) -> dict[str, object]:
+    params: dict[str, object] = {"retrieval": str(config.retrieval), "k": config.k, "n": config.n}
+    params |= {"questions_hash": _sha256([q.id for q in selected])}
+    params |= {"llm_base_url": public_url(pilot.llm_base_url), "llm_providers": _routing(pilot)}
+    params |= {"gen_model": pilot.gen_model, "max_tokens": pilot.max_tokens}
+    params |= {"size": config.size, "overlap": config.overlap, "collection": config.collection}
+    params |= {"corpus_hash": config.corpus_hash}
+    return params
 
 
 def _routing(pilot: PilotSettings) -> str:

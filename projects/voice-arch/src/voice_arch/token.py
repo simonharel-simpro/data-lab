@@ -4,7 +4,7 @@ import argparse
 
 from livekit.api import AccessToken, RoomAgentDispatch, RoomConfiguration, VideoGrants
 
-from voice_arch.settings import VoiceSettings
+from voice_arch.settings import VoiceSettings, load_settings
 
 
 def make_token(settings: VoiceSettings, room: str, identity: str, agent: str | None = None) -> str:
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--identity", default="me")
     parser.add_argument("--agent", help="agent name to dispatch into the room when the token joins")
     args = parser.parse_args(argv)
-    print(make_token(VoiceSettings(), args.room, args.identity, args.agent))  # pyright: ignore[reportCallIssue]
+    print(make_token(load_settings(), args.room, args.identity, args.agent))
     return 0
 
 

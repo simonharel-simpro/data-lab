@@ -163,6 +163,6 @@ class LiveCaller:
         self._room.unregister_text_stream_handler(RESULT_TOPIC)
         try:
             await self._session.aclose()
-        except Exception:
+        except Exception:  # best-effort: the room is disconnected next whatever happened
             logger.exception("closing the caller session failed")
         await self._room.disconnect()

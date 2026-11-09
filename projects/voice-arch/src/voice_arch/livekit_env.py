@@ -33,7 +33,7 @@ class LiveKitCallEnv:
         token = make_token(self._settings, room, _CALLER_IDENTITY)
         try:
             await lk_room.connect(self._settings.livekit_url, token)
-        except Exception:
+        except Exception:  # release the half-open caller, then re-raise the original failure
             await caller.close()
             raise
         caller.scan()

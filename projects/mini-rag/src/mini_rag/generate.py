@@ -38,8 +38,19 @@ def _prompt(question: str, passages: list[Chunk]) -> str:
     return f"Passages:\n{body}\n\nQuestion: {question}"
 
 
+def _extra_body(providers: list[str] | None, quantization: str | None) -> dict[str, object]:
+    body: dict[str, object] = {"temperature": 0}
+    if providers:
+        # OpenRouter routing: only these upstreams, in order, never outside the list or the quantization.
+        routing: dict[str, object] = {"order": providers, "allow_fallbacks": False}
+        if quantization:
+            routing["quantizations"] = [quantization]
+        body["provider"] = routing
+    return body
+
+
 class LlmGenerator:
-    def __init__(
+    def __init__(  # noqa: PLR0913  # connection settings; the 4 defaulted ones are optional kw-only knobs (#39)
         self,
         base_url: str,
         model: str,
@@ -54,13 +65,7 @@ class LlmGenerator:
     ) -> None:
         self.model, self.max_tokens = model, max_tokens
         # anthropic>=2 dropped `temperature` from the signature; both endpoints honour it.
-        self.extra_body: dict[str, object] = {"temperature": 0}
-        if providers:
-            # OpenRouter routing: only these upstreams, in order, never outside the list or the quantization.
-            routing: dict[str, object] = {"order": providers, "allow_fallbacks": False}
-            if quantization:
-                routing["quantizations"] = [quantization]
-            self.extra_body["provider"] = routing
+        self.extra_body = _extra_body(providers, quantization)
         # Which upstream served each answer (OpenRouter's `provider` response field); empty elsewhere.
         self.served: Counter[str] = Counter()
         self.sdk = anthropic.Anthropic(

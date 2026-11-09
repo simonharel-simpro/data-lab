@@ -6,14 +6,17 @@ extend-exclude = ["tools/weavit-ui", "spike-astro", "app"]
 src = ["packages/*/src", "projects/*/src"]
 
 [lint]
-select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "BLE", "PLR0913"]
 
 [lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106"]
+"**/tests/**" = ["S101", "S105", "S106", "PLR0913"]
 
 [format]
 # Vendored verbatim (sha256 in its header); the hooks pass --force-exclude.
 exclude = ["tools/check_hydra_project.py"]
+
+[lint.pylint]
+max-args = 5
 
 [lint.isort]
 # The template package is a placeholder until `datalab-new` renames it: sort it as first-party like the generated one.

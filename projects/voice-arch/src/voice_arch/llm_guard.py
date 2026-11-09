@@ -7,6 +7,7 @@ identical request can come back empty every time, so a retry raises the temperat
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Final
 
 from livekit.agents import APIConnectionError, llm
@@ -25,7 +26,7 @@ def retry_temperature(base: float, retry: int) -> float:
     return max(base, min(base + RETRY_TEMPERATURE_STEP * retry, MAX_RETRY_TEMPERATURE))
 
 
-def retry_on_empty_completion(model: llm.LLM) -> llm.LLM:
+def retry_on_empty_completion(model: llm.LLM, dump_dir: Path | None = None) -> llm.LLM:
     """Same model; an empty stream raises a retryable error, so LiveKit re-sends it (`conn_options.max_retry`)."""
     chat: Callable[..., llm.LLMStream] = model.chat
 
@@ -46,7 +47,7 @@ def retry_on_empty_completion(model: llm.LLM) -> llm.LLM:
             attempts += 1
             await run()
             if not stream._event_ch.output_sent:  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
-                dump_empty_request(stream, request, attempts)
+                dump_empty_request(stream, request, attempts, dump_dir)
                 raise APIConnectionError(EMPTY_COMPLETION, retryable=True)
 
         stream._run = checked_run  # pyright: ignore[reportPrivateUsage]

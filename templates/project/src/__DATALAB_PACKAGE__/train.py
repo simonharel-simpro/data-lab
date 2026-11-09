@@ -138,7 +138,7 @@ def _run_child(plan: _Plan, child: _Child) -> bool:
             mlflow.log_metric(plan.metric.key, score([model.predict(r) for r in plan.eval_rows], plan.labels))
     except (MlflowException, TrackingUnavailable):
         raise
-    except Exception as err:  # isolation boundary: one candidate's failure must not stop the others
+    except Exception as err:  # noqa: BLE001  # isolation boundary: one candidate's failure must not stop the others
         print(f"candidate {combo.run_name} failed: {err!r}", file=sys.stderr)
         return False
     return True

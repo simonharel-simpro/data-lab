@@ -38,6 +38,6 @@ def _after_failure(err: BaseException, what: str, cleanup: Callable[[], None]) -
     """Run `cleanup` while `err` propagates; if it fails too, note that on `err` so the body's error stays raised."""
     try:
         cleanup()
-    except Exception as cleanup_err:  # the body's error must win; this one is noted and logged
+    except Exception as cleanup_err:  # noqa: BLE001  # the body's error must win; this one is noted and logged
         err.add_note(f"{what} failed: {cleanup_err!r}")
         logger.warning("%s failed while handling %r: %r", what, err, cleanup_err)

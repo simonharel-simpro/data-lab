@@ -31,7 +31,7 @@ from voice_arch.candidates import (
 from voice_arch.corpus import Corpus, Utterance, build_corpus, load_utterances
 from voice_arch.openrouter_key import SpendTracker
 from voice_arch.seams import ChatModel, Synthesizer, Transcriber
-from voice_arch.settings import VoiceSettings
+from voice_arch.settings import VoiceSettings, load_settings
 from voice_arch.winners import (
     NoEligibleCandidate,
     pick_llm,
@@ -63,7 +63,10 @@ async def _logged_run(
     """Budget gate, then one run with the spend tracker inside it; a 401/402 propagates: run FAILED (F-4, F-4b)."""
     check_budget(spent_so_far(env.dl), ESTIMATES_USD["bench"], env.voice.experiment_budget_usd)
     key = env.voice.openrouter_api_key.get_secret_value()
-    on_exit = lambda cost: mlflow.log_metric("cost_usd", cost)  # noqa: E731
+
+    def on_exit(cost: float) -> None:
+        mlflow.log_metric("cost_usd", cost)
+
     with (
         tracked_run(env.project, env.dl, run_name=component, sub="bench") as run_id,
         SpendTracker(key, client=env.key_client, on_exit=on_exit),
@@ -152,7 +155,8 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _args(argv)
-    voice, dl, project = VoiceSettings(), Settings(), load()  # config validated before any I/O  # pyright: ignore[reportCallIssue]
+    # Config validated before any I/O.
+    voice, dl, project = load_settings(), Settings(), load()
     preflight(dl.mlflow_tracking_uri)
     env = BenchEnv(project, dl, voice, project.root / "results")
     print(asyncio.run(_dispatch(env, args.component, args.n)))

@@ -144,7 +144,7 @@ async def _cleanup(env: CallEnv, handle: CallerHandle | None, room: str) -> None
     try:
         if handle is not None:
             await asyncio.wait_for(handle.close(), STEP_TIMEOUT_S)
-    except Exception:
+    except Exception:  # best-effort cleanup: a failed close must not hide the call's row
         logger.warning("closing the caller of room %s failed", room, exc_info=True)
     try:
         await asyncio.wait_for(env.delete_room(room), STEP_TIMEOUT_S)
@@ -152,7 +152,7 @@ async def _cleanup(env: CallEnv, handle: CallerHandle | None, room: str) -> None
         logger.warning("deleting room %s failed", room, exc_info=True)
 
 
-async def run_one_call(  # the plan fixes this signature
+async def run_one_call(  # noqa: PLR0913  # call identity + two timeouts, kw-only (#39)
     env: CallEnv,
     persona: Persona,
     arch: Arch,

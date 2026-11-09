@@ -163,7 +163,7 @@ def _execute(gate: _Gate, settings: Settings) -> int:
     except (MlflowException, TrackingUnavailable) as err:
         print(f"tracking failed: {err}", file=sys.stderr)
         return 1
-    except Exception as err:  # isolation boundary: whatever failed, the child run is FAILED and eval exits 1
+    except Exception as err:  # noqa: BLE001  # isolation boundary: any failure FAILs the child run, eval exits 1
         print(f"eval failed: {err!r}", file=sys.stderr)
         return 1
     return 0

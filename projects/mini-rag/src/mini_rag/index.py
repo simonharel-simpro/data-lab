@@ -105,7 +105,7 @@ def _build_lock(name: str) -> Iterator[None]:
         yield
 
 
-def ensure_collection(
+def ensure_collection(  # noqa: PLR0913  # index identity (size/overlap/corpus/embedder), kw-only (#39)
     client: WeaviateClient, chunks: list[Chunk], *, size: int, overlap: int, corpus: str, embedder: str = EMBEDDER
 ) -> str:
     """Reuse a complete collection; else build it, rebuild once, then raise (F-13).

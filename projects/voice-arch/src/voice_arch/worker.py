@@ -18,10 +18,12 @@ from voice_arch.arch import Arch, UnknownArchError
 from voice_arch.audio import make_agent_llm, make_stt, make_tts
 from voice_arch.dispatch import AGENT_NAME
 from voice_arch.result import RESULT_TOPIC, CallResult
-from voice_arch.settings import VoiceSettings
+from voice_arch.settings import load_settings
 from voice_arch.worker_logic import (
     MAX_TOOL_STEPS,
     TURN_HANDLING,
+    CallIdentity,
+    SessionOutcome,
     SessionWatch,
     build_result,
     error_result,
@@ -29,7 +31,8 @@ from voice_arch.worker_logic import (
 )
 
 logger = logging.getLogger("voice_arch.worker")
-settings = VoiceSettings()  # pyright: ignore[reportCallIssue]
+# Module level: LiveKit pickles `entry` by module reference, so `server` cannot be built inside a function.
+settings = load_settings()
 server = AgentServer(
     ws_url=settings.livekit_url,
     api_key=settings.livekit_api_key.get_secret_value(),
@@ -75,17 +78,16 @@ async def entry(ctx: JobContext) -> None:
         await send_result(ctx.room, error_result(ctx.room.name, str(err)))
         return
     session, watch = await run_call(ctx, arch)
-    result = build_result(
-        ctx.room.name,
-        arch,
-        run_id,
-        session.userdata,
-        watch.close,
-        watch.errors,
-        lambda: ctx.make_session_report(session).to_dict(),
+    outcome = SessionOutcome(
+        state=session.userdata,
+        close=watch.close,
+        errors=watch.errors,
         summarize_chat_ctx=SUMMARIZE_CHAT_CTX if arch in _TASKGROUP_ARCHES else None,
         max_tool_steps=MAX_TOOL_STEPS,
         fatal=watch.fatal,
+    )
+    result = build_result(
+        CallIdentity(ctx.room.name, arch, run_id), outcome, lambda: ctx.make_session_report(session).to_dict()
     )
     await send_result(ctx.room, result)
 

@@ -1,6 +1,8 @@
 """Project settings (`VOICE_ARCH_*`); the shared infra settings come from `datalab.settings.Settings`."""
 
 import re
+from functools import cache
+from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
 
@@ -54,6 +56,10 @@ class VoiceSettings(BaseSettings):
     call_timeout_s: float = 420
     agent_join_timeout_s: float = 20
 
+    # Opt-in debug dump of the request behind an empty completion (ESC-3-2). The dump holds the whole
+    # conversation, so this directory must stay outside the repository.
+    dump_empty_dir: Path | None = None
+
     @field_validator("livekit_url")
     @classmethod
     def _ws_scheme(cls, v: str) -> str:
@@ -78,3 +84,9 @@ class VoiceSettings(BaseSettings):
     @property
     def provider_list(self) -> list[str]:
         return self.openrouter_providers.split(",")
+
+
+@cache
+def load_settings() -> VoiceSettings:
+    """The one place VoiceSettings is built from the environment: pydantic-settings fills the required fields."""
+    return VoiceSettings()  # pyright: ignore[reportCallIssue]  # fields come from env / .env, not arguments

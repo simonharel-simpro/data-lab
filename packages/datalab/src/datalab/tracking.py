@@ -132,14 +132,19 @@ def _parent_of(parent_id: str) -> tuple[str, str]:
     return parent.info.experiment_id, project
 
 
+def _trial_tags(tags: Mapping[str, str] | None) -> dict[str, str]:
+    extra = dict(tags or {})
+    if "project" in extra or Tag.CANDIDATE.value in extra:
+        raise ValueError("tags may not override 'project' or 'candidate': pass candidate= instead")
+    return extra
+
+
 @contextmanager
 def tracked_trial(
     run_name: str, tags: Mapping[str, str] | None = None, *, candidate: str | None = None
 ) -> Iterator[Trial]:
     """One child run of the open `tracked_run`, in the parent's experiment; it alone logs `cost_usd` (D-5)."""
-    extra = dict(tags or {})
-    if "project" in extra or Tag.CANDIDATE.value in extra:
-        raise ValueError("tags may not override 'project' or 'candidate': pass candidate= instead")
+    extra = _trial_tags(tags)
     active = mlflow.active_run()
     if active is None:
         raise TrialError(f"trial {run_name!r} needs an open tracked_run as its parent")
