@@ -340,3 +340,41 @@ are harmless and may stay.
 **Alternatives considered:** `==` like voice-arch's other dev pins.
 **Consequences:** `uv lock --upgrade` keeps working without editing the specs. The installed versions are whatever the
 lock says, so a reader checks `uv.lock`, not `pyproject.toml`.
+
+## 2026-11-09 — App formatter + linter: prettier + eslint flat config
+
+**Status:** accepted (Fix Phase 6, #13; overrides per ESC-6-1, decided 2026-11-08/09)
+**Context:** #13: the Astro app (`app/`) had no formatter and no linter, so style and the "no `any`" / type-import
+conventions were enforced by review only.
+**Decision:** Six exact dev pins: `eslint` 10.13.0, `@eslint/js` 10.0.1, `typescript-eslint` 8.72.0,
+`eslint-plugin-astro` 3.2.1, `prettier` 3.9.10, `prettier-plugin-astro` 1.1.2. `eslint.config.js` (flat config):
+`@eslint/js` `recommended` + typescript-eslint `recommended` + `@typescript-eslint/no-explicit-any` and
+`@typescript-eslint/consistent-type-imports` (inline `type` specifiers accepted) + eslint-plugin-astro
+`flat/recommended`; no rule disabled or overridden. `.prettierrc.json` matches the existing style (width 120, single
+quotes, trailing commas, astro parser for `*.astro`). Scripts `lint`, `format`, `format:check`; `lint` and
+`format:check` run in the CI `app` job (after `npm audit`) and in the `gates-app` pre-push hook.
+Eight exact npm `overrides` (ESC-6-1):
+
+| Package | Override | Published | Why |
+|---|---|---|---|
+| `minimatch` | 11.0.1 | 2026-10-27 | Fixes GHSA-g3hv-75wg-m249. Exempt from the 14-day rule (ESC-6-1); crosses the dependents' `^10` range |
+| `@isaacs/nonrecursive-glob-match` | 1.0.1 | 2026-10-27 | New dependency of minimatch 11.0.1 (oldest release its `^1.0.1` accepts). Exempt (ESC-6-1) |
+| `@eslint-community/regexpp` | 4.12.2 | 2025-10-22 | in range; 14-day rule (4.12.3 is 2026-11-08) |
+| `globals` | 17.13.0 | 2026-10-01 | in range; 14-day rule (17.14.0 is 2026-11-01) |
+| `postcss-selector-parser` | 7.1.7 | 2026-10-20 | in range; 14-day rule (7.2.0 is 2026-11-08) |
+| `@typescript-eslint/scope-manager` | 8.72.0 | 2026-10-19 | in range; 14-day rule (8.72.1 is 2026-10-26); same version `typescript-eslint` pins |
+| `@typescript-eslint/types` | 8.72.0 | 2026-10-19 | same |
+| `@typescript-eslint/visitor-keys` | 8.72.0 | 2026-10-19 | same |
+
+The two exceptions are a dated exception to the 14-day release-age rule (decided 2026-11-08/09; both releases pass
+14 days on 2026-11-10): the only minimatch release with the GHSA-g3hv-75wg-m249 fix is newer than 14 days, and
+`npm audit --audit-level=moderate` fails without it. The `minimatch` override crosses the `^10` range its dependents
+declare. The six in-range overrides keep the whole resolved tree under the 14-day rule.
+**Removal condition:** once eslint and typescript-eslint ship releases that depend on a fixed minimatch and are at
+least 14 days old, re-pin to them and drop every override whose package is then at least 14 days old in its natural
+resolution.
+**Alternatives considered:** Biome (no Astro template support at the pinned date); no formatter (lint only, style
+stays a review concern).
+**Consequences:** One whole-app rewrite commit (`a7e35ab`, prettier `--write`), listed in `.git-blame-ignore-revs`
+(`git config blame.ignoreRevsFile .git-blame-ignore-revs`). Land the PR with a merge commit (not squash/rebase) so the
+blame-ignore hash survives. The overrides are maintenance debt until the removal condition holds.

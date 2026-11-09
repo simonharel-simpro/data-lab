@@ -137,7 +137,7 @@ async function fetchProject(
     );
     return { kind: 'fetched', experiments, runs };
   } catch (err) {
-    const reason = (err as Error).message;
+    const reason = err instanceof Error ? err.message : String(err);
     reportUnavailable(project, reason);
     return { kind: 'unavailable', reason };
   }

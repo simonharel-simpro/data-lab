@@ -13,7 +13,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 3 | Ledger contract, enum discipline & datalab test quality | ✅ landed (9/9) | fix-phase-3-ledger-enums | clean @ 95ea6d2 (first pass) |
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
 | 5 | pyright strict on `src/` (#14) | ✅ landed (8/8 + 5.9) | fix-phase-5-pyright-strict | clean @ 31023ee (2 approved deviations) |
-| 6 | App formatter + linter (#13) | ⏸ parked: ESC-6-1 (pins fail npm audit), awaiting amended + re-validated plan | — | — |
+| 6 | App formatter + linter (#13) | 🔄 implemented (3/3) | fix-phase-6-app-format-lint | — |
 | 7 | Docs & dependency hygiene | ✅ landed (2/2) | fix-phase-7-docs-deps-hygiene | clean @ d552f5a (first pass) |
 | 8 | CI gates & tooling | ✅ landed (2/2) | fix-phase-8-ci-gates-tooling | clean @ 53f7a66 (first pass; gate-scope deviation) |
 
@@ -106,5 +106,16 @@ A phase is complete only when merged into the integration branch AND marked here
 - ✅ 7.1 ARCHITECTURE.md: full datalab module list (pure ones marked), voice-arch module → layer table (fresh grep 2026-11-09, adds `sweep`, `bench_runs`), `.claude/` in Project Structure + README pointer, Weaviate grace period, card-status note, py312 `from __future__` line + ADR; also documents `gates-root` and the enum-discipline hooks (Phase 8 / linter). voice-arch: `sweep_query` out of the LiveKit-free contract; new contract "pure modules stay MLflow-free"
 - ⚠️→✅ plan fallback used: `sweep_log` is not pure (transitive: `settings` → datalab, `worker_logic` → livekit), moved to the runs row in table + contract; no `ignore_imports`. IMPLEMENTATION_NOTES entry
 - ✅ 7.2 ADR: dev specs stay `>=` (#40); no pyproject dependency line changed
+- Cross-phase regressions: none
+
+## Phase 6 — App formatter + linter (#13) (🟡)
+
+**Implemented:** 2026-11-09 · **Branch:** fix-phase-6-app-format-lint · **Agent:** general-purpose (dispatch A + B)
+**Attempt 2** (attempt 1 halted on ESC-6-1: pins failed npm audit via minimatch). Plan amended + re-validated (3 independent passes), `aebc093`.
+**Tooling:** ✅ app lint 0 / format:check 0 / audit 0 (orchestrator re-run); subagent ran default + full pre-push stages green
+
+- ✅ 6.1 six exact pins + eight exact npm overrides (minimatch 11.0.1 + @isaacs/nonrecursive-glob-match 1.0.1 = dated ESC-6-1 exception; six older in-range transitives), eslint flat config, prettier config, scripts — `c1ac266`
+- ✅ 6.2 one-time prettier rewrite alone — `a7e35ab` (in `.git-blame-ignore-revs`; land the PR with a merge commit); lint clean: `preserve-caught-error` cause, two `(err as Error)` casts
+- ✅ 6.3 CI lint + format steps, `gates-app` hook (grep 1→0), ADR, ARCHITECTURE.md
 - Cross-phase regressions: none
 

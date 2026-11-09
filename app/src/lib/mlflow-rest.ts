@@ -51,7 +51,7 @@ export async function post(base: string, path: string, body: unknown, fetchImpl:
   } catch (err) {
     const name = err instanceof Error ? err.name : undefined;
     if (name === 'TimeoutError' || name === 'AbortError') throw new TransientError(`${path}: timed out`);
-    throw new Error(`${path}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`${path}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
   }
   if (res.status >= 500) throw new TransientError(`${path}: HTTP ${res.status}`);
   if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);

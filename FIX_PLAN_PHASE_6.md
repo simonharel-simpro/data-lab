@@ -1,5 +1,6 @@
 # Fix Plan — Phase 6: App formatter + linter (#13)
 
+**Status:** ✅ Complete — branch fix-phase-6-app-format-lint, 2026-11-09
 **Severity:** 🟡
 **Agent:** general-purpose. App conventions: Astro 7 + TS strict + `noUncheckedIndexedAccess`; zod from `astro/zod`; tests are `node:test` files `src/lib/*.test.ts` (`npm test`, coverage floor 70 %); `npm run check` = `astro check`; no `any`, no `@ts-ignore`; **exact** version pins in `package.json` (no `^`/`~`); `package-lock.json` committed; node ≥ 22.22 (`.nvmrc`).
 **Depends on:** Phase 3 (3.3 edits `app/src/lib`; the one-time rewrite in 6.2 comes after it)

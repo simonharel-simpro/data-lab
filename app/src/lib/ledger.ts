@@ -116,7 +116,7 @@ export function parseLedger(text: string): { ok: true; ledger: RunLedger } | { o
   try {
     doc = JSON.parse(text.startsWith(BOM) ? text.slice(BOM.length) : text);
   } catch (err) {
-    return { ok: false, reason: `invalid JSON: ${(err as Error).message}` };
+    return { ok: false, reason: `invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
   }
   if (typeof doc === 'object' && doc !== null && !Array.isArray(doc) && !('kind' in doc)) {
     return { ok: false, reason: 'unsupported schema (kind missing)' };
