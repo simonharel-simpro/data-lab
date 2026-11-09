@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import cache
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -15,6 +15,12 @@ from datalab.project import ProjectError, repo_root
 SHA256 = r"^[0-9a-f]{64}$"
 Sha = Annotated[str, Field(pattern=SHA256)]
 NonEmpty = Annotated[str, Field(min_length=1)]
+
+# Milestone ids the code names; any other id is data from contracts/milestones.json (decisions.md, ADR 2026-11-08).
+DATASET: Final = "dataset"
+FEATURES: Final = "features"
+MODELING: Final = "modeling"
+AUDIT: Final = "audit"
 
 
 class Status(StrEnum):
@@ -32,6 +38,17 @@ class Decision(StrEnum):
 class Kind(StrEnum):
     TRAINING = "training"
     COMPARISON = "comparison"
+
+
+# (status before, decision) -> status after; `None` = produce. The ops consult it; ARCHITECTURE.md draws it.
+# `redo(m)` is not a row: it resets m and every later milestone from any started status.
+TRANSITIONS: Final[Mapping[tuple[Status, Decision | None], Status]] = {
+    (Status.TODO, None): Status.PRODUCED,
+    (Status.PRODUCED, None): Status.PRODUCED,
+    (Status.PRODUCED, Decision.CORRECT): Status.PRODUCED,
+    (Status.PRODUCED, Decision.VALIDATE): Status.VALIDATED,
+    (Status.PRODUCED, Decision.REDO): Status.TODO,
+}
 
 
 class LedgerError(ValueError):

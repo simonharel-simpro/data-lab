@@ -7,8 +7,9 @@ import keyword
 import re
 import sys
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Final, Literal
+from typing import Final
 
 import yaml
 
@@ -95,10 +96,17 @@ def _frontmatter(card: Path) -> dict[object, object]:
     return data
 
 
+class Goal(StrEnum):
+    """Which way the card's metric improves; values in contracts/value_sets.json."""
+
+    MAX = "max"
+    MIN = "min"
+
+
 @dataclass(frozen=True)
 class CardMetric:
     key: str
-    goal: Literal["max", "min"]
+    goal: Goal
 
 
 def card_metric(project_dir: Path) -> CardMetric:
@@ -113,9 +121,12 @@ def card_metric(project_dir: Path) -> CardMetric:
     key, goal = metric.get("key"), metric.get("goal")
     if not isinstance(key, str) or not METRIC_KEY_RE.fullmatch(key):
         raise ProjectError(f"{card}: metric.key must match {METRIC_KEY_RE.pattern}, got {key!r}")
-    if goal not in ("max", "min"):
-        raise ProjectError(f"{card}: metric.goal must be 'max' or 'min', got {goal!r}")
-    return CardMetric(key=key, goal=goal)
+    try:
+        parsed = Goal(goal)
+    except ValueError as err:
+        allowed = " or ".join(repr(g.value) for g in Goal)
+        raise ProjectError(f"{card}: metric.goal must be {allowed}, got {goal!r}") from err
+    return CardMetric(key=key, goal=parsed)
 
 
 def load(start: Path | None = None, *, root: Path | None = None) -> Project:

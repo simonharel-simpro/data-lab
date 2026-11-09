@@ -26,7 +26,7 @@ from datalab.tags import Tag
 from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracked_trial
 
 from .candidates import config_sha256
-from .paths import PROJECT_DIR, register_resolvers
+from .paths import AUDIT_EXPERIMENT, PROJECT_DIR, register_resolvers
 from .prepare import PrepareError, check_data_hash, compose_model, refuse_multirun
 from .scoring import label, score
 from .split import SplitAccessError, check_time_kinds, load_split, read_rows
@@ -156,7 +156,7 @@ def _execute(gate: _Gate, settings: Settings) -> int:
     child_tags = {Tag.SPLIT.value: "test", Tag.TEST_LOOK.value: n, Tag.CONFIG_SHA256.value: gate.config_sha}
     try:
         with (
-            tracked_run(gate.project, settings, f"eval-{gate.candidate}", sub="audit", tags=parent_tags),
+            tracked_run(gate.project, settings, f"eval-{gate.candidate}", sub=AUDIT_EXPERIMENT, tags=parent_tags),
             tracked_trial(f"{gate.candidate}-test", child_tags, candidate=gate.candidate) as trial,
         ):
             _score_test(gate, trial.run_id)

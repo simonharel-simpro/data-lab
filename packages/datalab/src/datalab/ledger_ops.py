@@ -9,12 +9,15 @@ from typing import Any
 from pydantic import ValidationError
 
 from datalab.ledger_model import (
+    DATASET,
+    FEATURES,
+    MODELING,
+    TRANSITIONS,
     Decision,
     Kind,
     LedgerError,
     RunLedger,
     Status,
-    TestLook,
     Winner,
     contract,
     describe,
@@ -37,7 +40,7 @@ def _dump(lg: RunLedger) -> Doc:
 
 
 def _todo() -> Doc:
-    return {"status": "todo", "artifacts": [], "decision": None}
+    return {"status": Status.TODO.value, "artifacts": [], "decision": None}
 
 
 def new_ledger(kind: Kind, metric: str) -> RunLedger:
@@ -69,11 +72,18 @@ def _require_current(lg: RunLedger, milestone: str) -> Status:
     return lg.milestones[milestone].status
 
 
+def _next(status: Status, decision: Decision | None, milestone: str) -> Status:
+    after = TRANSITIONS.get((status, decision))
+    if after is None:
+        hint = "produce it before deciding" if decision is not None else "redo it before producing it again"
+        raise LedgerError(f"{milestone} is {status}: {hint}")
+    return after
+
+
 def produce(lg: RunLedger, milestone: str, artifacts: Sequence[str]) -> RunLedger:
-    if _require_current(lg, milestone) is Status.VALIDATED:
-        raise LedgerError(f"{milestone} is validated: redo it before producing it again")
+    _next(_require_current(lg, milestone), None, milestone)
     data = _dump(lg)
-    data["milestones"][milestone] = {"status": "produced", "artifacts": list(artifacts), "decision": None}
+    data["milestones"][milestone] = {"status": Status.PRODUCED.value, "artifacts": list(artifacts), "decision": None}
     return _revalidate(data)
 
 
@@ -85,7 +95,7 @@ def _check_decide_options(
         raise LedgerError("redo_from only applies to a redo decision")
     if redo_from is not None and (redo_from not in seq or seq.index(redo_from) > seq.index(milestone)):
         raise LedgerError(f"redo_from {redo_from!r} must be {milestone} or an earlier milestone")
-    needs_winner = milestone == "modeling" and decision is Decision.VALIDATE
+    needs_winner = milestone == MODELING and decision is Decision.VALIDATE
     if needs_winner != (winner is not None):
         raise LedgerError("a winner is required to validate modeling, and only then")
 
@@ -99,16 +109,15 @@ def decide(
     redo_from: str | None = None,
     winner: Winner | None = None,
 ) -> RunLedger:
-    if _require_current(lg, milestone) is not Status.PRODUCED:
-        raise LedgerError(f"{milestone} is {lg.milestones[milestone].status}: produce it before deciding")
+    _next(_require_current(lg, milestone), decision, milestone)
     _check_decide_options(lg, milestone, decision, redo_from, winner)
     data = _dump(lg)
     data["decisions_log"].append({"milestone": milestone, "decision": decision.value, "note": note})
     if decision is not Decision.VALIDATE:  # a redo clears a prior `correct` so I-8 sees the log's redo entry
-        data["milestones"][milestone]["decision"] = "correct" if decision is Decision.CORRECT else None
+        data["milestones"][milestone]["decision"] = Decision.CORRECT.value if decision is Decision.CORRECT else None
     if decision is Decision.VALIDATE:
         seq = lg.sequence()
-        data["milestones"][milestone].update(status="validated", decision="validate")
+        data["milestones"][milestone].update(status=Status.VALIDATED.value, decision=Decision.VALIDATE.value)
         data["current_milestone"] = seq[min(seq.index(milestone) + 1, len(seq) - 1)]
         data["winner"] = winner.model_dump(mode="json") if winner is not None else data["winner"]
     updated = _revalidate(data)
@@ -128,9 +137,9 @@ def redo(lg: RunLedger, milestone: str) -> RunLedger:
     data["current_milestone"] = milestone
     resets = (
         (contract().freeze_after, ("split_sha256", "split_summary")),
-        ("dataset", ("dataset",)),
-        ("features", ("features",)),
-        ("modeling", ("winner", "data_sha256")),
+        (DATASET, ("dataset",)),
+        (FEATURES, ("features",)),
+        (MODELING, ("winner", "data_sha256")),
     )
     for anchor, fields in resets:
         if anchor in seq and index <= seq.index(anchor):
@@ -154,7 +163,7 @@ def freeze_split(lg: RunLedger, split_path: Path, summary: str) -> RunLedger:
 def record_data(lg: RunLedger, data_path: Path) -> RunLedger:
     if lg.split_sha256 is None:
         raise LedgerError("the split must be frozen before the data is recorded")
-    if lg.milestones["modeling"].status is not Status.TODO:
+    if lg.milestones[MODELING].status is not Status.TODO:
         raise LedgerError("data_sha256 is recorded before modeling starts")
     try:
         with data_path.open("rb") as handle:
@@ -162,38 +171,3 @@ def record_data(lg: RunLedger, data_path: Path) -> RunLedger:
     except OSError as err:
         raise LedgerError(f"{data_path}: cannot read: {err}") from err
     return _revalidate(_dump(lg) | {"data_sha256": digest})
-
-
-def look_number(lg: RunLedger, split_sha: str) -> int:
-    return 1 + sum(1 for look in lg.test_looks if look.split_sha256 == split_sha)
-
-
-def test_access_problem(lg: RunLedger, split_sha: str, note: str | None) -> str | None:
-    if lg.current_milestone != "audit":
-        return f"the test partition is read at the audit; the current milestone is {lg.current_milestone}"
-    if lg.milestones["audit"].status is Status.VALIDATED:
-        return "the audit is already validated: the test partition is closed"
-    if split_sha != lg.split_sha256:
-        return "split.json changed since the freeze: its hash differs from run.json split_sha256"
-    if look_number(lg, split_sha) > 1 and not (note or "").strip():
-        return "a repeated test look on this split needs an expert note"
-    return None
-
-
-def test_access_allowed(lg: RunLedger, split_sha: str, note: str | None = None) -> bool:
-    return test_access_problem(lg, split_sha, note) is None
-
-
-def record_test_look(lg: RunLedger, split_sha: str, run_id: str, note: str | None) -> RunLedger:
-    problem = test_access_problem(lg, split_sha, note)
-    if problem is not None:
-        raise LedgerError(problem)
-    look = TestLook(split_sha256=split_sha, run_id=run_id, note=note or "").model_dump(mode="json")
-    data = _dump(lg)
-    data["test_looks"].append(look)
-    return _revalidate(data)
-
-
-# The names start with "test_" (the contract's wording): keep pytest from collecting them out of test modules.
-test_access_problem.__test__ = False  # pyright: ignore[reportFunctionMemberAccess]
-test_access_allowed.__test__ = False  # pyright: ignore[reportFunctionMemberAccess]

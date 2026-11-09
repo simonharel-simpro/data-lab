@@ -4,13 +4,14 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 import hydra
 import mlflow
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from mlflow import MlflowClient
+from mlflow.entities import RunStatus
 from mlflow.exceptions import MlflowException
 from omegaconf import DictConfig, OmegaConf
 from omegaconf.errors import OmegaConfBaseException
@@ -23,12 +24,14 @@ from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracke
 
 from .candidates import Row, config_sha256
 from .grid import Combo, GridError, expand
-from .paths import PROJECT_DIR, register_resolvers
+from .paths import AUDIT_EXPERIMENT, PROJECT_DIR, register_resolvers
 from .prepare import PrepareError, compose_model, file_sha256, frozen_score_on, refuse_multirun, resolve_config
 from .scoring import label, metric_key_problems, score
 from .split import SplitAccessError, load_split, read_rows
 
 register_resolvers()
+
+_FINISHED: Final = RunStatus.to_string(RunStatus.FINISHED)
 
 _REFUSALS = (PrepareError, ProjectError, SplitError, GridError, SplitAccessError, OSError, OmegaConfBaseException)
 
@@ -114,7 +117,7 @@ def _prepare(cfg: DictConfig, overrides: Sequence[str]) -> _Plan:
     metric = card_metric(project.root)
     sub = str(cfg.experiment.name)  # (2)
     experiment_name(project.name, sub)
-    if sub == "audit":
+    if sub == AUDIT_EXPERIMENT:
         raise PrepareError("experiment.name 'audit' is reserved for eval")
     resolved = resolve_config(cfg)  # (3)
     on = frozen_score_on(cfg)  # (4) before anything is composed: the ledger's split and data must be unchanged
@@ -145,7 +148,7 @@ def _key_problems(plan: _Plan, parent_id: str) -> list[str]:
     client = MlflowClient()
     experiment_id = client.get_run(parent_id).info.experiment_id
     found = client.search_runs([experiment_id], filter_string=f"tags.mlflow.parentRunId = '{parent_id}'")
-    keys = {r.info.run_name or r.info.run_id: frozenset(r.data.metrics) for r in found if r.info.status == "FINISHED"}
+    keys = {r.info.run_name or r.info.run_id: frozenset(r.data.metrics) for r in found if r.info.status == _FINISHED}
     # resolve_config yields plain containers and the experiment group is validated at compose time
     experiment = cast("dict[str, list[object]]", plan.resolved["experiment"])
     allowed = [str(k) for k in experiment["metrics"]]

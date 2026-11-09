@@ -303,3 +303,15 @@ under the lock, so B waits, then sees A's complete collection and reuses it.
 build into a uuid-suffixed collection, then point a Weaviate alias at it.
 **Consequences:** `fcntl` is POSIX-only, which is fine on Linux/WSL (ADR 3). Lock files in the OS temp dir are never
 removed, which is fine for a local lab. A holder that dies releases the lock with its file descriptor.
+
+## 2026-11-08 — Milestone ids stay data-driven strings
+
+**Status:** accepted (P-10, user 2026-11-08)
+**Context:** Milestone ids come from `contracts/milestones.json`, per experiment kind, and both the Python ledger and
+the TS app read that file. Python code names a few of them (`dataset`, `features`, `modeling`, `audit`).
+**Decision:** The ids the code names are `Final` constants in `datalab.ledger_model` (`DATASET`, `FEATURES`,
+`MODELING`, `AUDIT`), tested to exist in the contract. Any other id is validated at runtime by `_require_current` and,
+in the app, by the `superRefine` check I-1.
+**Alternatives considered:** A generated `Literal` plus drift tests on both sides; won't fix (raw literals).
+**Consequences:** A new or renamed milestone in the contract is caught by tests and runtime checks, not by the type
+checker. No code generation step to maintain.

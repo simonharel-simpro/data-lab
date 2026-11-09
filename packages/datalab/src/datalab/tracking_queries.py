@@ -3,15 +3,17 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Final
 
 from mlflow import MlflowClient
-from mlflow.entities import Run, ViewType
+from mlflow.entities import Run, RunStatus, ViewType
 from mlflow.exceptions import MlflowException
 
 from datalab.project import experiment_name
 from datalab.settings import Settings
 
 _PAGE = 1000
+_RUNNING: Final = RunStatus.to_string(RunStatus.RUNNING)
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,7 @@ def stale_runs(
     if not experiments:
         return []
     cutoff = now() - older_than
-    running = _runs(client, project, list(experiments), " and attributes.status = 'RUNNING'")
+    running = _runs(client, project, list(experiments), f" and attributes.status = '{_RUNNING}'")
     stale = [
         StaleRun(
             run_id=run.info.run_id,
@@ -100,7 +102,7 @@ def close_runs(project: str, settings: Settings, run_ids: Sequence[str]) -> list
             run = client.get_run(run_id)
         except MlflowException as err:
             raise ValueError(f"run {run_id} cannot be read: {err}") from err
-        if run.info.status != "RUNNING" or run.data.tags.get("project") != project:
+        if run.info.status != _RUNNING or run.data.tags.get("project") != project:
             raise ValueError(f"run {run_id} is not a RUNNING run of project {project!r}")
     for run_id in ids:
         client.set_terminated(run_id, status="KILLED")

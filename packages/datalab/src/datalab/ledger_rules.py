@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final
 
-from datalab.ledger_model import Decision, Kind, Status, contract
+from datalab.ledger_model import DATASET, MODELING, Decision, Kind, Status, contract
 
 if TYPE_CHECKING:
     from datalab.ledger_model import RunLedger
@@ -95,7 +95,7 @@ def _i10(lg: "RunLedger") -> str | None:
 
 
 def _i11(lg: "RunLedger") -> str | None:
-    if lg.milestones["dataset"].status is Status.VALIDATED and lg.dataset is None:
+    if lg.milestones[DATASET].status is Status.VALIDATED and lg.dataset is None:
         return "I-11: dataset is validated but dataset is null"
     return None
 
@@ -115,7 +115,7 @@ def _i12(lg: "RunLedger") -> str | None:
 
 
 def _i13(lg: "RunLedger") -> str | None:
-    validated = lg.milestones["modeling"].status is Status.VALIDATED
+    validated = lg.milestones[MODELING].status is Status.VALIDATED
     if (lg.winner is not None) != validated:
         return "I-13: winner must be set exactly when modeling is validated"
     return None
@@ -131,7 +131,7 @@ def _i14(lg: "RunLedger") -> str | None:
 
 
 def _i15(lg: "RunLedger") -> str | None:
-    if lg.milestones["modeling"].status is not Status.TODO and lg.data_sha256 is None:
+    if lg.milestones[MODELING].status is not Status.TODO and lg.data_sha256 is None:
         return "I-15: modeling started but data_sha256 is null"
     return None
 

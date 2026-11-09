@@ -4,12 +4,15 @@ import { isValidName } from './name.ts';
 export const STATUSES = ['idée', 'en cours', 'conclu', 'abandonné'] as const;
 export type Status = (typeof STATUSES)[number];
 
+export const GOALS = ['max', 'min'] as const;
+export type Goal = (typeof GOALS)[number];
+
 // The key is interpolated into an MLflow `order_by` between backticks (F-7): no backtick, quote or space.
 export const METRIC_KEY_RE = /^[A-Za-z0-9_.\-/]+$/;
 
 export const metricSchema = z.object({
   key: z.string().regex(METRIC_KEY_RE, { message: 'metric.key may only contain letters, digits and _ . - /' }),
-  goal: z.enum(['max', 'min']),
+  goal: z.enum(GOALS),
 });
 export type Metric = z.infer<typeof metricSchema>;
 

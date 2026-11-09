@@ -10,6 +10,7 @@ from typing import Final
 
 from pydantic import ValidationError
 
+from datalab.ledger_access import look_number, record_test_look, test_access_allowed, test_access_problem
 from datalab.ledger_checks import SPLIT_JSON, check_artifacts, check_metric, check_split_hash
 from datalab.ledger_model import (
     Contract,
@@ -30,14 +31,10 @@ from datalab.ledger_ops import (
     _revalidate,
     decide,
     freeze_split,
-    look_number,
     new_ledger,
     produce,
     record_data,
-    record_test_look,
     redo,
-    test_access_allowed,
-    test_access_problem,
 )
 from datalab.split import Partition, Split, SplitError, SplitStrategy, partition, read_split, split_sha256
 

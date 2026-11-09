@@ -6,6 +6,7 @@ from typing import Final
 from omegaconf import OmegaConf
 
 PROJECT_DIR: Final[Path] = Path(__file__).resolve().parents[2]
+AUDIT_EXPERIMENT: Final = "audit"  # reserved MLflow sub-experiment: eval writes it, train refuses it
 
 
 def register_resolvers() -> None:

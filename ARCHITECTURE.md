@@ -348,6 +348,8 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 - **Experiment ledger** — `projects/<name>/run.json` (a `RunLedger`, kind `training|comparison`): one status per
   milestone, the expert's decisions log, the frozen `split_sha256`, the winner and the test looks. Guarded by
   invariants I-1..I-15 (`datalab.ledger_rules`) and checks V-1..V-3; `split.json` is its frozen split.
+  Milestone ids are data from `contracts/milestones.json`; only the ids the code names are `Final` constants
+  (`DATASET`, `FEATURES`, `MODELING`, `AUDIT`), tested to exist in the contract (decisions.md, 2026-11-08).
 - **Collection** — a Weaviate collection named from the project name + parts, hashed to avoid collisions.
 
 ## State Machines
@@ -367,14 +369,26 @@ the status (enforced by the app, Phase 2B).
 
 ```
 todo ──► produced ──► validated
-            │  ▲
-            └──┘  correct          (produced → produced, decision `correct`)
+   ▲        │  ▲
+   │        └──┘  correct          (produced → produced, decision `correct`)
+   └─────────┘ redo                (produced → todo, decision `redo`)
 ```
 
-`produce` moves the current milestone `todo → produced`; `decide` validates it (current advances) or corrects it. A
-`redo` of milestone m sets m and every later milestone back to `todo` and clears the fields they fed (split, dataset,
-features, winner, data hash). Order is strict (a milestone starts only after every earlier one is validated) and
-there is no `skipped` status. Transitions live in `datalab.ledger_ops`; the log and test looks are append-only.
+`produce` moves the current milestone `todo → produced`; `decide` validates it (current advances), corrects it or
+redoes it. Order is strict (a milestone starts only after every earlier one is validated) and there is no `skipped`
+status. The log and test looks are append-only. The five legal transitions, one line per row of the table:
+
+```
+todo + produce → produced
+produced + produce → produced
+produced + correct → produced
+produced + validate → validated
+produced + redo → todo
+```
+
+`redo(m)` (any started status, VALIDATED included) → TODO for m and every later milestone, and clears the fields they
+fed (split, dataset, features, winner, data hash); a separate op, not a table row. Transitions:
+`datalab.ledger_model.TRANSITIONS`, checked against this table by `test_transitions_table_matches_architecture_md`.
 
 ## Cross-phase contracts
 

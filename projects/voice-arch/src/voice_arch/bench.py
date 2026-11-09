@@ -7,6 +7,7 @@ import argparse
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
@@ -41,6 +42,12 @@ from voice_arch.winners import (
 TTS_REPS: Final = 3
 
 
+class Component(StrEnum):
+    STT = "stt"
+    TTS = "tts"
+    LLM = "llm"
+
+
 @dataclass(frozen=True)
 class BenchEnv:
     project: Project
@@ -51,7 +58,7 @@ class BenchEnv:
 
 
 async def _logged_run(
-    env: BenchEnv, component: str, params: Mapping[str, str | int], measure: Callable[[Emit], Awaitable[Outcome]]
+    env: BenchEnv, component: Component, params: Mapping[str, str | int], measure: Callable[[Emit], Awaitable[Outcome]]
 ) -> str:
     """Budget gate, then one run with the spend tracker inside it; a 401/402 propagates: run FAILED (F-4, F-4b)."""
     check_budget(spent_so_far(env.dl), ESTIMATES_USD["bench"], env.voice.experiment_budget_usd)
@@ -80,7 +87,7 @@ async def bench_stt(
         return Outcome(metrics, choice, choice.reason, {"corpus_hash": corpus.hash})
 
     params = {"candidates": ",".join(stts), "n": len(utterances), "corpus_tts_model": CORPUS_TTS_MODEL}
-    return await _logged_run(env, "stt", params, measure)
+    return await _logged_run(env, Component.STT, params, measure)
 
 
 async def bench_tts(env: BenchEnv, ttss: Mapping[str, Synthesizer], lines: list[str], judge: Transcriber) -> str:
@@ -98,7 +105,7 @@ async def bench_tts(env: BenchEnv, ttss: Mapping[str, Synthesizer], lines: list[
         return Outcome(metrics, choice, choice.reason if choice else reason, {})
 
     params = {"candidates": ",".join(ttss), "n": len(lines), "reps": TTS_REPS, "judge_stt": judge.model}
-    return await _logged_run(env, "tts", params, measure)
+    return await _logged_run(env, Component.TTS, params, measure)
 
 
 async def bench_llm(env: BenchEnv, llms: Mapping[str, ChatModel], cases: list[LlmCase]) -> str:
@@ -113,13 +120,13 @@ async def bench_llm(env: BenchEnv, llms: Mapping[str, ChatModel], cases: list[Ll
         return Outcome(metrics, choice, choice.reason, {})
 
     params = {"candidates": ",".join(llms), "n": len(cases), "llm_providers": "none", "temperature": 0}
-    return await _logged_run(env, "llm", params, measure)
+    return await _logged_run(env, Component.LLM, params, measure)
 
 
-async def _dispatch(env: BenchEnv, component: str, n: int | None) -> str:
+async def _dispatch(env: BenchEnv, component: Component, n: int | None) -> str:
     data = env.project.root / "data"
     voice = env.voice
-    if component == "stt":
+    if component is Component.STT:
         utterances = select(load_utterances(data / "utterances.jsonl"), n)
         corpus_tts = audio.make_tts(voice, CORPUS_TTS_MODEL, CORPUS_VOICE)
 
@@ -128,7 +135,7 @@ async def _dispatch(env: BenchEnv, component: str, n: int | None) -> str:
 
         stts = {m: audio.make_stt(voice, m) for m in STT_CANDIDATES}
         return await bench_stt(env, stts, utterances, make_corpus)
-    if component == "tts":
+    if component is Component.TTS:
         lines = select([x for x in (data / "agent_lines.txt").read_text().splitlines() if x.strip()], n)
         ttss = {m: audio.make_tts(voice, m, v) for m, v in TTS_CANDIDATES}
         return await bench_tts(env, ttss, lines, audio.make_stt(voice))
@@ -138,7 +145,7 @@ async def _dispatch(env: BenchEnv, component: str, n: int | None) -> str:
 
 def _args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="voice_arch.bench", description="Stage-1 bench, logged to MLflow.")
-    parser.add_argument("--component", choices=["stt", "tts", "llm"], required=True)
+    parser.add_argument("--component", type=Component, choices=list(Component), required=True)
     parser.add_argument("--n", type=int, help="first N items only (a smoke run)")
     return parser.parse_args(argv)
 
