@@ -46,6 +46,26 @@ repos:
         pass_filenames: false
         files: ^(projects/voice-arch/|tools/pre_commit_checks/)
       # <<< datalab-new: declared-deps
+      # /scaffold-linter enum-discipline (FIX_PLAN "Recurring Patterns"). Scans the tree's src/ relative to the cwd
+      # with that tree's StrEnum value map, hence one entry per tree. Not generated: a new tree needs its map + entry.
+      - id: enum-discipline
+        name: datalab compares against StrEnum members, not raw literals
+        entry: uv run --locked --directory packages/datalab python ../../tools/pre_commit_checks/check_enum_discipline.py
+        language: system
+        pass_filenames: false
+        files: ^(packages/datalab/src/|tools/pre_commit_checks/)
+      - id: enum-discipline-mini-rag
+        name: mini-rag compares against StrEnum members, not raw literals
+        entry: uv run --locked --directory projects/mini-rag python ../../tools/pre_commit_checks/check_enum_discipline.py
+        language: system
+        pass_filenames: false
+        files: ^(projects/mini-rag/src/|packages/datalab/src/|tools/pre_commit_checks/)
+      - id: enum-discipline-voice-arch
+        name: voice-arch compares against StrEnum members, not raw literals
+        entry: uv run --locked --directory projects/voice-arch python ../../tools/pre_commit_checks/check_enum_discipline.py
+        language: system
+        pass_filenames: false
+        files: ^(projects/voice-arch/src/|packages/datalab/src/|tools/pre_commit_checks/)
       - id: hydra-gate
         name: Hydra is wired in projects with configs/
         entry: python tools/pre_commit_checks/hydra_gate.py
