@@ -14,7 +14,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
 | 5 | pyright strict on `src/` (#14) | ✅ landed (8/8 + 5.9) | fix-phase-5-pyright-strict | clean @ 31023ee (2 approved deviations) |
 | 6 | App formatter + linter (#13) | ⏸ parked: ESC-6-1 (pins fail npm audit), awaiting amended + re-validated plan | — | — |
-| 7 | Docs & dependency hygiene | 🔄 implemented (2/2) | fix-phase-7-docs-deps-hygiene | — |
+| 7 | Docs & dependency hygiene | ✅ landed (2/2) | fix-phase-7-docs-deps-hygiene | clean @ d552f5a (first pass) |
 | 8 | CI gates & tooling | ✅ landed (2/2) | fix-phase-8-ci-gates-tooling | clean @ 53f7a66 (first pass; gate-scope deviation) |
 
 ## Phase 1 — Run integrity (🔴)
