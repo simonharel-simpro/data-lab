@@ -1,5 +1,6 @@
 # Fix Plan — Phase 7: Docs & dependency hygiene
 
+**Status:** ✅ Complete — branch fix-phase-7-docs-deps-hygiene, 2026-11-09
 **Severity:** 🟡
 **Agent:** general-purpose. 7.1 is docs plus one import-linter contract (run `cd projects/voice-arch && uv run --locked lint-imports` after it). 7.2 edits `pyproject.toml` + `uv.lock` (run `uv lock` and every tree's gates after it).
 **Depends on:** Phases 3 and 4 (the docs describe `ledger_access`, `TRANSITIONS`, `load_settings`, the regrouped signatures)

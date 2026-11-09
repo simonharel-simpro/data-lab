@@ -14,7 +14,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
 | 5 | pyright strict on `src/` (#14) | ✅ landed (8/8 + 5.9) | fix-phase-5-pyright-strict | clean @ 31023ee (2 approved deviations) |
 | 6 | App formatter + linter (#13) | ⏸ parked: ESC-6-1 (pins fail npm audit), awaiting amended + re-validated plan | — | — |
-| 7 | Docs & dependency hygiene | pending | — | — |
+| 7 | Docs & dependency hygiene | 🔄 implemented (2/2) | fix-phase-7-docs-deps-hygiene | — |
 | 8 | CI gates & tooling | ✅ landed (2/2) | fix-phase-8-ci-gates-tooling | clean @ 53f7a66 (first pass; gate-scope deviation) |
 
 ## Phase 1 — Run integrity (🔴)
@@ -97,4 +97,14 @@ A phase is complete only when merged into the integration branch AND marked here
 - Test change: two moved hydra-gate assertions read stderr instead of stdout (required by 8.2; expected values unchanged) → `Test-Change:` trailer
 - Extra: `.ci-gate-exemptions.json` ruff / lint-imports reasons reworded to name `gates-root`
 - Cross-phase regressions: none (`assert-zero --done` OK)
+
+## Phase 7 — Docs & dependency hygiene (🟡)
+
+**Implemented:** 2026-11-09 · **Branch:** fix-phase-7-docs-deps-hygiene · **Agent:** general-purpose
+**Tooling:** ✅ voice-arch `lint-imports` 3 kept / 0 broken (orchestrator re-run); subagent ran default + pre-push stages green
+
+- ✅ 7.1 ARCHITECTURE.md: full datalab module list (pure ones marked), voice-arch module → layer table (fresh grep 2026-11-09, adds `sweep`, `bench_runs`), `.claude/` in Project Structure + README pointer, Weaviate grace period, card-status note, py312 `from __future__` line + ADR; also documents `gates-root` and the enum-discipline hooks (Phase 8 / linter). voice-arch: `sweep_query` out of the LiveKit-free contract; new contract "pure modules stay MLflow-free"
+- ⚠️→✅ plan fallback used: `sweep_log` is not pure (transitive: `settings` → datalab, `worker_logic` → livekit), moved to the runs row in table + contract; no `ignore_imports`. IMPLEMENTATION_NOTES entry
+- ✅ 7.2 ADR: dev specs stay `>=` (#40); no pyproject dependency line changed
+- Cross-phase regressions: none
 

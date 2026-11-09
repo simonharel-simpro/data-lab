@@ -128,6 +128,11 @@ prefixed `MiniRag_`. `--n N` runs the first N questions only: it logs `smoke_*` 
 `score`, so a smoke run never becomes the card's best run (D-15). A perfect run scores 0.9: 2 of the 20 questions
 are unanswerable and "I don't know" counts as missing (D-7).
 
+## Claude Code
+
+`.claude/skills/experiment/` holds the `/experiment` skill (runs a project's experiment milestone by milestone, contract
+`contracts/EXPERIMENT.md`); `.claude/hooks/` holds the loop guards and the statusline meter.
+
 ## Checks
 
 ```bash

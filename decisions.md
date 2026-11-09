@@ -315,3 +315,28 @@ in the app, by the `superRefine` check I-1.
 **Alternatives considered:** A generated `Literal` plus drift tests on both sides; won't fix (raw literals).
 **Consequences:** A new or renamed milestone in the contract is caught by tests and runtime checks, not by the type
 checker. No code generation step to maintain.
+
+## 2026-11-09 — No `from __future__ import annotations` on py312+
+
+**Status:** accepted (P-8, user 2026-11-08)
+**Context:** REVIEW 2026-11-08 (§2) found 79 non-test modules without the import and 3 with it, and asked for one
+decision (ruff `FA`/`I002`, or a py312+ exemption). Every tree requires Python 3.12, where PEP 604 (`X | None`) and
+PEP 585 (`list[int]`) syntax is native in annotations.
+**Decision:** The import is not required and new code does not add it. ruff `UP` (selected in the root `ruff.toml`)
+keeps annotations in the modern syntax.
+**Alternatives considered:** Require it everywhere with ruff `FA`/`I002` (a per-file rule with no benefit on 3.12);
+strip the 3 existing imports (churn for no behaviour change).
+**Consequences:** Annotations are evaluated at definition time, so a forward reference needs quotes. Existing imports
+are harmless and may stay.
+
+## 2026-11-09 — Dev dependency specs stay `>=`; `uv.lock` + `uv sync --locked` is the pin
+
+**Status:** accepted (P-9, user 2026-11-04, confirmed 2026-11-08; #40)
+**Context:** REVIEW 2026-11-04 and REVIEW 2026-11-08 (§5) flag the 12 `>=` dev-group specs in
+`packages/datalab/pyproject.toml`, `projects/mini-rag/pyproject.toml` and `projects/voice-arch/pyproject.toml`
+(`import-linter`). The user decided on 2026-11-04 to keep them and confirmed it on 2026-11-08. Tracker: #40.
+**Decision:** Keep the `>=` specs. The pin is each tree's `uv.lock`; the hooks and CI run `uv run --locked` /
+`uv sync --locked`, so an unlocked resolution fails instead of drifting.
+**Alternatives considered:** `==` like voice-arch's other dev pins.
+**Consequences:** `uv lock --upgrade` keeps working without editing the specs. The installed versions are whatever the
+lock says, so a reader checks `uv.lock`, not `pyproject.toml`.

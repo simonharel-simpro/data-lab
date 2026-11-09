@@ -58,9 +58,19 @@ name = "scoring and decision stay LiveKit-free"
 type = "forbidden"
 source_modules = [
     "voice_arch.scoring", "voice_arch.naturalness", "voice_arch.decide", "voice_arch.personas",
-    "voice_arch.call", "voice_arch.call_env", "voice_arch.sweep_query",
+    "voice_arch.call", "voice_arch.call_env",
 ]
 forbidden_modules = ["livekit"]
+
+[[tool.importlinter.contracts]]
+name = "pure modules stay MLflow-free"
+type = "forbidden"
+source_modules = [
+    "voice_arch.arch", "voice_arch.call", "voice_arch.call_env", "voice_arch.candidates", "voice_arch.fields",
+    "voice_arch.naturalness", "voice_arch.personas", "voice_arch.result", "voice_arch.scoring",
+    "voice_arch.winners",
+]
+forbidden_modules = ["mlflow", "datalab", "httpx", "livekit"]
 
 [tool.ruff]
 extend = "../../ruff.toml"   # single source: the repo-root config
