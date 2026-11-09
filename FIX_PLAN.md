@@ -10,7 +10,7 @@
 - pyright **strict** over `src/` only, current code: datalab **38** errors in 10 files, mini-rag **20** in 6, voice-arch **142** in 28. Of these, 17 are `reportMissingTypeStubs` on `datalab.*`, because the package has no `py.typed`. The rest are mostly `reportUnknown*` from untyped livekit/mlflow returns.
 - root `uvx pyright==1.1.414` (basic, `tools/` + `tests/`): 0 errors.
 - ruff: `BLE001` 3 hits (`worker_logic.py:122`, template `eval.py:140`, `train.py:138`; all three already carry inline reasons); `PLR0913` 17 hits (9 src, 8 tests); `FA` 0 hits (it is a no-op at `target-version = py312`).
-- #13 pins: each version was published before 2026-10-25, at least 14 days before 2026-11-08, checked on the npm registry: prettier 3.9.10 (10-10), prettier-plugin-astro 1.1.2 (10-23), eslint 10.13.0 (10-16), @eslint/js 10.0.1 (2026-02-06), eslint-plugin-astro 3.2.1 (09-17), typescript-eslint 8.72.0 (10-19). The peer ranges accept typescript 6.0.3 and node 22.
+- #13 pins: each version was published before 2026-10-25, at least 14 days before 2026-11-08, checked on the npm registry: prettier 3.9.10 (10-10), prettier-plugin-astro 1.1.2 (10-23), eslint 10.13.0 (10-16), @eslint/js 10.0.1 (2026-02-06), eslint-plugin-astro 3.2.1 (09-17), typescript-eslint 8.72.0 (10-19). The peer ranges accept typescript 6.0.3 and node 22. Amendment 2026-11-09 (ESC-6-1): these pins fail `npm audit` through minimatch, so Phase 6 adds eight exact npm overrides: two are a dated exception to the 14-day rule (`minimatch` 11.0.1, `@isaacs/nonrecursive-glob-match` 1.0.1), and six pin older in-range transitives so the rest of the resolved tree meets it; see `FIX_PLAN_PHASE_6.md`.
 
 ## Phase Summary
 
@@ -21,7 +21,7 @@
 | 3 | Ledger contract, enum discipline & datalab test quality (Python ↔ TS) | 🟡 | 9 | 23 | python-fastapi (all but 3.3), general-purpose (3.3, kept inside Phase 3) | Phase 2 (template `train.py`) |
 | 4 | Signatures, settings & error-handling style | 🟡 | 10 | 24 | python-fastapi | Phases 1, 2 (`ensure_collection`, `runner.py`, `call.py`) |
 | 5 | pyright strict on `src/` (#14) | 🟡 | 8 | 47 | python-fastapi | Phases 1–4 |
-| 6 | App formatter + linter (#13) | 🟡 | 3 | 11 | general-purpose | Phase 3 (3.3 edits `app/src/lib`) |
+| 6 | App formatter + linter (#13) | 🟡 | 3 | 12 | general-purpose | Phase 3 (3.3 edits `app/src/lib`) |
 | 7 | Docs & dependency hygiene | 🟡 | 2 | 6 | general-purpose | Phases 3, 4 (docs describe the new modules) |
 | 8 | CI gates & tooling | 🟡 | 2 | 10 | python-fastapi | — |
 | **Total** | | | **45** | | | |
