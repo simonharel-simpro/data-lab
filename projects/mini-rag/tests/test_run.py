@@ -12,7 +12,7 @@ from mini_rag.corpus import Chunk
 from mini_rag.generate import GenerationError
 from mini_rag.index import Retrieval
 from mini_rag.questions import Question
-from mini_rag.run import Answer, RunConfig, run
+from mini_rag.run import Answer, EmptyRetrieval, RunConfig, Search, run
 from mini_rag.settings import PilotSettings
 
 _QUESTIONS = [
@@ -38,6 +38,7 @@ def _run(  # every knob a config-identity test varies is a keyword
     *,
     n: int | None = None,
     answer: Answer = _answer,
+    search: Search = _search,
     k: int = 3,
     size: int = 120,
     gen_model: str = "test-gen-model",
@@ -46,14 +47,18 @@ def _run(  # every knob a config-identity test varies is a keyword
 ) -> str:
     settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
     pilot = PilotSettings(  # type: ignore[call-arg]
-        _env_file=None, llm_base_url=base_url, llm_api_key="sk-or-test", gen_model=gen_model, max_tokens=384
+        _env_file=None,  # pyright: ignore[reportCallIssue]  # pydantic-settings accepts _env_file at runtime
+        llm_base_url=base_url,
+        llm_api_key="sk-or-test",
+        gen_model=gen_model,
+        max_tokens=384,
     )
     project = Project(name="mini-rag", root=tmp_path)
     config = RunConfig(
         retrieval=Retrieval.BM25, k=k, n=n, size=size, overlap=20, collection="MiniRag_x", corpus_hash="abc123"
     )
     return run(
-        project, settings, pilot, _QUESTIONS, config=config, answer=answer, search=_search,
+        project, settings, pilot, _QUESTIONS, config=config, answer=answer, search=search,
         results_dir=tmp_path / "results", served_by=None if served_by is None else lambda: served_by,
     )  # fmt: skip
 
@@ -110,6 +115,28 @@ def test_f_13_generation_error_marks_run_failed_without_metrics(tmp_path: Path, 
     found = _only_run(sqlite_uri)
     assert found.info.status == "FAILED"
     assert found.data.metrics == {}
+
+
+def test_search_returning_no_passages_fails_the_run(tmp_path: Path, sqlite_uri: str) -> None:
+    searched: list[str] = []
+    answered: list[str] = []
+
+    def empty_on_second(query: str, mode: Retrieval, k: int) -> list[Chunk]:
+        searched.append(query)
+        return [] if len(searched) == 2 else _search(query, mode, k)
+
+    def recording(question: str, passages: list[Chunk]) -> str:
+        answered.append(question)
+        return _answer(question, passages)
+
+    with pytest.raises(EmptyRetrieval, match="q2"):
+        _run(tmp_path, sqlite_uri, answer=recording, search=empty_on_second)
+
+    found = _only_run(sqlite_uri)
+    assert found.info.status == "FAILED"
+    assert "score" not in found.data.metrics
+    assert [r["id"] for r in _jsonl_rows(tmp_path)] == ["q1"]
+    assert answered == [_QUESTIONS[0].question]  # no LLM call for the question without passages
 
 
 def test_d_15_partial_run_logs_smoke_metrics_only(tmp_path: Path, sqlite_uri: str) -> None:

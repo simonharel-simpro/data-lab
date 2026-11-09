@@ -18,16 +18,21 @@ const cards = await Promise.all(
   })),
 );
 ---
+
 <Base title="Projets">
   <h1>Projets</h1>
   {cards.length === 0 && (
-    <p class="muted">Aucun projet pour l'instant. Créez-en un avec <code>datalab-new &lt;nom&gt;</code>.</p>
+    <p class="muted">
+      Aucun projet pour l'instant. Créez-en un avec <code>datalab-new &lt;nom&gt;</code>.
+    </p>
   )}
   <div class="grid">
     {cards.map(({ e, gaps, state }) => (
       <article class="card">
         <span class="status">{e.data.status}</span>
-        <h2><a href={`/projects/${e.id}/`}>{e.data.title}</a></h2>
+        <h2>
+          <a href={`/projects/${e.id}/`}>{e.data.title}</a>
+        </h2>
         <p class="muted">{e.data.tags.join(' · ')}</p>
         <Metric state={state} metricKey={e.data.metric?.key} />
         {gaps.length > 0 && <p class="badge">À compléter : {gaps.join(', ')}</p>}

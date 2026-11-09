@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess  # the subprocess tests run this interpreter on the package entry points
 import sys
@@ -15,7 +16,7 @@ from datalab.tags import Tag
 # isort: split
 from __DATALAB_PACKAGE__.eval import run
 
-from .conftest import PROJECT_DIR, A, _runs, composed, ledger_at_modeling, write_model
+from .conftest import PROJECT_DIR, A, _runs, composed, ledger_at_modeling, with_winner, write_model
 
 AuditReady = Callable[..., tuple[RunLedger, str]]
 
@@ -154,6 +155,75 @@ def test_eval_refuses_winner_from_another_split(
     assert "another split or data" in capsys.readouterr().err
     assert client.get_experiment_by_name(A) is None
     assert ledger.read(exp_dir).test_looks == lg.test_looks
+
+
+@pytest.mark.parametrize("case", ["missing", "deleted"])
+def test_eval_with_deleted_winner_run_exits_2_naming_run(
+    case: str,
+    configs: Path,
+    exp_dir: Path,
+    data_overrides: list[str],
+    tracking: str,
+    audit_ready: AuditReady,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    lg, child_id = audit_ready()
+    client = MlflowClient(tracking)
+    if case == "deleted":
+        client.delete_run(child_id)
+    else:
+        child_id = "f" * 32
+        ledger.write_atomic(exp_dir, with_winner(ledger_at_modeling(exp_dir), "dummy", child_id))
+
+    assert _eval(configs, data_overrides) == 2
+
+    err = capsys.readouterr().err
+    assert child_id in err
+    assert ("does not exist" if case == "missing" else "is deleted") in err
+    assert client.get_experiment_by_name(A) is None
+    assert ledger.read(exp_dir).test_looks == lg.test_looks
+
+
+def test_eval_with_deleted_parent_run_exits_2_naming_run(
+    configs: Path,
+    data_overrides: list[str],
+    tracking: str,
+    audit_ready: AuditReady,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _, child_id = audit_ready()
+    client = MlflowClient(tracking)
+    parent_id = client.get_run(child_id).data.tags["mlflow.parentRunId"]
+    client.delete_run(parent_id)
+
+    assert _eval(configs, data_overrides) == 2
+
+    err = capsys.readouterr().err
+    assert parent_id in err
+    assert "is deleted" in err
+
+
+def test_eval_refuses_mixed_timezones_before_recording_a_test_look(
+    configs: Path,
+    exp_dir: Path,
+    data_overrides: list[str],
+    tracking: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rows = [{"x": i, "y": 0.0, "t": f"2024-12-{i + 1:02d}T00:00:00+00:00"} for i in range(7)]
+    (exp_dir / "sample.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    bounds = {"train": "2024-12-03", "val": "2024-12-05", "test": "2024-12-31"}  # naive bounds, aware rows
+    split = {"strategy": "temporal", "seed": 0, "target": "y", "group_key": None, "time_col": "t"}
+    split["splits"] = {name: {"time_max": bound} for name, bound in bounds.items()}  # type: ignore[assignment]
+    (exp_dir / "split.json").write_text(json.dumps(split), encoding="utf-8")
+    before = with_winner(ledger_at_modeling(exp_dir), "dummy", "f" * 32)
+    ledger.write_atomic(exp_dir, before)
+
+    assert _eval(configs, data_overrides) == 2
+
+    assert "timezone" in capsys.readouterr().err
+    assert ledger.read(exp_dir).test_looks == before.test_looks == ()
+    assert MlflowClient(tracking).get_experiment_by_name(A) is None
 
 
 def _cli(

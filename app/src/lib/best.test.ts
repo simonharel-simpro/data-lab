@@ -6,11 +6,22 @@ import type { MlflowRun } from './mlflow-rest.ts';
 const L: BestFilter = { kind: 'ledger', splitSha256: 'a'.repeat(64), dataSha256: 'b'.repeat(64) };
 const legacy: BestFilter = { kind: 'legacy' };
 
-function run(id: string, metrics: Record<string, number>, start = 1, exp = '1', params: Record<string, string> = {}, tags: Record<string, string> = {}, status = 'FINISHED'): MlflowRun {
+function run(
+  id: string,
+  metrics: Record<string, number>,
+  start = 1,
+  exp = '1',
+  params: Record<string, string> = {},
+  tags: Record<string, string> = {},
+  status = 'FINISHED',
+): MlflowRun {
   const m = Object.entries(metrics).map(([key, value]) => ({ key, value }));
   const p = Object.entries(params).map(([key, value]) => ({ key, value }));
   const t = Object.entries(tags).map(([key, value]) => ({ key, value }));
-  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status }, data: { metrics: m, params: p, tags: t } };
+  return {
+    info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status },
+    data: { metrics: m, params: p, tags: t },
+  };
 }
 const child = (id: string, parent: string, score: number, tags: Record<string, string> = {}, status = 'FINISHED') =>
   run(id, { score }, 1, '1', {}, { 'mlflow.parentRunId': parent, ...tags }, status);
@@ -45,7 +56,10 @@ test('U-27: ledger filter keeps the frozen split and full data only', () => {
 });
 
 test('U-27: null run.json hash or invalid ledger makes nothing eligible', () => {
-  const runs = [run('pa', {}, 1, '1', {}, { split_sha256: 'a'.repeat(64), data_sha256: 'b'.repeat(64) }), child('ca', 'pa', 0.4)];
+  const runs = [
+    run('pa', {}, 1, '1', {}, { split_sha256: 'a'.repeat(64), data_sha256: 'b'.repeat(64) }),
+    child('ca', 'pa', 0.4),
+  ];
   assert.deepEqual(eligibleForBest(runs, { ...L, kind: 'ledger', dataSha256: null }), []);
   assert.deepEqual(eligibleForBest(runs, { kind: 'none' }), []);
   assert.deepEqual(bestFilter({ kind: 'absent' }), { kind: 'legacy' });
@@ -59,6 +73,13 @@ test('a parentless run counts only under legacy and only when FINISHED', () => {
 });
 
 test('bestFilter on an ok ledger carries the run.json hashes', () => {
-  const f = bestFilter({ kind: 'ok', ledgerKind: 'training', metric: 'm', steps: [], splitSha256: 'a'.repeat(64), dataSha256: null });
+  const f = bestFilter({
+    kind: 'ok',
+    ledgerKind: 'training',
+    metric: 'm',
+    steps: [],
+    splitSha256: 'a'.repeat(64),
+    dataSha256: null,
+  });
   assert.deepEqual(f, { kind: 'ledger', splitSha256: 'a'.repeat(64), dataSha256: null });
 });

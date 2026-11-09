@@ -7,7 +7,7 @@ models return a `thinking` block before the text and may inline `<think>...</thi
 
 import re
 from collections import Counter
-from typing import Final
+from typing import Final, cast
 
 import anthropic
 import httpx2
@@ -38,8 +38,19 @@ def _prompt(question: str, passages: list[Chunk]) -> str:
     return f"Passages:\n{body}\n\nQuestion: {question}"
 
 
+def _extra_body(providers: list[str] | None, quantization: str | None) -> dict[str, object]:
+    body: dict[str, object] = {"temperature": 0}
+    if providers:
+        # OpenRouter routing: only these upstreams, in order, never outside the list or the quantization.
+        routing: dict[str, object] = {"order": providers, "allow_fallbacks": False}
+        if quantization:
+            routing["quantizations"] = [quantization]
+        body["provider"] = routing
+    return body
+
+
 class LlmGenerator:
-    def __init__(
+    def __init__(  # noqa: PLR0913  # connection settings; the 4 defaulted ones are optional kw-only knobs (#39)
         self,
         base_url: str,
         model: str,
@@ -54,13 +65,7 @@ class LlmGenerator:
     ) -> None:
         self.model, self.max_tokens = model, max_tokens
         # anthropic>=2 dropped `temperature` from the signature; both endpoints honour it.
-        self.extra_body: dict[str, object] = {"temperature": 0}
-        if providers:
-            # OpenRouter routing: only these upstreams, in order, never outside the list or the quantization.
-            routing: dict[str, object] = {"order": providers, "allow_fallbacks": False}
-            if quantization:
-                routing["quantizations"] = [quantization]
-            self.extra_body["provider"] = routing
+        self.extra_body = _extra_body(providers, quantization)
         # Which upstream served each answer (OpenRouter's `provider` response field); empty elsewhere.
         self.served: Counter[str] = Counter()
         self.sdk = anthropic.Anthropic(
@@ -73,17 +78,22 @@ class LlmGenerator:
 
     def answer(self, question: str, passages: list[Chunk]) -> str:
         try:
-            message = self.sdk.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                system=SYSTEM,
-                messages=[{"role": "user", "content": _prompt(question, passages)}],
-                extra_body=self.extra_body,
+            # widen to object: the isinstance below guards a malformed provider payload at runtime
+            raw = cast(
+                object,
+                self.sdk.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    system=SYSTEM,
+                    messages=[{"role": "user", "content": _prompt(question, passages)}],
+                    extra_body=self.extra_body,
+                ),
             )
         except anthropic.APIError as err:
             raise GenerationError(f"llm {self.model}: {err}") from err
-        if not isinstance(message, anthropic.types.Message):
-            raise GenerationError(f"llm {self.model}: malformed response ({type(message).__name__})")
+        if not isinstance(raw, anthropic.types.Message):
+            raise GenerationError(f"llm {self.model}: malformed response ({type(raw).__name__})")
+        message = raw
         if message.stop_reason == "max_tokens":
             raise GenerationError(
                 f"llm {self.model}: answer truncated at max_tokens={self.max_tokens}; raise MINI_RAG_MAX_TOKENS"

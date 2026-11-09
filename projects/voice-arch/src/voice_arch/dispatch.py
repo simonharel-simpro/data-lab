@@ -5,9 +5,10 @@ import asyncio
 import json
 from urllib.parse import urlsplit, urlunsplit
 
-from livekit.api import CreateAgentDispatchRequest, LiveKitAPI
+from livekit.api import LiveKitAPI
+from livekit.protocol.agent_dispatch import CreateAgentDispatchRequest
 
-from voice_arch.settings import VoiceSettings
+from voice_arch.settings import VoiceSettings, load_settings
 
 AGENT_NAME = "booking-agent"
 
@@ -39,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--arch", choices=["a", "b", "c"], required=True)
     parser.add_argument("--room", required=True)
     args = parser.parse_args(argv)
-    print(asyncio.run(dispatch(VoiceSettings(), args.arch, args.room)))  # pyright: ignore[reportCallIssue]
+    print(asyncio.run(dispatch(load_settings(), args.arch, args.room)))
     return 0
 
 

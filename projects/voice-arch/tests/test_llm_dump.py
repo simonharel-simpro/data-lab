@@ -5,8 +5,8 @@ import pytest
 from livekit.agents import llm
 
 from voice_arch.audio import make_llm
-from voice_arch.llm_dump import DUMP_DIR_ENV, dump_empty_request
-from voice_arch.settings import VoiceSettings
+from voice_arch.llm_dump import dump_empty_request
+from voice_arch.settings import VoiceSettings, load_settings
 
 
 async def _stream(voice_settings: VoiceSettings) -> llm.LLMStream:
@@ -18,20 +18,16 @@ async def _stream(voice_settings: VoiceSettings) -> llm.LLMStream:
     return stream
 
 
-async def test_dump_is_off_without_the_env_var(voice_settings: VoiceSettings, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(DUMP_DIR_ENV, raising=False)
+async def test_dump_is_off_without_a_directory(voice_settings: VoiceSettings) -> None:
     stream = await _stream(voice_settings)
 
-    assert dump_empty_request(stream, {"temperature": 0.0}, 1) is None
+    assert dump_empty_request(stream, {"temperature": 0.0}, 1, None) is None
 
 
-async def test_dump_writes_messages_tools_and_params(
-    voice_settings: VoiceSettings, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv(DUMP_DIR_ENV, str(tmp_path / "dumps"))
+async def test_dump_writes_messages_tools_and_params(voice_settings: VoiceSettings, tmp_path: Path) -> None:
     stream = await _stream(voice_settings)
 
-    path = dump_empty_request(stream, {"temperature": 0.3, "extra_headers": {"X": "secret"}}, 2)
+    path = dump_empty_request(stream, {"temperature": 0.3, "extra_headers": {"X": "secret"}}, 2, tmp_path / "dumps")
 
     assert path is not None and path.name.endswith("-attempt2.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -39,3 +35,11 @@ async def test_dump_writes_messages_tools_and_params(
     assert payload["messages"][1]["content"] == "Hello there"
     assert payload["tools"] == []
     assert payload["params"] == {"temperature": 0.3}  # headers are not dumped
+
+
+def test_dump_dir_read_from_settings(voice_settings: VoiceSettings, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VOICE_ARCH_DUMP_EMPTY_DIR", "/x")
+    load_settings.cache_clear()
+
+    assert load_settings().dump_empty_dir == Path("/x")
+    load_settings.cache_clear()

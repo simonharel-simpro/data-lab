@@ -217,7 +217,7 @@ def test_uv_missing_is_reported(
     assert _projects_entries(fake_repo) == []
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="needs a #!/bin/sh stub executable")
+@pytest.mark.skipif(sys.platform == "win32", reason="platform-conditional (#8): the uv stub is a #!/bin/sh executable")
 def test_uv_lock_nonzero_exit_is_reported(
     fake_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

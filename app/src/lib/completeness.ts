@@ -2,10 +2,10 @@ import type { Card, Status } from './card.ts';
 
 // What a card must contain once it reaches a status (each level adds to the previous one).
 const SECTIONS_BY_STATUS: Record<Status, readonly string[]> = {
-  'idée': ['Objectif'],
+  idée: ['Objectif'],
   'en cours': ['Objectif', 'Approche'],
-  'conclu': ['Objectif', 'Approche', 'Enseignements', 'Suite'],
-  'abandonné': ['Objectif', 'Approche', 'Enseignements', 'Suite'],
+  conclu: ['Objectif', 'Approche', 'Enseignements', 'Suite'],
+  abandonné: ['Objectif', 'Approche', 'Enseignements', 'Suite'],
 };
 const NEEDS_DATA_AND_METRIC: readonly Status[] = ['en cours', 'conclu', 'abandonné'];
 

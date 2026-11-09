@@ -1,15 +1,22 @@
 """Software experiment budget (D-1, F-4b) over the shared OpenRouter key, summed from the MLflow runs."""
 
-from typing import Final
+import logging
+from typing import Final, cast
 
 from mlflow import MlflowClient
-from mlflow.entities import ViewType
+from mlflow.entities import RunStatus, ViewType
 
 from datalab.project import experiment_name
+from datalab.settings import Settings
+from datalab.tracking_queries import project_spend
 
-# Money was spent whether or not the run finished.
-_COUNTED_STATUSES: Final = frozenset({"FINISHED", "FAILED", "KILLED"})
-_SUBS: Final = ("bench", "conversations")
+logger = logging.getLogger(__name__)
+PROJECT: Final = "voice-arch"
+# What one run of each sub-experiment may cost: the F-4b gate's fallback, and what a run that crashed before it
+# logged any cost counts for (P-2). A finished sweep is measured instead (`last_full_sweep_cost`).
+ESTIMATES_USD: Final = {"conversations": 15.0, "bench": 2.0}
+_PAGE = 1000
+_FINISHED: Final = RunStatus.to_string(RunStatus.FINISHED)
 
 
 class BudgetExceeded(Exception):
@@ -19,24 +26,36 @@ class BudgetExceeded(Exception):
         self.budget = budget
 
 
-def spent_so_far(client: MlflowClient) -> float:
-    """Sum of the latest `cost_usd` of every counted run of the voice-arch bench and conversations experiments."""
+def _unmeasured_estimates(client: MlflowClient) -> float:
+    """Estimates of the runs that are not FINISHED and never logged a `cost_usd` (crashed, killed, or still running)."""
     total = 0.0
-    for sub in _SUBS:
-        experiment = client.get_experiment_by_name(experiment_name("voice-arch", sub))
+    for sub, estimate in ESTIMATES_USD.items():
+        experiment = client.get_experiment_by_name(experiment_name(PROJECT, sub))
         if experiment is None:
             continue
         token: str | None = None
         while True:
-            # ALL: a soft-deleted run still spent its money.
             page = client.search_runs(
-                [experiment.experiment_id], run_view_type=ViewType.ALL, max_results=1000, page_token=token
+                [experiment.experiment_id],
+                filter_string=f"tags.project = '{PROJECT}'",
+                run_view_type=ViewType.ALL,  # a soft-deleted run still spent its money
+                max_results=_PAGE,
+                page_token=token,
             )
-            total += sum(run.data.metrics.get("cost_usd", 0.0) for run in page if run.info.status in _COUNTED_STATUSES)
-            token = page.token
+            for run in page:
+                if run.info.status != _FINISHED and "cost_usd" not in run.data.metrics:
+                    logger.warning("run %s has no cost_usd: counted at the %.2f $ estimate", run.info.run_id, estimate)
+                    total += estimate
+            token = cast("str | None", page.token)  # pyright: ignore[reportUnknownMemberType]  # PagedList.token
             if not token:
                 break
     return total
+
+
+def spent_so_far(settings: Settings) -> float:
+    """Every dollar of the voice-arch project: `cost_usd` of all runs whatever their status, plus P-2 estimates."""
+    client = MlflowClient(settings.mlflow_tracking_uri)
+    return project_spend(PROJECT, settings) + _unmeasured_estimates(client)
 
 
 def check_budget(spent: float, estimate: float, budget: float) -> None:

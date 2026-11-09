@@ -48,7 +48,10 @@ test('should read absent params as empty', () => {
 test('F-19: tags parsed, bad ones dropped', () => {
   const tags = [{ key: 'mlflow.parentRunId', value: 'p1' }, { key: 1 }];
   const [run, bare] = parseRuns({
-    runs: [{ info: { ...info, status: 'FAILED' }, data: { metrics: [], tags } }, { info, data: { metrics: [] } }],
+    runs: [
+      { info: { ...info, status: 'FAILED' }, data: { metrics: [], tags } },
+      { info, data: { metrics: [] } },
+    ],
   });
   assert.deepEqual(run?.data.tags, [{ key: 'mlflow.parentRunId', value: 'p1' }]);
   assert.equal(run?.info.status, 'FAILED');
@@ -70,7 +73,10 @@ test('F-19: follows next_page_token', async () => {
   const b = { info: { ...info, run_id: 'b' } };
   const f = pagedFetch((n) => (n === 1 ? { runs: [a], next_page_token: 't' } : { runs: [b] }));
   const runs = await searchAllRuns('http://h:1', { filter: 'x' }, f.impl);
-  assert.deepEqual(runs.map((r) => r.info.run_id), ['a', 'b']);
+  assert.deepEqual(
+    runs.map((r) => r.info.run_id),
+    ['a', 'b'],
+  );
   assert.equal(f.bodies.length, 2);
   assert.equal(f.bodies[0]?.page_token, undefined);
   assert.equal(f.bodies[1]?.page_token, 't');

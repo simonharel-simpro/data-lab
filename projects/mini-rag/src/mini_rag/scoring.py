@@ -56,7 +56,7 @@ class Metrics:
 def normalize(text: str) -> str:
     """Lowercase, NFKC, drop apostrophes, punctuation -> space, drop articles, collapse whitespace."""
     text = unicodedata.normalize("NFKC", text).lower()
-    chars = []
+    chars: list[str] = []
     for ch in text:
         if ch in _APOSTROPHES:
             continue

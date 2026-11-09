@@ -46,6 +46,26 @@ repos:
         pass_filenames: false
         files: ^(projects/voice-arch/|tools/pre_commit_checks/)
       # <<< datalab-new: declared-deps
+      # /scaffold-linter enum-discipline (FIX_PLAN "Recurring Patterns"). Scans the tree's src/ relative to the cwd
+      # with that tree's StrEnum value map, hence one entry per tree. Not generated: a new tree needs its map + entry.
+      - id: enum-discipline
+        name: datalab compares against StrEnum members, not raw literals
+        entry: uv run --locked --directory packages/datalab python ../../tools/pre_commit_checks/check_enum_discipline.py
+        language: system
+        pass_filenames: false
+        files: ^(packages/datalab/src/|tools/pre_commit_checks/)
+      - id: enum-discipline-mini-rag
+        name: mini-rag compares against StrEnum members, not raw literals
+        entry: uv run --locked --directory projects/mini-rag python ../../tools/pre_commit_checks/check_enum_discipline.py
+        language: system
+        pass_filenames: false
+        files: ^(projects/mini-rag/src/|packages/datalab/src/|tools/pre_commit_checks/)
+      - id: enum-discipline-voice-arch
+        name: voice-arch compares against StrEnum members, not raw literals
+        entry: uv run --locked --directory projects/voice-arch python ../../tools/pre_commit_checks/check_enum_discipline.py
+        language: system
+        pass_filenames: false
+        files: ^(projects/voice-arch/src/|packages/datalab/src/|tools/pre_commit_checks/)
       - id: hydra-gate
         name: Hydra is wired in projects with configs/
         entry: python tools/pre_commit_checks/hydra_gate.py
@@ -59,9 +79,17 @@ repos:
         files: ^projects/[^/]+/(run|split)\.json$
       # Pre-push parity with ci.yml's gates + tests. pip-audit, npm audit and the gitleaks history scan stay CI-only
       # because they need the network.
+      - id: gates-root
+        name: root tree (tools/ + tests/) types + tests + coverage floor (#7)
+        # One ad-hoc env (no root uv project, ADR 3): pyright resolves pytest/yaml from it. Single home of the pins.
+        entry: bash -c 'uv run --no-project --python 3.12 --with pyright==1.1.414 --with pytest==9.2.0 --with pytest-cov==7.1.0 --with pyyaml==6.0.3 sh -c "pyright && pytest -q tests/ --cov=tools --cov-report=term-missing --cov-fail-under=70"'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: gates-datalab
         name: datalab gates (contracts, types) + unit tests + coverage floor
-        entry: bash -c 'cd packages/datalab && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov=datalab'
+        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+        entry: bash -c 'cd packages/datalab && uv run --locked lint-imports && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov=datalab'
         language: system
         pass_filenames: false
         stages: [pre-push]
@@ -69,23 +97,25 @@ repos:
       # >>> datalab-new: gates
       - id: gates-mini-rag
         name: mini-rag gates (contracts, types) + unit tests + coverage floor
-        entry: bash -c 'cd projects/mini-rag && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
+        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+        entry: bash -c 'cd projects/mini-rag && uv run --locked lint-imports && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov'
         language: system
         pass_filenames: false
         stages: [pre-push]
         files: ^(projects/mini-rag/|packages/datalab/src/)
       - id: gates-voice-arch
         name: voice-arch gates (contracts, types) + unit tests + coverage floor
-        entry: bash -c 'cd projects/voice-arch && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
+        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+        entry: bash -c 'cd projects/voice-arch && uv run --locked lint-imports && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov'
         language: system
         pass_filenames: false
         stages: [pre-push]
         files: ^(projects/voice-arch/|packages/datalab/src/)
       # <<< datalab-new: gates
       - id: gates-app
-        name: app astro check + unit tests + coverage floor
+        name: app lint + format check + astro check + unit tests + coverage floor
         # Needs node >=22.22 on PATH (see .nvmrc); node 20 rejects --test-coverage-lines.
-        entry: bash -c 'cd app && npm run check && npm test'
+        entry: bash -c 'cd app && npm run lint && npm run format:check && npm run check && npm test'
         language: system
         pass_filenames: false
         stages: [pre-push]

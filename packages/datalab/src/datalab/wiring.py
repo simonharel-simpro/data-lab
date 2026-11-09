@@ -48,8 +48,9 @@ def gates_block(name: str) -> str:
     return (
         f"      - id: gates-{name}\n"
         f"        name: {name} gates (contracts, types) + unit tests + coverage floor\n"
-        f"        entry: bash -c 'cd projects/{name} && uv run --locked lint-imports && uv run --locked pyright"
-        " && uv run --locked pytest -q --cov'\n"
+        "        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)\n"
+        f"        entry: bash -c 'cd projects/{name} && uv run --locked lint-imports"
+        " && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov'\n"
         "        language: system\n"
         "        pass_filenames: false\n"
         "        stages: [pre-push]\n"
@@ -77,13 +78,14 @@ def _merge_blocks(body: str, block: str) -> str:
     for line in body.splitlines(keepends=True):
         found = _BLOCK_ID.match(line.rstrip("\n"))
         if found:
-            current = found.group(1)
-            if current in blocks:
-                raise ProjectError(f"duplicate hook id {current!r} in a datalab-new region")
-            blocks[current] = ""
+            block_id: str = found.group(1)
+            if block_id in blocks:
+                raise ProjectError(f"duplicate hook id {block_id!r} in a datalab-new region")
+            current, blocks[block_id] = block_id, line
         elif current is None:
             raise ProjectError(f"unexpected text before the first hook in a datalab-new region: {line.strip()!r}")
-        blocks[current] += line
+        else:
+            blocks[current] += line
     new_id = _BLOCK_ID.match(block.splitlines()[0])
     if new_id is None:  # pragma: no cover  # blocks come from this module
         raise ProjectError("malformed generated block")

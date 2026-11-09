@@ -1,0 +1,21 @@
+{
+ "schema_version": 1,
+ "statuses": [
+  "todo",
+  "produced",
+  "validated"
+ ],
+ "decisions": [
+  "validate",
+  "correct",
+  "redo"
+ ],
+ "kinds": [
+  "training",
+  "comparison"
+ ],
+ "goals": [
+  "max",
+  "min"
+ ]
+}

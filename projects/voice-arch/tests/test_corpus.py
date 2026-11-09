@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from tests.fakes import FakeTts
-from voice_arch.corpus import EmptyAudioError, Utterance, build_corpus, load_utterances
+from voice_arch.corpus import Corpus, EmptyAudioError, Utterance, build_corpus, load_utterances
 
 UTTERANCES_FILE = Path(__file__).resolve().parents[1] / "data" / "utterances.jsonl"
 _UTTERANCES = [
@@ -13,7 +13,7 @@ _UTTERANCES = [
 ]
 
 
-async def _build(tts: FakeTts, out_dir: Path, voice: str = "v1", utterances: list[Utterance] = _UTTERANCES):
+async def _build(tts: FakeTts, out_dir: Path, voice: str = "v1", utterances: list[Utterance] = _UTTERANCES) -> Corpus:
     return await build_corpus(utterances, tts, out_dir, tts_model="m", voice=voice)
 
 

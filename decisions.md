@@ -290,3 +290,91 @@ compensates for the defect; it was not tuned to pass the test.
 **Alternatives considered:** the default 1.0 (smeared clusters); patching or forking umap-rs; another UMAP crate.
 **Consequences:** Layouts depend on a workaround for a crate bug. Revisit it if umap-rs fixes `step_epochs` or is
 replaced: the compensation would then halve repulsion for nothing.
+
+## 2026-11-08 — Serialize Weaviate index builds with a host-local flock
+
+**Status:** accepted (P-1, user 2026-11-08)
+**Context:** Two concurrent mini-rag runs racing `ensure_collection` (#12): B saw A's partial object count as
+"incomplete" and deleted A's collection mid-build.
+**Decision:** `ensure_collection` runs entirely under `fcntl.flock(LOCK_EX)` on `<tmp>/datalab-index-locks/<name>.lock`,
+one lock per collection name. Weaviate is local (127.0.0.1), so the host is the right scope. The reuse check runs
+under the lock, so B waits, then sees A's complete collection and reuses it.
+**Alternatives considered:** (b) the `filelock` package (also works on Windows; adds a dependency); (c) no lock:
+build into a uuid-suffixed collection, then point a Weaviate alias at it.
+**Consequences:** `fcntl` is POSIX-only, which is fine on Linux/WSL (ADR 3). Lock files in the OS temp dir are never
+removed, which is fine for a local lab. A holder that dies releases the lock with its file descriptor.
+
+## 2026-11-08 — Milestone ids stay data-driven strings
+
+**Status:** accepted (P-10, user 2026-11-08)
+**Context:** Milestone ids come from `contracts/milestones.json`, per experiment kind, and both the Python ledger and
+the TS app read that file. Python code names a few of them (`dataset`, `features`, `modeling`, `audit`).
+**Decision:** The ids the code names are `Final` constants in `datalab.ledger_model` (`DATASET`, `FEATURES`,
+`MODELING`, `AUDIT`), tested to exist in the contract. Any other id is validated at runtime by `_require_current` and,
+in the app, by the `superRefine` check I-1.
+**Alternatives considered:** A generated `Literal` plus drift tests on both sides; won't fix (raw literals).
+**Consequences:** A new or renamed milestone in the contract is caught by tests and runtime checks, not by the type
+checker. No code generation step to maintain.
+
+## 2026-11-09 — No `from __future__ import annotations` on py312+
+
+**Status:** accepted (P-8, user 2026-11-08)
+**Context:** REVIEW 2026-11-08 (§2) found 79 non-test modules without the import and 3 with it, and asked for one
+decision (ruff `FA`/`I002`, or a py312+ exemption). Every tree requires Python 3.12, where PEP 604 (`X | None`) and
+PEP 585 (`list[int]`) syntax is native in annotations.
+**Decision:** The import is not required and new code does not add it. ruff `UP` (selected in the root `ruff.toml`)
+keeps annotations in the modern syntax.
+**Alternatives considered:** Require it everywhere with ruff `FA`/`I002` (a per-file rule with no benefit on 3.12);
+strip the 3 existing imports (churn for no behaviour change).
+**Consequences:** Annotations are evaluated at definition time, so a forward reference needs quotes. Existing imports
+are harmless and may stay.
+
+## 2026-11-09 — Dev dependency specs stay `>=`; `uv.lock` + `uv sync --locked` is the pin
+
+**Status:** accepted (P-9, user 2026-11-04, confirmed 2026-11-08; #40)
+**Context:** REVIEW 2026-11-04 and REVIEW 2026-11-08 (§5) flag the 12 `>=` dev-group specs in
+`packages/datalab/pyproject.toml`, `projects/mini-rag/pyproject.toml` and `projects/voice-arch/pyproject.toml`
+(`import-linter`). The user decided on 2026-11-04 to keep them and confirmed it on 2026-11-08. Tracker: #40.
+**Decision:** Keep the `>=` specs. The pin is each tree's `uv.lock`; the hooks and CI run `uv run --locked` /
+`uv sync --locked`, so an unlocked resolution fails instead of drifting.
+**Alternatives considered:** `==` like voice-arch's other dev pins.
+**Consequences:** `uv lock --upgrade` keeps working without editing the specs. The installed versions are whatever the
+lock says, so a reader checks `uv.lock`, not `pyproject.toml`.
+
+## 2026-11-09 — App formatter + linter: prettier + eslint flat config
+
+**Status:** accepted (Fix Phase 6, #13; overrides per ESC-6-1, decided 2026-11-08/09)
+**Context:** #13: the Astro app (`app/`) had no formatter and no linter, so style and the "no `any`" / type-import
+conventions were enforced by review only.
+**Decision:** Six exact dev pins: `eslint` 10.13.0, `@eslint/js` 10.0.1, `typescript-eslint` 8.72.0,
+`eslint-plugin-astro` 3.2.1, `prettier` 3.9.10, `prettier-plugin-astro` 1.1.2. `eslint.config.js` (flat config):
+`@eslint/js` `recommended` + typescript-eslint `recommended` + `@typescript-eslint/no-explicit-any` and
+`@typescript-eslint/consistent-type-imports` (inline `type` specifiers accepted) + eslint-plugin-astro
+`flat/recommended`; no rule disabled or overridden. `.prettierrc.json` matches the existing style (width 120, single
+quotes, trailing commas, astro parser for `*.astro`). Scripts `lint`, `format`, `format:check`; `lint` and
+`format:check` run in the CI `app` job (after `npm audit`) and in the `gates-app` pre-push hook.
+Eight exact npm `overrides` (ESC-6-1):
+
+| Package | Override | Published | Why |
+|---|---|---|---|
+| `minimatch` | 11.0.1 | 2026-10-27 | Fixes GHSA-g3hv-75wg-m249. Exempt from the 14-day rule (ESC-6-1); crosses the dependents' `^10` range |
+| `@isaacs/nonrecursive-glob-match` | 1.0.1 | 2026-10-27 | New dependency of minimatch 11.0.1 (oldest release its `^1.0.1` accepts). Exempt (ESC-6-1) |
+| `@eslint-community/regexpp` | 4.12.2 | 2025-10-22 | in range; 14-day rule (4.12.3 is 2026-11-08) |
+| `globals` | 17.13.0 | 2026-10-01 | in range; 14-day rule (17.14.0 is 2026-11-01) |
+| `postcss-selector-parser` | 7.1.7 | 2026-10-20 | in range; 14-day rule (7.2.0 is 2026-11-08) |
+| `@typescript-eslint/scope-manager` | 8.72.0 | 2026-10-19 | in range; 14-day rule (8.72.1 is 2026-10-26); same version `typescript-eslint` pins |
+| `@typescript-eslint/types` | 8.72.0 | 2026-10-19 | same |
+| `@typescript-eslint/visitor-keys` | 8.72.0 | 2026-10-19 | same |
+
+The two exceptions are a dated exception to the 14-day release-age rule (decided 2026-11-08/09; both releases pass
+14 days on 2026-11-10): the only minimatch release with the GHSA-g3hv-75wg-m249 fix is newer than 14 days, and
+`npm audit --audit-level=moderate` fails without it. The `minimatch` override crosses the `^10` range its dependents
+declare. The six in-range overrides keep the whole resolved tree under the 14-day rule.
+**Removal condition:** once eslint and typescript-eslint ship releases that depend on a fixed minimatch and are at
+least 14 days old, re-pin to them and drop every override whose package is then at least 14 days old in its natural
+resolution.
+**Alternatives considered:** Biome (no Astro template support at the pinned date); no formatter (lint only, style
+stays a review concern).
+**Consequences:** One whole-app rewrite commit (`a7e35ab`, prettier `--write`), listed in `.git-blame-ignore-revs`
+(`git config blame.ignoreRevsFile .git-blame-ignore-revs`). Land the PR with a merge commit (not squash/rebase) so the
+blame-ignore hash survives. The overrides are maintenance debt until the removal condition holds.

@@ -7,6 +7,7 @@ import pytest
 from datalab.project import (
     METRIC_KEY_RE,
     CardMetric,
+    Goal,
     Project,
     ProjectError,
     card_metric,
@@ -187,7 +188,7 @@ def test_card_metric_reads_frontmatter(tmp_path: Path) -> None:
     folder = tmp_path / "demo"
     _card(folder, "---\nname: demo\nmetric:\n  key: score\n  goal: max\n---\n")
 
-    assert card_metric(folder) == CardMetric("score", "max")
+    assert card_metric(folder) == CardMetric("score", Goal.MAX)
     bad_cards = [
         "---\nname: demo\n---\n",
         "---\nname: demo\nmetric: {key: a b, goal: max}\n---\n",
@@ -214,3 +215,9 @@ def test_package_name_maps_dashes_and_refuses_deps() -> None:
     for taken in ("pydantic", "antlr4", "omegaconf"):
         with pytest.raises(ProjectError, match=taken):
             package_name(taken)
+
+
+def test_goal_values_match_contract() -> None:
+    value_sets = json.loads((REPO_ROOT / "contracts" / "value_sets.json").read_text(encoding="utf-8"))
+
+    assert [g.value for g in Goal] == value_sets["goals"]

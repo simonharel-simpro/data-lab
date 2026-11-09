@@ -21,8 +21,9 @@ from voice_arch.call import AgentNeverJoined, ProviderAuthStop
 from voice_arch.caller import make_caller_session
 from voice_arch.openrouter_key import SpendTracker
 from voice_arch.personas import load_personas
-from voice_arch.runner import CallerFaultRate, run_sweep
+from voice_arch.runner import run_sweep
 from voice_arch.settings import VoiceSettings
+from voice_arch.sweep import CallerFaultRate, SweepContext, SweepPlan, Tracker
 
 EXPERIMENT = "voice-arch/conversations"
 NO_FULL_COST: Callable[[], float | None] = lambda: None  # noqa: E731
@@ -44,14 +45,13 @@ class Sweep:
         *,
         spent: float = 0.0,
         last_full: Callable[[], float | None] = NO_FULL_COST,
-        tracker: Callable[..., FakeTracker] | None = None,
+        tracker: Callable[..., Tracker] | None = None,
     ) -> str:
         chosen = [p for p in load_personas(SHIPPED) if p.id in personas]
         factory = tracker or partial(FakeTracker)
-        return await run_sweep(
-            env, chosen, Arch.A, reps, self.settings, project=self.project, dl_settings=self.dl,
-            spent=spent, last_full_cost=last_full, spend_tracker=factory,
-        )  # fmt: skip
+        plan = SweepPlan(chosen, Arch.A, reps)
+        ctx = SweepContext(self.project, self.dl, self.settings, spent, last_full, factory)
+        return await run_sweep(env, plan, ctx)
 
     def only_run(self) -> Run:
         experiment = self.client.get_experiment_by_name(EXPERIMENT)
@@ -192,6 +192,39 @@ async def test_cost_is_logged_with_cost_per_call(sweep: Sweep) -> None:
     metrics = sweep.only_run().data.metrics
     assert metrics["cost_usd"] == final
     assert metrics["cost_per_call_usd"] == pytest.approx(final / 2)
+
+
+async def test_sweep_logs_cumulative_cost_after_each_call(sweep: Sweep) -> None:
+    tracker = partial(FakeTracker, readings=[0.5, 1.25])
+
+    await sweep.run(FakeEnv(), ["self_correction"], reps=2, tracker=tracker)
+
+    history = sweep.client.get_metric_history(sweep.only_run().info.run_id, "cost_usd")
+    assert [(m.step, m.value) for m in sorted(history, key=lambda m: m.step)] == [(0, 0.5), (1, 1.25)]
+
+
+async def test_unreadable_key_tags_cost_unknown(sweep: Sweep) -> None:
+    tracker = partial(FakeTracker, readings=[None, None])
+
+    await sweep.run(FakeEnv(), ["self_correction"], reps=2, tracker=tracker)
+
+    run = sweep.only_run()
+    assert run.data.tags["cost_unknown"] == "true"
+    assert run.info.status == "FINISHED"
+
+
+async def test_readable_key_does_not_tag_cost_unknown(sweep: Sweep) -> None:
+    await sweep.run(FakeEnv(), ["self_correction"], reps=1, tracker=partial(FakeTracker, readings=[0.1]))
+
+    assert "cost_unknown" not in sweep.only_run().data.tags
+
+
+async def test_exit_cost_is_the_latest_metric_after_per_call_points(sweep: Sweep) -> None:
+    tracker = partial(FakeTracker, readings=[0.5, 1.25], final=1.3)
+
+    await sweep.run(FakeEnv(), ["self_correction"], reps=2, tracker=tracker)
+
+    assert sweep.only_run().data.metrics["cost_usd"] == 1.3
 
 
 async def test_f_12_cost_absent_when_key_read_fails(sweep: Sweep) -> None:

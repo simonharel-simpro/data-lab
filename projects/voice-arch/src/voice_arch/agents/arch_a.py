@@ -2,6 +2,7 @@
 
 from livekit.agents import Agent
 
+from voice_arch.agents.state import session_of
 from voice_arch.agents.tools import ALL_TOOLS
 from voice_arch.booking import instructions as text
 
@@ -21,8 +22,10 @@ INSTRUCTIONS = " ".join(
 
 class OrchestratorAgent(Agent):
     def __init__(self) -> None:
-        super().__init__(instructions=INSTRUCTIONS, tools=list(ALL_TOOLS))
+        super().__init__(  # pyright: ignore[reportUnknownMemberType]  # Agent.__init__ takes STT[Unknown]
+            instructions=INSTRUCTIONS, tools=list(ALL_TOOLS)
+        )
 
     async def on_enter(self) -> None:
         # Only the booking agent greets (F-8): the caller waits for this first turn.
-        self.session.generate_reply(instructions=text.GREETING)
+        session_of(self).generate_reply(instructions=text.GREETING)

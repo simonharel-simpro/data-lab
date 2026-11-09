@@ -1,6 +1,15 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { bestRun, metricState, pickBest, projectView, readReport, reportUnavailable, warmUp, type MlflowRun } from './mlflow.ts';
+import {
+  bestRun,
+  metricState,
+  pickBest,
+  projectView,
+  readReport,
+  reportUnavailable,
+  warmUp,
+  type MlflowRun,
+} from './mlflow.ts';
 import type { BestFilter } from './best.ts';
 
 type Call = { path: string; body: Record<string, unknown> };
@@ -10,11 +19,22 @@ const score = { key: 'score', goal: 'max' } as const;
 
 beforeEach(() => readReport().clear());
 
-function run(id: string, metrics: Record<string, number>, start = 1, exp = '1', params: Record<string, string> = {}, tags: Record<string, string> = {}, status = 'FINISHED'): MlflowRun {
+function run(
+  id: string,
+  metrics: Record<string, number>,
+  start = 1,
+  exp = '1',
+  params: Record<string, string> = {},
+  tags: Record<string, string> = {},
+  status = 'FINISHED',
+): MlflowRun {
   const m = Object.entries(metrics).map(([key, value]) => ({ key, value }));
   const p = Object.entries(params).map(([key, value]) => ({ key, value }));
   const t = Object.entries(tags).map(([key, value]) => ({ key, value }));
-  return { info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status }, data: { metrics: m, params: p, tags: t } };
+  return {
+    info: { run_id: id, run_name: `n-${id}`, experiment_id: exp, start_time: start, status },
+    data: { metrics: m, params: p, tags: t },
+  };
 }
 
 /** Fake MLflow: route by REST path; an Error reply is thrown, a function gets the call count for that path. */
@@ -22,7 +42,9 @@ function fakeFetch(routes: Record<string, Reply>) {
   const calls: Call[] = [];
   const counts = new Map<string, number>();
   const impl = (async (url: string | URL, init?: RequestInit) => {
-    const path = String(url).replace(/^.*\/api\/2\.0\/mlflow\//, '').replace(/^https?:\/\/[^/]+\//, '');
+    const path = String(url)
+      .replace(/^.*\/api\/2\.0\/mlflow\//, '')
+      .replace(/^https?:\/\/[^/]+\//, '');
     const n = (counts.get(path) ?? 0) + 1;
     counts.set(path, n);
     calls.push({ path, body: init?.body ? JSON.parse(String(init.body)) : {} });
@@ -35,7 +57,9 @@ function fakeFetch(routes: Record<string, Reply>) {
   return { impl, calls };
 }
 
-const exps = (...names: string[]) => ({ experiments: names.map((name, i) => ({ experiment_id: String(i + 1), name })) });
+const exps = (...names: string[]) => ({
+  experiments: names.map((name, i) => ({ experiment_id: String(i + 1), name })),
+});
 
 test('U-1: should ignore NaN/Infinity runs', () => {
   assert.deepEqual(pickBest([run('a', { score: NaN }), run('b', { score: Infinity })], score), { kind: 'no-runs' });
@@ -86,7 +110,10 @@ test('no runs at all → no-runs', () => {
 });
 
 test('F-6: should not pick a better run from a sibling-prefix experiment', async () => {
-  const f = fakeFetch({ 'experiments/search': exps('mini-rag', 'mini-rag-v2'), 'runs/search': { runs: [run('r', { score: 1 })] } });
+  const f = fakeFetch({
+    'experiments/search': exps('mini-rag', 'mini-rag-v2'),
+    'runs/search': { runs: [run('r', { score: 1 })] },
+  });
   const r = await bestRun('mini-rag', score, f.impl, env);
   const runsCall = f.calls.find((c) => c.path === 'runs/search');
   assert.deepEqual(runsCall?.body.experiment_ids, ['1']);
@@ -103,7 +130,14 @@ test('U-7: should keep p/sub experiments', async () => {
 test('ok result carries experiment name and run URL; requests are well-formed', async () => {
   const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs: [run('r9', { score: 0.8 })] } });
   const r = await bestRun('p', score, f.impl, env);
-  assert.deepEqual(r, { kind: 'ok', runName: 'n-r9', value: 0.8, runCount: 1, experiment: 'p', runUrl: 'http://h:1/#/experiments/1/runs/r9' });
+  assert.deepEqual(r, {
+    kind: 'ok',
+    runName: 'n-r9',
+    value: 0.8,
+    runCount: 1,
+    experiment: 'p',
+    runUrl: 'http://h:1/#/experiments/1/runs/r9',
+  });
   for (const c of f.calls) assert.ok(Number(c.body.max_results) > 0, `${c.path} max_results`);
   const [expCall, runsCall] = f.calls;
   assert.ok(expCall && runsCall);
@@ -119,13 +153,19 @@ test('no matching experiment → no-runs without searching runs', async () => {
 
 test('F-1: should return ok when the first search times out and the retry succeeds', async () => {
   const timeout = new DOMException('timed out', 'TimeoutError');
-  const f = fakeFetch({ 'experiments/search': (n: number) => (n === 1 ? timeout : exps('p')), 'runs/search': { runs: [run('r', { score: 1 })] } });
+  const f = fakeFetch({
+    'experiments/search': (n: number) => (n === 1 ? timeout : exps('p')),
+    'runs/search': { runs: [run('r', { score: 1 })] },
+  });
   const r = await bestRun('p', score, f.impl, env);
   assert.equal(r.kind, 'ok');
 });
 
 test('F-1: a 5xx on the first search is retried once', async () => {
-  const f = fakeFetch({ 'experiments/search': (n: number) => (n === 1 ? new Response('', { status: 503 }) : exps('p')), 'runs/search': {} });
+  const f = fakeFetch({
+    'experiments/search': (n: number) => (n === 1 ? new Response('', { status: 503 }) : exps('p')),
+    'runs/search': {},
+  });
   assert.equal((await bestRun('p', score, f.impl, env)).kind, 'no-runs');
 });
 
@@ -157,7 +197,11 @@ test('U-8: should not call MLflow when the card has no metric', async () => {
 });
 
 test('metricState warms up then returns the best run', async () => {
-  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs: [run('r', { score: 0.3 })] } });
+  const f = fakeFetch({
+    health: 'OK',
+    'experiments/search': exps('p'),
+    'runs/search': { runs: [run('r', { score: 0.3 })] },
+  });
   const r = await metricState({ name: 'p', metric: score }, f.impl, env);
   assert.equal(r.kind === 'ok' && r.value, 0.3);
   const first = f.calls.at(0);
@@ -208,7 +252,10 @@ test('F-1: warmUp resolves without rejecting when /health stays non-200', async 
 test('U-6: should report metric-not-logged end to end', async () => {
   const runs = [run('a', { accuracy: 0.9 }), run('b', { smoke_score: 1 })];
   const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
-  assert.deepEqual(await metricState({ name: 'p', metric: score }, f.impl, env), { kind: 'metric-not-logged', runCount: 2 });
+  assert.deepEqual(await metricState({ name: 'p', metric: score }, f.impl, env), {
+    kind: 'metric-not-logged',
+    runCount: 2,
+  });
 });
 
 test('should warn once per project when the same reason repeats', (t) => {
@@ -220,8 +267,11 @@ test('should warn once per project when the same reason repeats', (t) => {
   assert.equal(warn.mock.callCount(), 2);
 });
 
-test('ok result carries the best run\'s Weaviate collection when it logged a valid one', async () => {
-  const runs = [run('r1', { score: 0.9 }, 1, '1', { collection: 'MiniRag_x_6f5bda78' }), run('r2', { score: 0.1 }, 1, '1', { collection: 'Other' })];
+test("ok result carries the best run's Weaviate collection when it logged a valid one", async () => {
+  const runs = [
+    run('r1', { score: 0.9 }, 1, '1', { collection: 'MiniRag_x_6f5bda78' }),
+    run('r2', { score: 0.1 }, 1, '1', { collection: 'Other' }),
+  ];
   const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs } });
   const r = await bestRun('p', score, f.impl, env);
   assert.equal(r.kind === 'ok' && r.collection, 'MiniRag_x_6f5bda78');
@@ -230,7 +280,10 @@ test('ok result carries the best run\'s Weaviate collection when it logged a val
 test('ok result has no collection when the param is absent or not a collection name', async () => {
   const cases: Record<string, string>[] = [{}, { collection: 'mini rag' }, { collection: '<script>' }];
   for (const params of cases) {
-    const f = fakeFetch({ 'experiments/search': exps('p'), 'runs/search': { runs: [run('r', { score: 1 }, 1, '1', params)] } });
+    const f = fakeFetch({
+      'experiments/search': exps('p'),
+      'runs/search': { runs: [run('r', { score: 1 }, 1, '1', params)] },
+    });
     const r = await bestRun('p', score, f.impl, env);
     assert.equal(r.kind, 'ok');
     assert.ok(!('collection' in r), JSON.stringify(params));
@@ -251,14 +304,20 @@ test('F-19: all-status query', async () => {
 
 test('U-8: projectView without metric makes no request', async () => {
   const f = fakeFetch({});
-  assert.deepEqual(await projectView({ name: 'p' }, { kind: 'legacy' }, f.impl, env), { state: { kind: 'no-metric' }, groups: [] });
+  assert.deepEqual(await projectView({ name: 'p' }, { kind: 'legacy' }, f.impl, env), {
+    state: { kind: 'no-metric' },
+    groups: [],
+  });
   assert.equal(f.calls.length, 0);
 });
 
 test('F-13 / U-9: card best ignores test runs and unfinished parents', async () => {
   const runs = [
-    run('ok', {}, 1, '1', {}, { n_children: '2' }), child('c1', 'ok', 0.5), child('c2', 'ok', 0.99, { split: 'test' }),
-    run('bad', {}, 1, '1', {}, { n_children: '1' }, 'FAILED'), child('c3', 'bad', 0.9),
+    run('ok', {}, 1, '1', {}, { n_children: '2' }),
+    child('c1', 'ok', 0.5),
+    child('c2', 'ok', 0.99, { split: 'test' }),
+    run('bad', {}, 1, '1', {}, { n_children: '1' }, 'FAILED'),
+    child('c3', 'bad', 0.9),
   ];
   const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
   const r = await bestRun('p', score, f.impl, env);
@@ -268,18 +327,27 @@ test('F-13 / U-9: card best ignores test runs and unfinished parents', async () 
 
 test('U-27: projectView with a ledger filter ranks only matching parents', async () => {
   const runs = [
-    run('pa', {}, 1, '1', {}, { split_sha256: 'a'.repeat(64), data_sha256: 'b'.repeat(64) }), child('ca', 'pa', 0.4),
-    run('pc', {}, 2, '1', {}, { split_sha256: 'c'.repeat(64), data_sha256: 'b'.repeat(64) }), child('cc', 'pc', 0.9),
+    run('pa', {}, 1, '1', {}, { split_sha256: 'a'.repeat(64), data_sha256: 'b'.repeat(64) }),
+    child('ca', 'pa', 0.4),
+    run('pc', {}, 2, '1', {}, { split_sha256: 'c'.repeat(64), data_sha256: 'b'.repeat(64) }),
+    child('cc', 'pc', 0.9),
   ];
   const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs } });
   const view = await projectView({ name: 'p', metric: score }, L, f.impl, env);
   assert.equal(view.state.kind === 'ok' && view.state.value, 0.4);
-  assert.deepEqual(view.groups.map((g) => (g.kind === 'parent' ? g.best?.value : g.kind)), [undefined, 0.4]);
+  assert.deepEqual(
+    view.groups.map((g) => (g.kind === 'parent' ? g.best?.value : g.kind)),
+    [undefined, 0.4],
+  );
   assert.equal(f.calls.filter((c) => c.path === 'runs/search').length, 1);
 });
 
 test('legacy parentless FINISHED run still counts', async () => {
-  const f = fakeFetch({ health: 'OK', 'experiments/search': exps('p'), 'runs/search': { runs: [run('r', { score: 0.6 })] } });
+  const f = fakeFetch({
+    health: 'OK',
+    'experiments/search': exps('p'),
+    'runs/search': { runs: [run('r', { score: 0.6 })] },
+  });
   const r = await metricState({ name: 'p', metric: score }, f.impl, env);
   assert.equal(r.kind === 'ok' && r.value, 0.6);
 });

@@ -3,7 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { ledgerState, MILESTONES, parseLedger, readLedger, type LedgerFs, type LedgerState } from './ledger.ts';
+import {
+  DECISIONS,
+  KINDS,
+  ledgerState,
+  MILESTONES,
+  parseLedger,
+  readLedger,
+  STATUSES,
+  type LedgerFs,
+  type LedgerState,
+} from './ledger.ts';
 import { readReport } from './report.ts';
 import { checkReport } from '../integrations/export-guard.ts';
 
@@ -16,7 +26,16 @@ const vector = (name: string): Vector => {
   assert.ok(v, name);
   return v;
 };
-const PREFIX: Record<string, string> = { schema: 'schema:', 'U-13': 'unsupported schema (kind missing)', 'I-1': 'I-1:' };
+const contract = JSON.parse(readFileSync(new URL('../../../contracts/value_sets.json', import.meta.url), 'utf8')) as {
+  statuses: string[];
+  decisions: string[];
+  kinds: string[];
+};
+const PREFIX: Record<string, string> = {
+  schema: 'schema:',
+  'U-13': 'unsupported schema (kind missing)',
+  'I-1': 'I-1:',
+};
 const fixture = fileURLToPath(new URL('../../test-fixtures/ledger/valid', import.meta.url));
 
 /** In-memory LedgerFs: `files` maps a path to its text, `links` maps a path to its real path. */
@@ -67,6 +86,12 @@ test('F-18: milestones contract', () => {
   assert.equal(MILESTONES.freeze_after, 'dataset');
 });
 
+test('ledger value sets match contracts/value_sets.json', () => {
+  assert.deepEqual([...STATUSES], contract.statuses);
+  assert.deepEqual([...DECISIONS], contract.decisions);
+  assert.deepEqual([...KINDS], contract.kinds);
+});
+
 test('F-20: missing run.json renders nothing', () => {
   assert.deepEqual(ledgerState('p', '/x/p', fakeFs(new Map())), { kind: 'absent' });
   assert.equal(readReport().size, 0);
@@ -108,26 +133,43 @@ test('U-15: missing artifact flagged, present one not', () => {
 
 test('U-15: symlink escape is missing', () => {
   const text = JSON.stringify(vector('training-mid-run').run);
-  const files = new Map([['/x/p/run.json', text], ['/x/p/scope.md', 'secret link']]);
+  const files = new Map([
+    ['/x/p/run.json', text],
+    ['/x/p/scope.md', 'secret link'],
+  ]);
   const fs = fakeFs(files, new Map([['/x/p/scope.md', '/etc/passwd']]));
   const scoping = ok(readLedger('/x/p', fs)).steps.find((s) => s.id === 'scoping');
   assert.deepEqual(scoping?.artifacts, [{ path: 'scope.md', exists: false }]);
 });
 
 test('U-15: an absolute or parent-relative artifact is missing even when the file exists', () => {
-  const run = structuredClone(vector('training-mid-run').run) as { milestones: Record<string, { artifacts: string[] }> };
+  const run = structuredClone(vector('training-mid-run').run) as {
+    milestones: Record<string, { artifacts: string[] }>;
+  };
   const scoping = run.milestones.scoping;
   assert.ok(scoping);
   scoping.artifacts = ['/x/q/a.md', '../q/a.md'];
-  const files = new Map([['/x/p/run.json', JSON.stringify(run)], ['/x/q/a.md', 'outside']]);
+  const files = new Map([
+    ['/x/p/run.json', JSON.stringify(run)],
+    ['/x/q/a.md', 'outside'],
+  ]);
   const step = ok(readLedger('/x/p', fakeFs(files))).steps.find((s) => s.id === 'scoping');
-  assert.deepEqual(step?.artifacts.map((a) => a.exists), [false, false]);
+  assert.deepEqual(
+    step?.artifacts.map((a) => a.exists),
+    [false, false],
+  );
 });
 
 test('steps follow the kind sequence, mark current, carry notes', () => {
   const state = ok(readLedger(fixture));
-  assert.deepEqual(state.steps.map((s) => s.id), MILESTONES.sequences.training);
-  assert.deepEqual(state.steps.filter((s) => s.current).map((s) => s.id), ['eda']);
+  assert.deepEqual(
+    state.steps.map((s) => s.id),
+    MILESTONES.sequences.training,
+  );
+  assert.deepEqual(
+    state.steps.filter((s) => s.current).map((s) => s.id),
+    ['eda'],
+  );
   assert.deepEqual(state.steps[0]?.notes, [{ decision: 'validate', note: 'ok' }]);
   assert.equal(state.steps[0]?.agent, 'ds-scoper');
   assert.equal(state.ledgerKind, 'training');
@@ -145,7 +187,9 @@ test('no current step once all are validated', () => {
 test('an unreadable run.json is invalid, never a throw', () => {
   const fs: LedgerFs = {
     exists: () => true,
-    read: () => { throw Object.assign(new Error('EACCES: permission denied, open /x/p/run.json'), { code: 'EACCES' }); },
+    read: () => {
+      throw Object.assign(new Error('EACCES: permission denied, open /x/p/run.json'), { code: 'EACCES' });
+    },
     real: (p) => p,
   };
   assert.deepEqual(readLedger('/x/p', fs), { kind: 'invalid', reason: 'cannot read: EACCES' });

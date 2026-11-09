@@ -1,8 +1,11 @@
 // Which runs may stand as a project's best, and the pick among them. Pure; the leaf of the MLflow modules.
-import type { Metric } from './card.ts';
+import type { Goal, Metric } from './card.ts';
 import type { MlflowRun } from './mlflow-rest.ts';
 import type { LedgerState } from './ledger.ts';
 import { PARENT_RUN_ID, RUN_STATUS, TAGS, TEST_SPLIT } from './tags.ts';
+
+// Sort direction per goal: a new Goal fails type-checking until it gets a sign.
+const SIGN: Record<Goal, number> = { max: -1, min: 1 };
 
 export type PickedRun = { kind: 'picked'; run: MlflowRun; value: number; runCount: number };
 
@@ -19,7 +22,7 @@ export function pickBest(
   if (carrying.length === 0) return { kind: 'metric-not-logged', runCount: runs.length };
   const finite = carrying.filter((c): c is { run: MlflowRun; value: number } => Number.isFinite(c.value));
   if (finite.length === 0) return { kind: 'no-runs' };
-  const sign = metric.goal === 'max' ? -1 : 1;
+  const sign = SIGN[metric.goal];
   finite.sort(
     (a, b) =>
       sign * (a.value - b.value) ||
@@ -40,9 +43,7 @@ export function tag(run: MlflowRun, key: string): string | undefined {
  * `none`: run.json is invalid, so no run can be trusted to be on the frozen split.
  */
 export type BestFilter =
-  | { kind: 'legacy' }
-  | { kind: 'ledger'; splitSha256: string | null; dataSha256: string | null }
-  | { kind: 'none' };
+  { kind: 'legacy' } | { kind: 'ledger'; splitSha256: string | null; dataSha256: string | null } | { kind: 'none' };
 
 export function bestFilter(state: LedgerState): BestFilter {
   if (state.kind === 'absent') return { kind: 'legacy' };

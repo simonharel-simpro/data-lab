@@ -18,6 +18,8 @@ from datalab import ledger
 from datalab.ledger import Kind, LedgerError, RunLedger
 from datalab.split import Partition
 
+from .candidates import plain_mapping
+
 _MODEL_CHOICE: Final = re.compile(r"^[~+]*model=")
 
 
@@ -30,9 +32,10 @@ def resolve_config(cfg: DictConfig) -> dict[str, object]:
         resolved = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     except OmegaConfBaseException as err:
         raise PrepareError(f"config does not resolve: {err}") from err
-    if not isinstance(resolved, dict):
+    plain = plain_mapping(resolved)
+    if plain is None:
         raise PrepareError("config is not a mapping")
-    return {str(k): v for k, v in resolved.items()}
+    return plain
 
 
 def compose_model(config_name: str, overrides: Sequence[str], candidate: str) -> DictConfig:
@@ -74,6 +77,31 @@ def score_on(cfg: DictConfig, lg: RunLedger | None) -> Partition:
 def file_sha256(path: Path) -> str:
     with path.open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def check_data_hash(expected: str | None, data_file: Path) -> None:
+    """Nothing is frozen while `expected` is None; otherwise the data file must still hash to it."""
+    if expected is not None and file_sha256(data_file) != expected:
+        raise PrepareError("data_file changed since modeling: its hash differs from run.json data_sha256")
+
+
+def _check_frozen(lg: RunLedger | None, experiment_dir: Path, data_file: Path) -> None:
+    """With a ledger, the split and the data must still be what was frozen; no ledger freezes nothing."""
+    if lg is None:
+        return
+    try:
+        ledger.check_split_hash(experiment_dir, lg)
+    except LedgerError as err:
+        raise PrepareError(str(err)) from err
+    check_data_hash(lg.data_sha256, data_file)
+
+
+def frozen_score_on(cfg: DictConfig) -> Partition:
+    """Train's ledger step: read run.json, refuse a split or data moved since the freeze, then pick the partition."""
+    experiment_dir = Path(cfg.paths.experiment_dir)
+    lg = read_ledger(experiment_dir)
+    _check_frozen(lg, experiment_dir, Path(cfg.paths.data_file))
+    return score_on(cfg, lg)
 
 
 def refuse_multirun(program: str) -> None:

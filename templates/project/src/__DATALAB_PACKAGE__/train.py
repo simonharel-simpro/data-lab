@@ -4,13 +4,14 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 import hydra
 import mlflow
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from mlflow import MlflowClient
+from mlflow.entities import RunStatus
 from mlflow.exceptions import MlflowException
 from omegaconf import DictConfig, OmegaConf
 from omegaconf.errors import OmegaConfBaseException
@@ -21,14 +22,16 @@ from datalab.split import Partition, SplitError, split_sha256
 from datalab.tags import Tag
 from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracked_trial
 
-from .candidates import Row, config_sha256
-from .grid import Combo, GridError, expand
-from .paths import PROJECT_DIR, register_resolvers
-from .prepare import PrepareError, compose_model, file_sha256, read_ledger, refuse_multirun, resolve_config, score_on
+from .candidates import Row, config_sha256, plain_mapping
+from .grid import Combo, GridError, Scalar, expand
+from .paths import AUDIT_EXPERIMENT, PROJECT_DIR, register_resolvers
+from .prepare import PrepareError, compose_model, file_sha256, frozen_score_on, refuse_multirun, resolve_config
 from .scoring import label, metric_key_problems, score
 from .split import SplitAccessError, load_split, read_rows
 
 register_resolvers()
+
+_FINISHED: Final = RunStatus.to_string(RunStatus.FINISHED)
 
 _REFUSALS = (PrepareError, ProjectError, SplitError, GridError, SplitAccessError, OSError, OmegaConfBaseException)
 
@@ -65,12 +68,12 @@ def _candidates(cfg: DictConfig) -> list[str]:
 
 
 def _children(resolved: dict[str, object], overrides: Sequence[str], candidates: list[str]) -> list[_Child]:
-    search = resolved.get("hparams_search") or {}
-    if not isinstance(search, dict):
+    search = plain_mapping(resolved.get("hparams_search") or {})
+    if search is None:
         raise PrepareError("hparams_search must map candidates to parameter lists")
     nodes = {name: compose_model("train", overrides, name) for name in candidates}
-    children = []
-    for combo in expand(candidates, search):
+    children: list[_Child] = []
+    for combo in expand(candidates, cast("dict[str, dict[str, list[Scalar]]]", search)):
         try:
             merged = OmegaConf.merge(nodes[combo.candidate], dict(combo.params))
         except OmegaConfBaseException as err:
@@ -78,10 +81,9 @@ def _children(resolved: dict[str, object], overrides: Sequence[str], candidates:
             raise PrepareError(
                 f"hparams_search: {combo.candidate} has no parameter {unknown} in configs/model/{combo.candidate}.yaml"
             ) from err
-        model = OmegaConf.to_container(merged, resolve=True)
-        if not isinstance(model, dict):
+        plain = plain_mapping(OmegaConf.to_container(merged, resolve=True))
+        if plain is None:
             raise PrepareError(f"model {combo.candidate!r} is not a mapping")
-        plain = {str(k): v for k, v in model.items()}
         children.append(_Child(combo, plain, config_sha256(plain)))
     return children
 
@@ -114,10 +116,10 @@ def _prepare(cfg: DictConfig, overrides: Sequence[str]) -> _Plan:
     metric = card_metric(project.root)
     sub = str(cfg.experiment.name)  # (2)
     experiment_name(project.name, sub)
-    if sub == "audit":
+    if sub == AUDIT_EXPERIMENT:
         raise PrepareError("experiment.name 'audit' is reserved for eval")
     resolved = resolve_config(cfg)  # (3)
-    on = score_on(cfg, read_ledger(Path(cfg.paths.experiment_dir)))  # (4)
+    on = frozen_score_on(cfg)  # (4) before anything is composed: the ledger's split and data must be unchanged
     candidates = _candidates(cfg)  # (5)
     children = _children(resolved, overrides, candidates)
     eval_rows, labels, tags = _eval_part(cfg, on)  # (6)
@@ -135,7 +137,7 @@ def _run_child(plan: _Plan, child: _Child) -> bool:
             mlflow.log_metric(plan.metric.key, score([model.predict(r) for r in plan.eval_rows], plan.labels))
     except (MlflowException, TrackingUnavailable):
         raise
-    except Exception as err:  # isolation boundary: one candidate's failure must not stop the others
+    except Exception as err:  # noqa: BLE001  # isolation boundary: one candidate's failure must not stop the others
         print(f"candidate {combo.run_name} failed: {err!r}", file=sys.stderr)
         return False
     return True
@@ -145,7 +147,7 @@ def _key_problems(plan: _Plan, parent_id: str) -> list[str]:
     client = MlflowClient()
     experiment_id = client.get_run(parent_id).info.experiment_id
     found = client.search_runs([experiment_id], filter_string=f"tags.mlflow.parentRunId = '{parent_id}'")
-    keys = {r.info.run_name or r.info.run_id: frozenset(r.data.metrics) for r in found if r.info.status == "FINISHED"}
+    keys = {r.info.run_name or r.info.run_id: frozenset(r.data.metrics) for r in found if r.info.status == _FINISHED}
     # resolve_config yields plain containers and the experiment group is validated at compose time
     experiment = cast("dict[str, list[object]]", plan.resolved["experiment"])
     allowed = [str(k) for k in experiment["metrics"]]

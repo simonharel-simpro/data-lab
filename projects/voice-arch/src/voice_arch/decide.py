@@ -12,6 +12,7 @@ from mlflow import MlflowClient
 
 from datalab.settings import Settings
 from voice_arch.arch import Arch
+from voice_arch.call import Outcome
 from voice_arch.sweep_query import human_ratings, latest_full_metrics
 
 MARGIN_CALLS: Final = 2  # archs within this many exact calls of the best tie, and latency then decides
@@ -78,7 +79,7 @@ class SweepDataError(Exception):
 
 def summary_from_metrics(arch: Arch, metrics: dict[str, float], ratings: Sequence[int]) -> ArchSummary:
     try:
-        n = sum(round(metrics[f"n_{o}"]) for o in ("scored", "timeout", "agent_lost"))
+        n = sum(round(metrics[f"n_{o.value}"]) for o in (Outcome.SCORED, Outcome.TIMEOUT, Outcome.AGENT_LOST))
         exact = round(metrics["n_exact"])
     except KeyError as err:
         raise SweepDataError(f"the latest full {arch.value} sweep has no metric {err}") from err

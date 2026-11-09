@@ -71,7 +71,10 @@ test('should match an NFD heading against the NFC section name', () => {
 });
 
 test('CRLF body is parsed', () => {
-  assert.deepEqual(missing({ status: 'conclu', data: 'd', metric }, full + '## Enseignements\r\ne\r\n## Suite\r\ns\r\n'), []);
+  assert.deepEqual(
+    missing({ status: 'conclu', data: 'd', metric }, full + '## Enseignements\r\ne\r\n## Suite\r\ns\r\n'),
+    [],
+  );
 });
 
 test('G-8: the template card is a valid idée card missing only Objectif', () => {

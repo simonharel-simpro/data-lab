@@ -4,9 +4,10 @@ import { readFileSync } from 'node:fs';
 import { isValidName } from './name.ts';
 
 // Repo root is 3 levels up from app/src/lib/; never resolve from the cwd.
-const vectors = JSON.parse(
-  readFileSync(new URL('../../../contracts/name_vectors.json', import.meta.url), 'utf8'),
-) as { accept: string[]; reject: string[] };
+const vectors = JSON.parse(readFileSync(new URL('../../../contracts/name_vectors.json', import.meta.url), 'utf8')) as {
+  accept: string[];
+  reject: string[];
+};
 
 test('F-12: should match the shared name vectors', () => {
   for (const name of vectors.accept) assert.equal(isValidName(name), true, `accept ${name}`);

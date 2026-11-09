@@ -3,15 +3,35 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Final
 
 from mlflow import MlflowClient
-from mlflow.entities import Run, ViewType
+from mlflow.entities import Experiment, Run, RunStatus, ViewType
 from mlflow.exceptions import MlflowException
+from mlflow.store.entities.paged_list import PagedList
 
 from datalab.project import experiment_name
 from datalab.settings import Settings
 
 _PAGE = 1000
+_RUNNING: Final = RunStatus.to_string(RunStatus.RUNNING)
+
+
+def _next_token[T](page: PagedList[T]) -> str | None:
+    # mlflow leaves `PagedList.token` unannotated; it is a `str | None` page token.
+    token: object = page.token  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]  # see above
+    return token if isinstance(token, str) and token else None
+
+
+def experiments_page(
+    client: MlflowClient, *, max_results: int, filter_string: str | None = None, token: str | None = None
+) -> tuple[list[Experiment], str | None]:
+    """One page of experiments plus the next page token (None on the last page)."""
+    # mlflow annotates `page_token` with an unresolved type, so the bound method is partially unknown.
+    page = client.search_experiments(  # pyright: ignore[reportUnknownMemberType]  # see above
+        view_type=ViewType.ALL, filter_string=filter_string, max_results=max_results, page_token=token
+    )
+    return list(page), _next_token(page)
 
 
 @dataclass(frozen=True)
@@ -28,12 +48,9 @@ def _experiments(client: MlflowClient, project: str) -> dict[str, str]:
     found: dict[str, str] = {}
     token: str | None = None
     while True:
-        page = client.search_experiments(
-            view_type=ViewType.ALL, filter_string=f"name LIKE '{name}%'", max_results=_PAGE, page_token=token
-        )
+        page, token = experiments_page(client, filter_string=f"name LIKE '{name}%'", max_results=_PAGE, token=token)
         found |= {e.experiment_id: e.name for e in page if e.name == name or e.name.startswith(f"{name}/")}
-        token = page.token
-        if not token:
+        if token is None:
             return found
 
 
@@ -49,8 +66,8 @@ def _runs(client: MlflowClient, project: str, ids: list[str], extra: str = "") -
             page_token=token,
         )
         runs += list(page)
-        token = page.token
-        if not token:
+        token = _next_token(page)
+        if token is None:
             return runs
 
 
@@ -78,7 +95,7 @@ def stale_runs(
     if not experiments:
         return []
     cutoff = now() - older_than
-    running = _runs(client, project, list(experiments), " and attributes.status = 'RUNNING'")
+    running = _runs(client, project, list(experiments), f" and attributes.status = '{_RUNNING}'")
     stale = [
         StaleRun(
             run_id=run.info.run_id,
@@ -100,7 +117,7 @@ def close_runs(project: str, settings: Settings, run_ids: Sequence[str]) -> list
             run = client.get_run(run_id)
         except MlflowException as err:
             raise ValueError(f"run {run_id} cannot be read: {err}") from err
-        if run.info.status != "RUNNING" or run.data.tags.get("project") != project:
+        if run.info.status != _RUNNING or run.data.tags.get("project") != project:
             raise ValueError(f"run {run_id} is not a RUNNING run of project {project!r}")
     for run_id in ids:
         client.set_terminated(run_id, status="KILLED")

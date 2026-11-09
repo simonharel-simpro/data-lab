@@ -47,11 +47,12 @@ class LiveCaller:
         self._started = False
         self._tasks: set[asyncio.Task[None]] = set()
         room.register_text_stream_handler(RESULT_TOPIC, self._on_stream)
-        room.on("participant_connected", self._on_joined)
-        room.on("participant_disconnected", self._on_left)
-        room.on("participant_attributes_changed", self._on_attributes)
-        session.on("error", self._on_error)
-        session.on("close", self._on_close)
+        # EventEmitter.on takes an unparameterised callback in the SDK, hence the ignores below.
+        room.on("participant_connected", self._on_joined)  # pyright: ignore[reportUnknownMemberType]
+        room.on("participant_disconnected", self._on_left)  # pyright: ignore[reportUnknownMemberType]
+        room.on("participant_attributes_changed", self._on_attributes)  # pyright: ignore[reportUnknownMemberType]
+        session.on("error", self._on_error)  # pyright: ignore[reportUnknownMemberType]
+        session.on("close", self._on_close)  # pyright: ignore[reportUnknownMemberType]
 
     def scan(self) -> None:
         """Agents already in the room when we connected raise no `participant_connected`."""
@@ -71,7 +72,7 @@ class LiveCaller:
         """`start` waits for an agent participant to link, so it runs in the background (F-2 needs the timeout)."""
         try:
             with fake_job_context(room=self._room):
-                await self._session.start(
+                await self._session.start(  # pyright: ignore[reportUnknownMemberType]  # SDK overloads
                     agent,
                     room=self._room,
                     room_options=RoomOptions(participant_kinds=[_AGENT]),
@@ -145,7 +146,13 @@ class LiveCaller:
         return self._result
 
     async def interject(self, text: str) -> None:
-        self._session.say(text, allow_interruptions=False)
+        if not self._started or self.caller_error is not None:
+            return
+        try:
+            self._session.say(text, allow_interruptions=False)
+        except RuntimeError as err:  # `say` raises it when the session is not running or is closing
+            logger.warning("the interjection failed", exc_info=True)
+            self.caller_error = f"interjection failed: {type(err).__name__}"
 
     def agent_speaking_for(self) -> float:
         return 0.0 if self._speaking_since is None else time.monotonic() - self._speaking_since
@@ -157,6 +164,6 @@ class LiveCaller:
         self._room.unregister_text_stream_handler(RESULT_TOPIC)
         try:
             await self._session.aclose()
-        except Exception:
+        except Exception:  # best-effort: the room is disconnected next whatever happened
             logger.exception("closing the caller session failed")
         await self._room.disconnect()

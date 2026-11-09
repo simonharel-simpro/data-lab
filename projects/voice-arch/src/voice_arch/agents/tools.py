@@ -3,7 +3,7 @@
 Under B and C a step task completes only when ITS OWN field was written (`FIELD`); under A nothing completes.
 """
 
-from typing import Literal
+from typing import Literal, cast
 
 from livekit.agents import AgentTask, RunContext, function_tool
 
@@ -28,8 +28,11 @@ _DESCRIPTIONS = {schema.name: schema.description for schema in TOOL_SCHEMAS}
 def complete_current_task(ctx: Ctx, field: str) -> None:
     """Finish the running step task if it owns `field`; `complete` raises on a second call, hence the guard."""
     agent = ctx.session.current_agent
-    if isinstance(agent, AgentTask) and not agent.done() and getattr(agent, "FIELD", None) == field:
-        agent.complete(None)
+    if not isinstance(agent, AgentTask):
+        return
+    task = cast("AgentTask[None]", agent)  # step tasks are `AgentTask[None]`; the SDK's isinstance leaves it Unknown
+    if not task.done() and getattr(task, "FIELD", None) == field:
+        task.complete(None)
 
 
 def _record(ctx: Ctx, field: str, value: str) -> str:

@@ -5,7 +5,8 @@ One job = one call: build the session, run the chosen architecture until the ses
 """
 
 import logging
-from typing import Final
+from collections.abc import Callable
+from typing import Final, cast
 
 from livekit import rtc
 from livekit.agents import AgentServer, AgentSession, JobContext, cli
@@ -18,10 +19,12 @@ from voice_arch.arch import Arch, UnknownArchError
 from voice_arch.audio import make_agent_llm, make_stt, make_tts
 from voice_arch.dispatch import AGENT_NAME
 from voice_arch.result import RESULT_TOPIC, CallResult
-from voice_arch.settings import VoiceSettings
+from voice_arch.settings import load_settings
 from voice_arch.worker_logic import (
     MAX_TOOL_STEPS,
     TURN_HANDLING,
+    CallIdentity,
+    SessionOutcome,
     SessionWatch,
     build_result,
     error_result,
@@ -29,7 +32,8 @@ from voice_arch.worker_logic import (
 )
 
 logger = logging.getLogger("voice_arch.worker")
-settings = VoiceSettings()  # pyright: ignore[reportCallIssue]
+# Module level: LiveKit pickles `entry` by module reference, so `server` cannot be built inside a function.
+settings = load_settings()
 server = AgentServer(
     ws_url=settings.livekit_url,
     api_key=settings.livekit_api_key.get_secret_value(),
@@ -46,6 +50,15 @@ async def send_result(room: rtc.Room, result: CallResult) -> None:
         logger.exception("could not send the call result for room %s", room.name)
 
 
+def session_report(ctx: JobContext, session: AgentSession[BookingState]) -> dict[str, object]:
+    # SessionReport.to_dict is annotated `dict` without parameters in the SDK.
+    to_dict = cast(
+        "Callable[[], dict[str, object]]",
+        ctx.make_session_report(session).to_dict,  # pyright: ignore[reportUnknownMemberType]
+    )
+    return to_dict()
+
+
 async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingState], SessionWatch]:
     session = AgentSession[BookingState](
         stt=make_stt(settings),
@@ -60,7 +73,7 @@ async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingSta
     )
     watch = SessionWatch()
     watch.attach(session)
-    await session.start(agent=build_agent(arch), room=ctx.room)
+    await session.start(agent=build_agent(arch), room=ctx.room)  # pyright: ignore[reportUnknownMemberType]  # SDK
     await watch.closed.wait()
     return session, watch
 
@@ -75,18 +88,15 @@ async def entry(ctx: JobContext) -> None:
         await send_result(ctx.room, error_result(ctx.room.name, str(err)))
         return
     session, watch = await run_call(ctx, arch)
-    result = build_result(
-        ctx.room.name,
-        arch,
-        run_id,
-        session.userdata,
-        watch.close,
-        watch.errors,
-        lambda: ctx.make_session_report(session).to_dict(),
+    outcome = SessionOutcome(
+        state=session.userdata,
+        close=watch.close,
+        errors=watch.errors,
         summarize_chat_ctx=SUMMARIZE_CHAT_CTX if arch in _TASKGROUP_ARCHES else None,
         max_tool_steps=MAX_TOOL_STEPS,
         fatal=watch.fatal,
     )
+    result = build_result(CallIdentity(ctx.room.name, arch, run_id), outcome, lambda: session_report(ctx, session))
     await send_result(ctx.room, result)
 
 

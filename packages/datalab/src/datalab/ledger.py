@@ -10,6 +10,7 @@ from typing import Final
 
 from pydantic import ValidationError
 
+from datalab.ledger_access import look_number, record_test_look, test_access_allowed, test_access_problem
 from datalab.ledger_checks import SPLIT_JSON, check_artifacts, check_metric, check_split_hash
 from datalab.ledger_model import (
     Contract,
@@ -27,26 +28,22 @@ from datalab.ledger_model import (
     describe,
 )
 from datalab.ledger_ops import (
-    _revalidate,
     decide,
     freeze_split,
-    look_number,
     new_ledger,
     produce,
     record_data,
-    record_test_look,
     redo,
-    test_access_allowed,
-    test_access_problem,
+    revalidate,
 )
 from datalab.split import Partition, Split, SplitError, SplitStrategy, partition, read_split, split_sha256
 
 __all__ = [
     "Contract", "Dataset", "Decision", "Kind", "LedgerError", "LogEntry", "MilestoneEntry", "Partition",
-    "RunLedger", "Split", "SplitError", "SplitStrategy", "Status", "TestLook", "Winner", "contract", "decide",
-    "freeze_split", "look_number", "main", "new_ledger", "parse", "partition", "produce", "read", "read_split",
-    "record_data", "record_test_look", "redo", "split_sha256", "test_access_allowed", "test_access_problem",
-    "validate_dir", "write_atomic",
+    "RunLedger", "Split", "SplitError", "SplitStrategy", "Status", "TestLook", "Winner", "check_split_hash",
+    "contract", "decide", "freeze_split", "look_number", "main", "new_ledger", "parse", "partition", "produce",
+    "read", "read_split", "record_data", "record_test_look", "redo", "split_sha256", "test_access_allowed",
+    "test_access_problem", "validate_dir", "write_atomic",
 ]  # fmt: skip
 
 RUN_JSON: Final = "run.json"
@@ -118,7 +115,7 @@ def _publish(path: Path, text: str) -> None:
 
 
 def write_atomic(project_dir: Path, ledger: RunLedger, *, replace_corrupt: bool = False) -> None:
-    checked = _revalidate(ledger.model_dump(mode="json"))
+    checked = revalidate(ledger.model_dump(mode="json"))
     path = project_dir / RUN_JSON
     if path.exists():
         _check_overwrite(project_dir, checked, replace_corrupt)

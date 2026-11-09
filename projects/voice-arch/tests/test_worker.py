@@ -10,6 +10,8 @@ from voice_arch.result import CallResult
 from voice_arch.worker_logic import (
     MAX_TOOL_STEPS,
     TURN_HANDLING,
+    CallIdentity,
+    SessionOutcome,
     SessionWatch,
     build_result,
     error_result,
@@ -19,6 +21,20 @@ from voice_arch.worker_logic import (
 
 def _close(reason: CloseReason = CloseReason.USER_INITIATED, error: LLMError | None = None) -> CloseEvent:
     return CloseEvent(reason=reason, error=error)
+
+
+def _identity(room: str = "r", arch: Arch = Arch.A, run_id: str = "x") -> CallIdentity:
+    return CallIdentity(room, arch, run_id)
+
+
+def _outcome(
+    state: BookingState | None = None,
+    *,
+    close: CloseEvent | None = None,
+    errors: int = 0,
+    summarize_chat_ctx: bool | None = None,
+) -> SessionOutcome:
+    return SessionOutcome(state or BookingState(), close, errors, summarize_chat_ctx, max_tool_steps=6)
 
 
 def _report() -> dict[str, object]:
@@ -33,7 +49,7 @@ def test_f_16_turn_handling_and_tool_steps_are_pinned() -> None:
     }
     assert MAX_TOOL_STEPS == 6
 
-    result = build_result("r", Arch.A, "x", BookingState(), None, 0, _report, summarize_chat_ctx=None, max_tool_steps=6)
+    result = build_result(_identity(), _outcome(), _report)
 
     assert CallResult.from_json(result.to_json()).max_tool_steps == 6
 
@@ -64,7 +80,7 @@ def test_f_3_report_failure_yields_error_result() -> None:
     def failing() -> dict[str, object]:
         raise RuntimeError("recorder still recording")
 
-    result = build_result("r", Arch.B, "x", state, _close(), 0, failing, summarize_chat_ctx=False, max_tool_steps=6)
+    result = build_result(_identity(arch=Arch.B), _outcome(state, summarize_chat_ctx=False, close=_close()), failing)
 
     assert result.report is None
     assert result.error is not None
@@ -74,18 +90,17 @@ def test_f_3_report_failure_yields_error_result() -> None:
 
 
 def test_f_15_build_result_carries_the_summarize_flag() -> None:
-    result = build_result(
-        "r", Arch.B, "x", BookingState(), None, 0, _report, summarize_chat_ctx=False, max_tool_steps=6
-    )
+    result = build_result(_identity(arch=Arch.B), _outcome(summarize_chat_ctx=False), _report)
 
     assert result.summarize_chat_ctx is False
 
 
 def test_build_result_carries_close_reason_report_and_error_count() -> None:
     result = build_result(
-        "room-9", Arch.C, "run-1", BookingState(), _close(CloseReason.PARTICIPANT_DISCONNECTED), 3, _report,
-        summarize_chat_ctx=None, max_tool_steps=6,
-    )  # fmt: skip
+        _identity("room-9", Arch.C, "run-1"),
+        _outcome(close=_close(CloseReason.PARTICIPANT_DISCONNECTED), errors=3),
+        _report,
+    )
 
     assert (result.room, result.arch, result.run_id) == ("room-9", Arch.C, "run-1")
     assert result.close_reason == "participant_disconnected"
@@ -101,9 +116,7 @@ def test_build_result_takes_http_status_from_the_close_error() -> None:
     failure = LLMError(timestamp=0.0, label="llm", error=ApiError("payment required"), recoverable=False)
     close = _close(CloseReason.ERROR, error=failure)
 
-    result = build_result(
-        "r", Arch.A, "x", BookingState(), close, 1, _report, summarize_chat_ctx=None, max_tool_steps=6
-    )
+    result = build_result(_identity(), _outcome(close=close, errors=1), _report)
 
     assert result.http_status == 402
     assert result.error is not None
@@ -112,7 +125,7 @@ def test_build_result_takes_http_status_from_the_close_error() -> None:
 
 def test_build_result_record_is_a_copy() -> None:
     state = BookingState()
-    result = build_result("r", Arch.A, "x", state, None, 0, _report, summarize_chat_ctx=None, max_tool_steps=6)
+    result = build_result(_identity(), _outcome(state), _report)
 
     state.record.set_field("name", "later")
 

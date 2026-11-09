@@ -11,7 +11,7 @@ from mlflow import MlflowClient
 from mlflow.entities import Run
 
 from datalab.tags import Tag
-from datalab.tracking import _OUTCOMES, TrialError, project_spend, tracked_run, tracked_trial
+from datalab.tracking import OUTCOMES, TrialError, project_spend, tracked_run, tracked_trial
 from tests.tracking_support import make_project, make_settings
 
 
@@ -66,7 +66,7 @@ def test_f_8_parent_lists_failed_candidates(sqlite_uri: str, tmp_path: Path) -> 
     client = MlflowClient(tracking_uri=sqlite_uri)
     tags = client.get_run(parent_id).data.tags
     assert (tags["n_children"], tags["n_failed"], tags["failed_candidates"]) == ("2", "1", "b")
-    assert _OUTCOMES == {}
+    assert OUTCOMES == {}
     assert "n_children" not in client.get_run(plain_id).data.tags
 
 
@@ -116,7 +116,7 @@ def test_f_15_concurrent_trial_refused(sqlite_uri: str, tmp_path: Path) -> None:
         with tracked_trial(name):
             await asyncio.sleep(0)
 
-    async def both() -> list[object]:
+    async def both() -> tuple[BaseException | None, BaseException | None]:
         return await asyncio.gather(trial("a"), trial("b"), return_exceptions=True)
 
     with _parent(sqlite_uri, tmp_path):
@@ -147,6 +147,21 @@ def test_trial_slot_freed_when_cost_log_fails(sqlite_uri: str, tmp_path: Path) -
     client = MlflowClient(tracking_uri=sqlite_uri)
     assert client.get_run(first_id).data.tags["n_children"] == "1"
     assert client.get_run(second_id).data.tags["n_children"] == "1"
+
+
+def test_tracked_trial_surfaces_the_body_error_when_cost_log_fails(sqlite_uri: str, tmp_path: Path) -> None:
+    def failing(*args: Any, **kwargs: Any) -> None:  # stands in for mlflow.log_metric
+        raise OSError("log failed")
+
+    with (
+        patch("mlflow.log_metric", failing),
+        pytest.raises(KeyError, match="body") as caught,
+        _parent(sqlite_uri, tmp_path),
+        tracked_trial("a"),
+    ):
+        raise KeyError("body")
+
+    assert any("logging the trial cost failed" in note for note in caught.value.__notes__)
 
 
 def test_u_10_trial_name_and_candidate(sqlite_uri: str, tmp_path: Path) -> None:

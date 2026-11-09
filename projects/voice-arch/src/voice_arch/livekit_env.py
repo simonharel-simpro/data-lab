@@ -4,7 +4,8 @@ import logging
 from typing import Final
 
 from livekit import rtc
-from livekit.api import DeleteRoomRequest, LiveKitAPI
+from livekit.api import LiveKitAPI
+from livekit.protocol.room import DeleteRoomRequest
 
 from voice_arch.arch import Arch
 from voice_arch.call_env import CallerHandle
@@ -33,7 +34,7 @@ class LiveKitCallEnv:
         token = make_token(self._settings, room, _CALLER_IDENTITY)
         try:
             await lk_room.connect(self._settings.livekit_url, token)
-        except Exception:
+        except Exception:  # release the half-open caller, then re-raise the original failure
             await caller.close()
             raise
         caller.scan()

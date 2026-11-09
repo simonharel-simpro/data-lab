@@ -14,8 +14,13 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (inference image `1.13.3`, English-only in v1, D-5 / #6). Default vectorizer `none`: collections opt in.
 - **Experiment tracking:** MLflow 3.17.2, SQLite backend, artifacts served by the tracking server.
 - **Python:** 3.12, managed with uv; one env per project; ruff (single root `ruff.toml`), pytest.
+  py312+: `from __future__ import annotations` is not required; PEP 604/585 syntax is native and ruff `UP` keeps it
+  modern (decisions.md, 2026-11-09).
 - **App:** Astro 7.4.1 on Node 22 (static output, no server adapter); zod via `astro/zod`; tests with `node --test`
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
+  Lint + format (#13): eslint 10 flat config (`@eslint/js` + `typescript-eslint` `recommended` + `eslint-plugin-astro`
+  `flat/recommended`) and prettier 3 with `prettier-plugin-astro`; scripts `lint`, `format`, `format:check`; eight exact
+  npm `overrides` (decisions.md, 2026-11-09).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
   web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
   Projection tab: `weavit-projector` Rust sidecar (umap-rs 0.4.5, ndarray, rayon), deck.gl 9.3.11 canvas; Rust gates
@@ -26,8 +31,10 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   `/audio/speech`, `/chat/completions`). Browser smoke client: `livekit-client` 2.23.0 from jsDelivr.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
 - **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps (`declared-deps-voice-arch` covers the voice-arch tree).
-  Pre-push stage: `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
-  `gates-app` (`npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
+  `enum-discipline` (+ `-mini-rag`, `-voice-arch`, one per tree): no raw string compared to a declared StrEnum value.
+  Pre-push stage: `gates-root` (pyright + pytest + coverage >= 70 on `tools/` + root `tests/`, one ad-hoc
+  `uv run --no-project` env, #7), `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
+  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
 - **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (LLM over the Anthropic
@@ -45,7 +52,8 @@ infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys
 contracts/              cross-side contracts read by the Python and app test suites: name_vectors.json, EXPERIMENT.md,
                         milestones.json, run_ledger_vectors.json, mlflow_tags.json
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A); experiment ledger:
-                        split, ledger_model/_rules/_ops/_checks/ledger (run.json), tags, tracking_queries,
+                        split, ledger_model/_rules/_ops/_access/_checks/ledger (run.json), tags, tracking_queries,
+                        tracking_outcome,
                         wiring (text-level hook + CI matrix wiring for `datalab-new`)
                         wiring_parity (test-time check that every projects/* has its hook stanzas + CI matrix entry)
 templates/project/      template copied by `datalab-new` (Phase 2A; Hydra experiment code since experiment Phase 3):
@@ -56,8 +64,8 @@ projects/<name>/        one project per folder: own env, PROJECT.md card (projec
 projects/mini-rag/      the pilot (Phase 3): data/ (frozen corpus + questions), src/mini_rag/, tests/
 projects/voice-arch/    voice-agent architecture experiment: src/voice_arch/ (settings, audio factories, stage-1 bench,
                         booking/ pure domain, agents/ LiveKit layer for archs A/B/C, worker, result, simulated
-                        caller + sweep runner + scoring + decide), web/ (smoke client), data/ (incl. personas),
-                        tests/ (+ tests/integration, live)
+                        caller + sweep runner + scoring + decide; module -> layer table under "Voice modules"),
+                        web/ (smoke client), data/ (incl. personas), tests/ (+ tests/integration, live)
 app/                    read-only Astro presentation app (Phase 2B): src/lib (pure, node --test), src/pages,
                         src/integrations/export-guard.ts, test-fixtures/ (CI build fixtures)
 tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; web mode, RAG OpenRouter preset)
@@ -66,13 +74,19 @@ tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the 
                         builds the projector incrementally; serves even if cargo is missing or the build fails)
 tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency;
-                        hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root
+                        hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root;
+                        check_enum_discipline.py (hooks `enum-discipline`, `-mini-rag`, `-voice-arch`, one per tree):
+                        no raw string compared to a declared StrEnum value
 tools/check_hydra_project.py  vendored verbatim from trouvetou (sha256 in its header): Hydra is wired, not just shaped
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
                         fixtures (job `app`); one matrix job `projects` (fail-fast off; mini-rag, voice-arch): gates + pip-audit, Hydra gate, ledger
                         validate; Python gates `--locked`
-tests/                  root tests (compose contract), run with `uvx pytest tests/`
+tests/                  root tests (compose contract, check_file_size, hydra_gate, weavit-web), run by the `gates-root`
+                        pre-push hook (coverage >= 70 on `tools/`)
+.claude/skills/experiment/  the `/experiment` skill: SKILL.md, references/agent-overrides.md,
+                        references/dispatch-briefs.md; its contract is contracts/EXPERIMENT.md
+.claude/hooks/          Claude Code hooks: loop guards (loop-git-guard.sh, loop-compaction-flag.sh), statusline-meter.sh
 ruff.toml               single ruff config for every Python tree
 ```
 
@@ -82,6 +96,9 @@ ruff.toml               single ruff config for every Python tree
 - **Does:** runs one Weaviate, one vectorizer and one MLflow for all projects, with named volumes and healthchecks.
 - **Must NOT:** publish any port on anything but `127.0.0.1` (unauthenticated, #2); reuse Demo-RAG's ports
   5000 / 8080 / 50051 (D-4).
+- `stop_grace_period: 60s` on Weaviate (#36) lets it flush the HNSW commit log on an orderly stop. A hard kill
+  (`wsl --shutdown`, a Docker Desktop restart, OOM) can still lose it; mini-rag's reuse check probes vector search for
+  that reason (Phase 1.1).
 
 ```yaml
     ports:
@@ -91,11 +108,18 @@ ruff.toml               single ruff config for every Python tree
 
 ### Shared package (`packages/datalab`, Phase 2A)
 - **Does:** reads `DATALAB_*` settings, validates project names (`NAME_RE`), builds collection names, wraps MLflow
-  runs with the non-overridable `project` tag, scaffolds new projects (`datalab-new`).
+  runs with the non-overridable `project` tag, scaffolds new projects (`datalab-new`); holds the experiment ledger
+  (`run.json`: model, rules, ops, test-access rules, cross-checks, `python -m datalab.ledger validate`), the frozen
+  split (`split.json` and its hash), and the hook + CI wiring of new projects (`wiring`, checked by `wiring_parity`).
 - **Must NOT:** read unprefixed env vars such as `MLFLOW_TRACKING_URI` (F-5); validate the card beyond `name` (D-3).
-- **Modules:** `project` (pure: `NAME_RE`, `load`, `repo_root`, naming), `settings` (`Settings`, `connect_weaviate`),
-  `tracking` (`preflight`, `tracked_run`), `new_project` (`datalab-new`). Root found from the package file, so only
-  editable installs work (F-10).
+- **Modules** (*pure* = in the import-linter contract "pure modules stay pure (no weaviate/mlflow)"): `project`
+  (*pure*: `NAME_RE`, `load`, `repo_root`, naming), `settings` (`Settings`, `connect_weaviate`), `tracking`
+  (`preflight`, `tracked_run`, `tracked_trial`), `tracking_outcome` (per-parent tally of trial outcomes),
+  `tracking_queries` (`project_spend`), `new_project` (`datalab-new`), `ledger` (*pure*, facade + `validate` CLI),
+  `ledger_model` (*pure*, `RunLedger`, `TRANSITIONS`), `ledger_rules` (*pure*, I-1..I-15), `ledger_ops` (*pure*),
+  `ledger_access` (*pure*, test-partition access, test looks), `ledger_checks` (*pure*, V-1..V-3), `split` (*pure*),
+  `tags` (*pure*, `Tag`), `wiring` (text-level hook + CI matrix wiring), `wiring_parity` (test-time check). Root found
+  from the package file, so only editable installs work (F-10).
 
 ```python
 def collection_name(project: str, *parts: str) -> str:
@@ -192,11 +216,12 @@ def complete_current_task(ctx: Ctx, field: str) -> None:
 - **Does:** measures each architecture against a simulated caller: one sweep = one arch x 6 personas x N reps = one
   MLflow run in `voice-arch/conversations` (metric `exact_rate`), then `decide` picks the architecture (D-15) and
   `rate` logs human ratings (reported, never ranking).
-- **Layers:** pure and LiveKit-free (import-linter contract "scoring and decision stay LiveKit-free"): `personas`
+- **Layers:** LiveKit-free (import-linter contract "scoring and decision stay LiveKit-free"): `personas`
   (`load_personas`, `PersonaError`), `naturalness` (counters from `SessionReport.to_dict()`), `scoring`
-  (`aggregate`, `cost_per_call`), `decide` (`pick_arch` on integers), `call` (`run_one_call` -> `CallRow`, the F-*
-  classification), `call_env` (the `CallEnv` / `CallerHandle` protocols the tests fake), `sweep_log`, `sweep_query`.
-  LiveKit side: `caller` (`CallerAgent`, `make_caller_session`), `live_caller` (the live `CallerHandle`),
+  (`aggregate`, `cost_per_call`), `decide` (`pick_arch` on integers; reads runs through `sweep_query`, so it imports
+  `mlflow` and is not pure), `call` (`run_one_call` -> `CallRow`, the F-* classification), `call_env` (the `CallEnv` /
+  `CallerHandle` protocols the tests fake). Runs side: `sweep` (one sweep's per-call loop), `sweep_log` (JSONL rows,
+  MLflow params), `sweep_query` (reads the sweep runs). LiveKit side: `caller` (`CallerAgent`, `make_caller_session`), `live_caller` (the live `CallerHandle`),
   `livekit_env` (`LiveKitCallEnv`). `runner` wires settings, budget gate, MLflow run and spend tracker; `rate` is a
   small CLI.
 - **Must NOT:** let `call.py` or the scoring modules import LiveKit; start a sweep without the budget gate (F-4b);
@@ -211,9 +236,27 @@ return _row(persona, rep, room, _classify(handle, result), result)
   (it joins the room and starts listening; B and C only after the agent's greeting, see `LiveCaller`), wait for the
   agent's `CallResult` on `voice-arch.result` (firing the persona's interjections while the agent talks), classify,
   delete the room. Rows are appended to `results/<run_id>.jsonl`; metrics, params and `per_conversation.json` are
-  logged at the end; `cost_usd` (caller included) is logged when the tracker exits, even for a FAILED run.
+  logged at the end. `cost_usd` (caller included) is the key's cumulative usage: logged after every call
+  (`step=index`, so a killed sweep loses at most one call) and once more on tracker exit (`step=len(rows)`), even for
+  a FAILED run; an unreadable key tags the run `cost_unknown=true` and the sweep carries on (F-12).
+- **Budget:** `budget.spent_so_far` is `datalab.tracking_queries.project_spend("voice-arch")` (every run, whatever its
+  status, RUNNING included) plus P-2: a `voice-arch/<sub>` run that is not FINISHED and logged no `cost_usd` counts
+  at `ESTIMATES_USD[sub]` (conversations 15 $, bench 2 $), with a warning.
 - **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
   transition model, each call is classified once from what the handle reports.
+
+### Voice modules (`projects/voice-arch/src/voice_arch/`, module -> layer)
+
+Measured 2026-11-09 with `grep -lE '^(import|from) (mlflow|datalab|httpx|livekit)'`, then checked transitively by
+import-linter. The **pure** row is exactly the contract "pure modules stay MLflow-free" (no mlflow, datalab, httpx,
+livekit, even through another module); `booking/` has its own contract "booking stays pure".
+
+| Layer | Modules |
+|---|---|
+| pure | `arch`, `call`, `call_env`, `candidates`, `fields`, `naturalness`, `personas`, `result`, `scoring`, `winners`, the `booking` package |
+| MLflow / runs | `bench`, `bench_record`, `budget`, `decide` (imports `mlflow`), `rate`, `runner`, `sweep`, `sweep_log` (no direct import, but reaches `datalab` via `settings` and `livekit` via `worker_logic`), `sweep_query` |
+| IO adapters / LiveKit | `audio`, `bench_runs`, `caller`, `corpus`, `dispatch`, `live_caller`, `livekit_env`, `llm_dump`, `llm_guard`, `openrouter_key`, `seams`, `settings`, `token`, `tool_schemas`, `worker_logic`, the `agents` package |
+| entry points | `worker`, `smoke_agent` (and the `main()` of `runner`, `bench`, `decide`, `rate`) |
 
 ### Projection (Weavit fork, `tools/weavit-ui`)
 - **Does:** the host reads vectors (lean cursor loop, `src/main/projection/readVectors.ts`) → sidecar stdin →
@@ -236,6 +279,10 @@ return _row(persona, rep, room, _classify(handle, result), result)
   steps, artifact containment; no writes), `lib/report.ts` (build report), `lib/config.ts` (the only module that names the app's `DATALAB_*` env vars),
   `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
   Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
+- **Lint + format (#13):** `npm run lint` (`eslint.config.js`: `recommended` rule sets plus
+  `@typescript-eslint/no-explicit-any` and `consistent-type-imports`, both `error`), `npm run format:check`
+  (`.prettierrc.json`: width 120, single quotes, trailing commas; `npm run format` rewrites). Both run in CI and in
+  `gates-app`. A caught error rethrown with a new message keeps it as `{ cause: err }` (`preserve-caught-error`).
 - **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.
 - **Metric value contract (U-6):** the value of a run is `run.data.metrics` — MLflow's *latest* value of the key,
   not the max over steps. Only exactly `metric.key` counts (a `smoke_score` never stands in for `score`, D-15).
@@ -310,7 +357,9 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
    20-word overlap); `main()` computes `index.corpus_hash` once; `index.ensure_collection` reuses or builds
    `MiniRag_t2v_bge_small_en_v1_5_w120o20_c<corpus_hash12>_<hash8>` (vectorizer `text2vec-transformers`, embedder
    id and corpus hash in the hashed parts, U-13): reuse is keyed on corpus content, so a corpus edit gets a new
-   collection, never stale vectors; the count check stays a completeness check, with one rebuild (F-13).
+   collection, never stale vectors; a collection is reused only if its count matches AND a `near_text` probe answers
+   (an index that holds objects but answers nothing is rebuilt), with one rebuild, then `IndexBuildError` (F-13).
+   Index builds are serialized per collection by a host-local file lock, #12.
 3. `run.run` takes a frozen `RunConfig` (retrieval, k, n, size, overlap, collection, corpus_hash), logged as params
    and covered by `config_hash`; it opens `tracked_run(..., sub="retrieval")` → experiment `mini-rag/retrieval`,
    tags `project`, `config_hash` (and `smoke=true` for `--n`); per question: `index.search` (`bm25` or
@@ -319,8 +368,8 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
    Each scored answer is appended as it is produced to `projects/<project>/results/<run_id>.jsonl` (gitignored
    crash copy), so a kill, a `GenerationError` or an MLflow outage keeps the answers computed so far.
 4. Metrics and the artifact are logged only after every question is scored: `score = accuracy − hallucination`
-   (or `smoke_*`) and `per_question.json` (the canonical artifact); a `GenerationError` leaves a FAILED run without
-   metrics (F-13).
+   (or `smoke_*`) and `per_question.json` (the canonical artifact); a `GenerationError`, or a question whose search
+   returns no passages (`EmptyRetrieval`), leaves a FAILED run without metrics (F-13).
 5. The app shows the card with the best FINISHED run by `score` (`max`).
 
 ```python
@@ -341,6 +390,8 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 - **Experiment ledger** — `projects/<name>/run.json` (a `RunLedger`, kind `training|comparison`): one status per
   milestone, the expert's decisions log, the frozen `split_sha256`, the winner and the test looks. Guarded by
   invariants I-1..I-15 (`datalab.ledger_rules`) and checks V-1..V-3; `split.json` is its frozen split.
+  Milestone ids are data from `contracts/milestones.json`; only the ids the code names are `Final` constants
+  (`DATASET`, `FEATURES`, `MODELING`, `AUDIT`), tested to exist in the contract (decisions.md, 2026-11-08).
 - **Collection** — a Weaviate collection named from the project name + parts, hashed to avoid collisions.
 
 ## State Machines
@@ -356,18 +407,34 @@ idée ──► en cours ──► conclu
 Valid transitions: `idée → en cours`, `en cours → conclu`, any → `abandonné`. The required card sections grow with
 the status (enforced by the app, Phase 2B).
 
+The status is a hand-edited label. The diagram is the intended workflow, and nothing enforces the transitions. The
+app only checks that the value is one of `STATUSES` (`app/src/lib/card.ts`) and that the required sections for that
+status are present (`app/src/lib/completeness.ts`).
+
 ### Experiment milestone (`run.json`, per milestone)
 
 ```
 todo ──► produced ──► validated
-            │  ▲
-            └──┘  correct          (produced → produced, decision `correct`)
+   ▲        │  ▲
+   │        └──┘  correct          (produced → produced, decision `correct`)
+   └─────────┘ redo                (produced → todo, decision `redo`)
 ```
 
-`produce` moves the current milestone `todo → produced`; `decide` validates it (current advances) or corrects it. A
-`redo` of milestone m sets m and every later milestone back to `todo` and clears the fields they fed (split, dataset,
-features, winner, data hash). Order is strict (a milestone starts only after every earlier one is validated) and
-there is no `skipped` status. Transitions live in `datalab.ledger_ops`; the log and test looks are append-only.
+`produce` moves the current milestone `todo → produced`; `decide` validates it (current advances), corrects it or
+redoes it. Order is strict (a milestone starts only after every earlier one is validated) and there is no `skipped`
+status. The log and test looks are append-only. The five legal transitions, one line per row of the table:
+
+```
+todo + produce → produced
+produced + produce → produced
+produced + correct → produced
+produced + validate → validated
+produced + redo → todo
+```
+
+`redo(m)` (any started status, VALIDATED included) → TODO for m and every later milestone, and clears the fields they
+fed (split, dataset, features, winner, data hash); a separate op, not a table row. Transitions:
+`datalab.ledger_model.TRANSITIONS`, checked against this table by `test_transitions_table_matches_architecture_md`.
 
 ## Cross-phase contracts
 

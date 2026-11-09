@@ -1,10 +1,14 @@
 """The five booking tools: one source for the stage-1 LLM bench and Phase 2's agent tools (U-26)."""
 
+from collections.abc import Coroutine
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 from livekit.agents import function_tool
 from livekit.agents.llm import RawFunctionTool
+
+# `_noop` as `function_tool` wraps it; the Coroutine's send/yield slots are Any in typeshed's async def.
+type RawTool = RawFunctionTool[[dict[str, object]], Coroutine[Any, Any, str]]
 
 PROBLEM_TYPES: Final = ("plumbing", "electrical", "hvac", "appliance", "other")
 
@@ -60,6 +64,6 @@ async def _noop(raw_arguments: dict[str, object]) -> str:
     return ""
 
 
-def to_raw_tools() -> list[RawFunctionTool]:
+def to_raw_tools() -> list[RawTool]:
     """Schema-only tool objects for `LLM.chat(tools=...)`: they are never executed."""
     return [function_tool(_noop, raw_schema=flat) for flat in to_openai_tools()]

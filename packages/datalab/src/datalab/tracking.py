@@ -4,7 +4,7 @@ import logging
 import math
 import os
 import threading
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Final
@@ -17,7 +17,8 @@ from mlflow.exceptions import MlflowException
 from datalab.project import Project, experiment_name
 from datalab.settings import Settings
 from datalab.tags import Tag
-from datalab.tracking_queries import StaleRun, close_runs, project_spend, stale_runs
+from datalab.tracking_outcome import OUTCOMES, Outcome, after_failure, tag_outcome
+from datalab.tracking_queries import StaleRun, close_runs, experiments_page, project_spend, stale_runs
 
 __all__ = [
     "StaleRun", "TrackingUnavailable", "Trial", "TrialError", "close_runs", "preflight", "project_spend",
@@ -53,19 +54,11 @@ class Trial:
 
 
 @dataclass
-class _Outcome:
-    children: int = 0
-    failed: list[str] = field(default_factory=list)
-
-
-@dataclass
 class _Slot:
     lock: threading.Lock = field(default_factory=threading.Lock)
     open_trial: str | None = None
 
 
-# Outcomes of the trials of each open parent run, keyed by parent run id; popped by `tracked_run` when it closes.
-_OUTCOMES: dict[str, _Outcome] = {}
 _SLOT: Final = _Slot()
 
 
@@ -86,7 +79,7 @@ def preflight(uri: str) -> None:
         except httpx.HTTPError as err:
             raise TrackingUnavailable(f"MLflow not reachable at {uri}: {err}") from err
     try:
-        MlflowClient(tracking_uri=uri).search_experiments(max_results=1)
+        experiments_page(MlflowClient(tracking_uri=uri), max_results=1)
     except MlflowException as err:
         raise TrackingUnavailable(f"MLflow at {uri} rejected a query: {err}") from err
 
@@ -98,7 +91,7 @@ def tracked_run(
     run_name: str,
     sub: str | None = None,
     tags: Mapping[str, str] | None = None,
-) -> Iterator[str]:
+) -> Generator[str, None, None]:
     """Open a run in `<name>` or `<name>/<sub>`; an exception inside marks it FAILED and is re-raised."""
     _bound_http_retries()
     extra = dict(tags or {})
@@ -106,26 +99,17 @@ def tracked_run(
         raise ValueError("tags may not override 'project': it always equals the project name")
     # Set explicitly, so a project that skips preflight never logs through an inherited MLFLOW_TRACKING_URI (F-5).
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-    mlflow.set_experiment(experiment_name(project.name, sub))
+    # mlflow annotates `trace_location` with an unresolved type, so the function is partially unknown.
+    mlflow.set_experiment(experiment_name(project.name, sub))  # pyright: ignore[reportUnknownMemberType]  # see above
     with mlflow.start_run(run_name=run_name) as run:
         mlflow.set_tags({"project": project.name} | extra)
         try:
             yield run.info.run_id
-        finally:
-            _tag_outcome(run.info.run_id)
-
-
-def _tag_outcome(parent_id: str) -> None:
-    outcome = _OUTCOMES.pop(parent_id, None)
-    if outcome is None:
-        return
-    mlflow.set_tags(
-        {
-            Tag.N_CHILDREN.value: str(outcome.children),
-            Tag.N_FAILED.value: str(len(outcome.failed)),
-            Tag.FAILED_CANDIDATES.value: ",".join(sorted(outcome.failed)),
-        }
-    )
+        except BaseException as err:
+            after_failure(err, "tagging the outcome", lambda: tag_outcome(run.info.run_id))
+            raise
+        else:
+            tag_outcome(run.info.run_id)
 
 
 def _claim_slot(run_name: str) -> None:
@@ -149,14 +133,19 @@ def _parent_of(parent_id: str) -> tuple[str, str]:
     return parent.info.experiment_id, project
 
 
-@contextmanager
-def tracked_trial(
-    run_name: str, tags: Mapping[str, str] | None = None, *, candidate: str | None = None
-) -> Iterator[Trial]:
-    """One child run of the open `tracked_run`, in the parent's experiment; it alone logs `cost_usd` (D-5)."""
+def _trial_tags(tags: Mapping[str, str] | None) -> dict[str, str]:
     extra = dict(tags or {})
     if "project" in extra or Tag.CANDIDATE.value in extra:
         raise ValueError("tags may not override 'project' or 'candidate': pass candidate= instead")
+    return extra
+
+
+@contextmanager
+def tracked_trial(
+    run_name: str, tags: Mapping[str, str] | None = None, *, candidate: str | None = None
+) -> Generator[Trial, None, None]:
+    """One child run of the open `tracked_run`, in the parent's experiment; it alone logs `cost_usd` (D-5)."""
+    extra = _trial_tags(tags)
     active = mlflow.active_run()
     if active is None:
         raise TrialError(f"trial {run_name!r} needs an open tracked_run as its parent")
@@ -170,14 +159,15 @@ def tracked_trial(
             trial = Trial(child.info.run_id, candidate or run_name)
             try:
                 yield trial
-            except BaseException:
+            except BaseException as err:
                 failed = True
+                after_failure(err, "logging the trial cost", lambda: mlflow.log_metric("cost_usd", trial.cost_usd))
                 raise
-            finally:
+            else:
                 mlflow.log_metric("cost_usd", trial.cost_usd)
     finally:
         _release_slot()
         if opened:
-            outcome = _OUTCOMES.setdefault(parent_id, _Outcome())
+            outcome = OUTCOMES.setdefault(parent_id, Outcome())
             outcome.children += 1
             outcome.failed += [run_name] if failed else []

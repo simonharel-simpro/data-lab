@@ -17,7 +17,13 @@ test('weavitCollectionUrl refuses a value that is not a collection name', () => 
 });
 
 test('runCollection picks the collection param and ignores invalid names', () => {
-  assert.equal(runCollection([{ key: 'k', value: '3' }, { key: 'collection', value: 'MiniRag_x' }]), 'MiniRag_x');
+  assert.equal(
+    runCollection([
+      { key: 'k', value: '3' },
+      { key: 'collection', value: 'MiniRag_x' },
+    ]),
+    'MiniRag_x',
+  );
   assert.equal(runCollection([{ key: 'collection', value: 'mini-rag' }]), undefined);
   assert.equal(runCollection([]), undefined);
 });

@@ -43,6 +43,7 @@ source_modules = [
     "datalab.split",
     "datalab.ledger_model",
     "datalab.ledger_rules",
+    "datalab.ledger_access",
     "datalab.ledger_ops",
     "datalab.ledger_checks",
     "datalab.ledger",
@@ -74,6 +75,7 @@ show_missing = true
 [tool.pyright]
 include = ["src", "tests"]
 typeCheckingMode = "basic"
+strict = ["src"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

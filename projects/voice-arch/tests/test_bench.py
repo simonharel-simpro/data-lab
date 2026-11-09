@@ -1,5 +1,5 @@
 import json
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 
 import httpx
@@ -15,7 +15,7 @@ from voice_arch.bench import BenchEnv, bench_llm, bench_stt, bench_tts
 from voice_arch.bench_record import select
 from voice_arch.bench_runs import LlmCase
 from voice_arch.budget import BudgetExceeded
-from voice_arch.corpus import Utterance, build_corpus
+from voice_arch.corpus import Corpus, Utterance, build_corpus
 from voice_arch.settings import VoiceSettings
 
 _UTTERANCES = [
@@ -51,7 +51,7 @@ def _runs(env: BenchEnv) -> list[Run]:
     return [] if experiment is None else list(client.search_runs([experiment.experiment_id]))
 
 
-def _corpus(tmp_path: Path):
+def _corpus(tmp_path: Path) -> Callable[[], Awaitable[Corpus]]:
     return lambda: build_corpus(_UTTERANCES, FakeTts(), tmp_path / "audio", tts_model="m", voice="v")
 
 

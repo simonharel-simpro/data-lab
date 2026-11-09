@@ -28,14 +28,15 @@ jobs:
           # keep in sync with .pre-commit-config.yaml gitleaks rev
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
           ./gitleaks git --redact --verbose .
-      - name: root compose test
-        run: uvx pytest tests/
+      - name: 'root tree (tools/ + tests/): types, tests, coverage floor (#7: no root uv project)'
+        run: uvx pre-commit run gates-root --hook-stage pre-push --all-files
       - name: datalab gates + unit tests + coverage floor
         working-directory: packages/datalab
         run: |
           uv sync --locked
           uv run --locked lint-imports
-          uv run --locked pyright
+          # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+          uv run --locked pyright -p pyproject.toml
           uv run --locked pip-audit
           uv run --locked pytest --cov=datalab
       - name: scaffold a fresh project and run its gates (F-3; network for uv lock)
@@ -59,6 +60,10 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm audit --audit-level=moderate
+      - name: lint (eslint)
+        run: npm run lint
+      - name: format (prettier --check)
+        run: npm run format:check
       - name: astro check
         run: npm run check
       - name: unit tests + line coverage floor (70 %)
@@ -112,7 +117,8 @@ jobs:
         run: |
           uv sync --locked
           uv run --locked lint-imports
-          uv run --locked pyright
+          # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+          uv run --locked pyright -p pyproject.toml
           uv run --locked pip-audit
           uv run --locked pytest --cov
       - name: Hydra gate (skips a project without configs/)

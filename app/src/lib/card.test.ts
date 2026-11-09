@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cardSchema, METRIC_KEY_RE } from './card.ts';
+import { cardSchema, GOALS, METRIC_KEY_RE } from './card.ts';
 
 const base = { name: 'p', title: 'T', status: 'idée' };
 
@@ -42,4 +42,11 @@ test('F-18: METRIC_KEY_RE matches the Python literal', () => {
   const m = /METRIC_KEY_RE: Final = re\.compile\(r"(.+)"\)/.exec(py);
   assert.ok(m, 'METRIC_KEY_RE literal not found in project.py');
   assert.equal(m[1], METRIC_KEY_RE.source);
+});
+
+test('goal value set matches contracts/value_sets.json', () => {
+  const contract = JSON.parse(readFileSync(new URL('../../../contracts/value_sets.json', import.meta.url), 'utf8')) as {
+    goals: string[];
+  };
+  assert.deepEqual([...GOALS], contract.goals);
 });

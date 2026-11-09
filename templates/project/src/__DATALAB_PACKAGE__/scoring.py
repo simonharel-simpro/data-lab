@@ -32,7 +32,7 @@ def metric_key_problems(
     if len(set(child_keys.values())) > 1:
         shown = {name: sorted(keys) for name, keys in sorted(child_keys.items())}
         problems.append(f"children log different metric keys: {shown}")
-    seen = sorted(set().union(*child_keys.values()))
+    seen = sorted(frozenset[str]().union(*child_keys.values()))
     extra = [k for k in seen if k not in {key, "cost_usd", *allowed}]
     if extra:
         problems.append(f"metric keys not allowed (declare them in experiment.metrics): {extra}")
