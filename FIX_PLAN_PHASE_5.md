@@ -1,5 +1,6 @@
 # Fix Plan — Phase 5: pyright strict on `src/` (#14)
 
+**Status:** ✅ Complete (+ approved 5.9 gate wiring) — branch fix-phase-5-pyright-strict, 2026-11-08
 **Severity:** 🟡
 **Agent:** python-fastapi. This is generic Python: ignore the FastAPI layering rules.
 **Depends on:** Phases 1–4 (they change signatures and move code; strict types the final shape)

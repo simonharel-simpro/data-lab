@@ -12,7 +12,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 2 | Resilience at the trust boundaries | ✅ landed (7/7) | fix-phase-2-trust-boundaries | clean @ 2e1bc20 (1 fix-check iter) |
 | 3 | Ledger contract, enum discipline & datalab test quality | ✅ landed (9/9) | fix-phase-3-ledger-enums | clean @ 95ea6d2 (first pass) |
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
-| 5 | pyright strict on `src/` (#14) | pending | — | — |
+| 5 | pyright strict on `src/` (#14) | implemented (8/8 + 5.9), awaiting /check | fix-phase-5-pyright-strict | — |
 | 6 | App formatter + linter (#13) | pending | — | — |
 | 7 | Docs & dependency hygiene | pending | — | — |
 | 8 | CI gates & tooling | pending | — | — |
@@ -74,3 +74,14 @@ A phase is complete only when merged into the integration branch AND marked here
 - Red-first: `6653b52` (collection errors on old source) → fix `36b8620`
 - Deviations (low-stakes): two noqa reasons shortened for the 120-col limit; `_trial_tags(tags)` takes only `tags`; test renamed `test_dump_is_off_without_a_directory` (trailer `Test-Change: #39`).
 - Cross-phase regressions: none
+
+## Phase 5 — pyright strict on `src/` (#14) (🟡)
+
+**Implemented:** 2026-11-08 · **Branch:** fix-phase-5-pyright-strict · **Agents:** python-fastapi ×4 (datalab+template / mini-rag / voice-arch / 5.9 gate wiring)
+**Tooling:** ✅ pre-push exit 0 · scaffold 1 passed · `pyright -p pyproject.toml` 0 errors in datalab, mini-rag, voice-arch · strict probe (`def f(x)`) → 4 errors (strict is live)
+
+- ✅ 5.1 `strict = ["src"]` ×4, `py.typed` · ✅ 5.2/5.3 datalab (private cross-module names made public) · ✅ 5.4 mini-rag · ✅ 5.5–5.7 voice-arch full strict (casts at SDK boundaries, P-6) · ✅ 5.8 template strict via scaffold
+- **⚠️ Finding (pre-existing, also on main):** the root `pyrightconfig.json` (0b5de8f) won pyright's config discovery, so every per-tree `uv run pyright` (pre-commit, CI, /check) checked only root `tools/`+`tests/` — the trees were never type-checked. The "pyright 0" rows in Phases 1–4 /check were vacuous for the trees.
+- ✅ **5.9 (user-approved deviation, 2026-11-08):** hooks + CI + `wiring.gates_block` generator run `pyright -p pyproject.toml`; 15 basic-mode errors in tests/ fixed type-only.
+- Commit: `d4345ea` (single commit: typing refactor, no behavioural tests; `Test-Change: #14`)
+- Follow-ups: S-14 stale-cast risk on livekit upgrades (casts in llm_dump, llm_guard, worker, naturalness, agents/tools, agents/state); the plan's "every ignore has a reason" grep cannot fail (the `# pyright:` itself matches `  # `).
