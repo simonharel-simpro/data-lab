@@ -65,3 +65,13 @@ def test_file_below_warn_band_is_silent(
 
     assert _load().main([rel]) == 0
     assert capsys.readouterr().err == ""
+
+
+def test_template_module_over_cap_fails_and_names_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    rel = _module(tmp_path, "templates/project/src/pkg/m.py", 201)
+
+    assert _load().main([rel]) == 1
+    assert "templates/project/src/pkg/m.py" in capsys.readouterr().err

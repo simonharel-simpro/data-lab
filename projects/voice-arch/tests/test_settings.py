@@ -29,7 +29,7 @@ def livekit_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _settings() -> VoiceSettings:
-    return VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
+    return VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]  # pydantic-settings kwarg
 
 
 @pytest.mark.usefixtures("livekit_env")
@@ -135,8 +135,9 @@ def test_agent_reasoning_effort_defaults_to_low_and_rejects_minimal(monkeypatch:
     monkeypatch.setenv("OPENROUTER_API_KEY", "k1")
     monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_KEY", "devkey")
     monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_SECRET", "s" * 32)
+    # Pydantic-settings kwarg.
     assert VoiceSettings(_env_file=None).agent_reasoning_effort == "low"  # pyright: ignore[reportCallIssue]
 
     monkeypatch.setenv("VOICE_ARCH_AGENT_REASONING_EFFORT", "minimal")  # the value that reproduced the failure
     with pytest.raises(ValidationError):
-        VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
+        VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]  # pydantic-settings kwarg

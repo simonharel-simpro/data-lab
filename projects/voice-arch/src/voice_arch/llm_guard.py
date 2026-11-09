@@ -35,8 +35,7 @@ def retry_on_empty_completion(model: llm.LLM[object], dump_dir: Path | None = No
         run = stream._run  # pyright: ignore[reportPrivateUsage]  # the only hook on a stream's attempt
         # The dict LiveKit's OpenAI stream sends as request parameters on every attempt. Read directly: if a
         # LiveKit upgrade drops it, the first call fails loudly rather than retrying at an unchanged temperature.
-        # The OpenAI stream's private kwargs dict is untyped in the plugin; cast to the shape it has.
-        request = cast("dict[str, Any]", private_attr(stream, "_extra_kwargs"))
+        request = cast("dict[str, Any]", private_attr(stream, "_extra_kwargs"))  # untyped in the OpenAI plugin
         base = float(request.get("temperature", 0.0))
         attempts = 0
 
@@ -47,12 +46,13 @@ def retry_on_empty_completion(model: llm.LLM[object], dump_dir: Path | None = No
                 logger.warning("empty LLM completion, retry %d at temperature %.2f", attempts, request["temperature"])
             attempts += 1
             await run()
+            # Wraps LiveKit internals.
             if not stream._event_ch.output_sent:  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
                 dump_empty_request(stream, request, attempts, dump_dir)
                 raise APIConnectionError(EMPTY_COMPLETION, retryable=True)
 
-        stream._run = checked_run  # pyright: ignore[reportPrivateUsage]
+        stream._run = checked_run  # pyright: ignore[reportPrivateUsage]  # wraps LiveKit internals
         return stream
 
-    model.chat = guarded_chat  # pyright: ignore[reportAttributeAccessIssue]
+    model.chat = guarded_chat  # pyright: ignore[reportAttributeAccessIssue]  # wraps LiveKit internals
     return model

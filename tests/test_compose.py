@@ -30,7 +30,7 @@ def _compose_config(*profiles: str) -> dict:
         raise unittest.SkipTest("docker is not on PATH: cannot render compose.yaml with `docker compose config`")
     # Fixed argv, no shell, absolute binary path: nothing user-controlled reaches the command line.
     profile_args = [arg for profile in profiles for arg in ("--profile", profile)]
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603  # fixed argv list, no shell
         [docker, "compose", "-f", str(COMPOSE_FILE), *profile_args, "config", "--format", "json"],
         cwd=REPO_ROOT,
         capture_output=True,

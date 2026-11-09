@@ -378,3 +378,13 @@ stays a review concern).
 **Consequences:** One whole-app rewrite commit (`a7e35ab`, prettier `--write`), listed in `.git-blame-ignore-revs`
 (`git config blame.ignoreRevsFile .git-blame-ignore-revs`). Land the PR with a merge commit (not squash/rebase) so the
 blame-ignore hash survives. The overrides are maintenance debt until the removal condition holds.
+
+## 2026-11-09 — Split leakage property: exhaustive enumeration instead of Hypothesis
+
+**Status:** accepted (user, 2026-11-09)
+**Context:** REVIEW 2026-11-08 §4 / migration M1.4 asked for one Hypothesis property on `datalab.split`.
+**Decision:** `packages/datalab/tests/test_split_rules.py` enumerates all 4^4 index assignments over a small domain.
+The property: a split is accepted iff train and test are both non-empty.
+**Alternatives considered:** Hypothesis (a new dev dependency); random sampling of the same small domain.
+**Consequences:** No new dependency, and the domain is small enough to be exhaustive rather than sampled. Revisit if
+the split rules grow beyond what enumeration covers.

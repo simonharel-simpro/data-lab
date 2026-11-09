@@ -19,6 +19,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def live() -> VoiceSettings:
+    # Pydantic-settings kwarg.
     return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]
 
 

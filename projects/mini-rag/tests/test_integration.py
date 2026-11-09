@@ -16,7 +16,7 @@ pytestmark = pytest.mark.integration
 @pytest.mark.parametrize("mode", list(Retrieval))
 def test_integration_bm25_and_vector_return_hits(mode: Retrieval) -> None:
     chunks = load_corpus(CORPUS_DIR, size=120, overlap=20)
-    with connect_weaviate(Settings(_env_file=None)) as client:  # type: ignore[call-arg]
+    with connect_weaviate(Settings(_env_file=None)) as client:  # type: ignore[call-arg]  # settings kwarg
         name = ensure_collection(client, chunks, size=120, overlap=20, corpus=corpus_hash(chunks))
         hits = search(client, name, "Which port does MLflow use?", mode, 3)
 

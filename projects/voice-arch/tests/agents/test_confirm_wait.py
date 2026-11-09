@@ -35,6 +35,7 @@ def _ctx(session: FakeSession, state: BookingState) -> RunContext[BookingState]:
 def _history(*messages: tuple[str, float]) -> ChatContext:
     history = ChatContext()
     for role, created_at in messages:
+        # Loose test fake.
         history.add_message(role=role, content="text", created_at=created_at)  # pyright: ignore[reportArgumentType]
     return history
 
@@ -114,6 +115,6 @@ async def test_failed_write_does_not_start_the_wait() -> None:
     state = BookingState()
     ctx = _ctx(FakeSession(ChatContext()), state)
 
-    await tools.record_problem(ctx, "roofing")  # pyright: ignore[reportArgumentType]
+    await tools.record_problem(ctx, "roofing")  # pyright: ignore[reportArgumentType]  # loose test fake
 
     assert state.last_write_at is None

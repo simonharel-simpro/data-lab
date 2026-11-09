@@ -29,7 +29,7 @@ def _compose_host_ports() -> dict[tuple[str, int], tuple[str, int]]:
     if docker is None:
         pytest.skip("docker is not on PATH: the compose part of the parity check cannot run")
     # Fixed argv, absolute binary, no shell: nothing user-controlled reaches the command line.
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603  # fixed argv list, no shell
         [docker, "compose", "-f", str(REPO_ROOT / "compose.yaml"), "config", "--format", "json"],
         capture_output=True,
         text=True,
@@ -104,19 +104,20 @@ def test_g_10_ports_agree_with_compose() -> None:
 
 def test_scheme_less_tracking_uri_fails_at_settings() -> None:
     with pytest.raises(ValidationError, match="scheme"):
-        Settings(_env_file=None, mlflow_tracking_uri="127.0.0.1:5050")  # type: ignore[call-arg]
+        Settings(_env_file=None, mlflow_tracking_uri="127.0.0.1:5050")  # type: ignore[call-arg]  # settings kwarg
 
 
 def test_sqlite_tracking_uri_still_validates(tmp_path: Path) -> None:
     uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
 
+    # Settings kwarg.
     assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]
 
 
 @pytest.mark.parametrize("uri", ["http://", "://", "garbage://", "x ://y", "http:// host"])
 def test_malformed_tracking_uri_fails_at_settings(uri: str) -> None:
     with pytest.raises(ValidationError, match="scheme"):
-        Settings(_env_file=None, mlflow_tracking_uri=uri)  # type: ignore[call-arg]
+        Settings(_env_file=None, mlflow_tracking_uri=uri)  # type: ignore[call-arg]  # settings kwarg
 
 
 @pytest.mark.parametrize(
@@ -124,4 +125,5 @@ def test_malformed_tracking_uri_fails_at_settings(uri: str) -> None:
     ["sqlite:////abs/mlflow.db", "sqlite:///rel.db", "postgresql://u@h/db", "mysql://u@h:3306/db", "http://h:5000"],
 )
 def test_valid_tracking_uri_schemes_still_validate(uri: str) -> None:
+    # Settings kwarg.
     assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]

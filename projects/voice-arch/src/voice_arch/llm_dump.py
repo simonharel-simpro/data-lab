@@ -19,7 +19,10 @@ def private_attr(stream: llm.LLMStream, name: str) -> object:
 
 
 def dump_empty_request(
-    stream: llm.LLMStream, request: dict[str, Any], attempt: int, directory: Path | None
+    stream: llm.LLMStream,
+    request: dict[str, Any],  # raw LLM payload dumped as-is
+    attempt: int,
+    directory: Path | None,
 ) -> Path | None:
     """Write the messages, tool definitions and parameters this attempt sent; None when the dump is off."""
     if directory is None:
@@ -29,7 +32,7 @@ def dump_empty_request(
     strict = cast("bool", private_attr(stream, "_strict_tool_schema"))
     to_provider = cast(
         "Callable[..., tuple[list[dict[str, Any]], object]]",
-        stream.chat_ctx.to_provider_format,  # pyright: ignore[reportUnknownMemberType]
+        stream.chat_ctx.to_provider_format,  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
     )
     messages, _ = to_provider(format=fmt)
     tools = llm.ToolContext(stream.tools).parse_function_tools("openai", strict=strict)

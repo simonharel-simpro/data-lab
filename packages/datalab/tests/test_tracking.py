@@ -10,7 +10,7 @@ from unittest.mock import patch
 import mlflow
 import pytest
 from mlflow import MlflowClient
-from mlflow.entities import Run
+from mlflow.entities import Run, RunStatus
 from mlflow.exceptions import MlflowException
 
 from datalab.tags import Tag
@@ -108,6 +108,44 @@ def test_tracked_run_still_raises_when_tagging_fails_after_a_good_body(sqlite_ur
         tracked_trial("a"),
     ):
         pass
+
+
+def _ending_as_failed_fails() -> AbstractContextManager[object]:
+    real = MlflowClient.set_terminated
+
+    def flaky(self: MlflowClient, run_id: str, status: str | None = None, end_time: int | None = None) -> None:
+        if status == RunStatus.to_string(RunStatus.FAILED):
+            raise MlflowException("store down")
+        real(self, run_id, status, end_time)
+
+    return patch.object(MlflowClient, "set_terminated", flaky)
+
+
+def test_tracked_run_surfaces_the_body_error_when_end_run_fails(sqlite_uri: str, tmp_path: Path) -> None:
+    with (
+        _ending_as_failed_fails(),
+        pytest.raises(ValueError, match="body") as caught,
+        tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "r"),
+    ):
+        raise ValueError("body")
+
+    assert any("ending the run as FAILED failed" in note for note in caught.value.__notes__)
+
+
+def test_tracked_run_after_a_failed_end_run_opens_a_top_level_run(sqlite_uri: str, tmp_path: Path) -> None:
+    with (
+        _ending_as_failed_fails(),
+        pytest.raises(ValueError, match="body"),
+        tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "dead"),
+    ):
+        raise ValueError("body")
+
+    with tracked_run(make_project(tmp_path), make_settings(sqlite_uri), "next") as run_id:
+        pass
+
+    run = MlflowClient(tracking_uri=sqlite_uri).get_run(run_id)
+    assert "mlflow.parentRunId" not in run.data.tags
+    assert run.info.status == "FINISHED"
 
 
 def test_preflight_unreachable_raises_tracking_unavailable() -> None:

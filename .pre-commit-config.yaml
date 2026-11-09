@@ -21,7 +21,14 @@ repos:
         # No root uv project exists, so the hook runs the stdlib-only script directly.
         entry: python tools/check_file_size.py
         language: python
-        files: ^(packages|projects)/[^/]+/src/.*\.py$
+        files: ^(packages|projects|templates)/[^/]+/src/.*\.py$
+      - id: check-function-length
+        name: src functions <= 30 lines, classes <= 150 (REVIEW M3.3)
+        # /scaffold-linter function-length (recipe check_file_length.py, function/class half). Same scope as
+        # file-size; stdlib-only, so no uv env. pre-commit passes the matching files.
+        entry: python tools/pre_commit_checks/check_function_length.py
+        language: python
+        files: ^(packages|projects|templates)/[^/]+/src/.*\.py$
       - id: declared-deps
         name: datalab imports are declared dependencies
         # Vendored recipe (tools/pre_commit_checks). It reads pyproject.toml/uv.lock and scans src/ relative to the

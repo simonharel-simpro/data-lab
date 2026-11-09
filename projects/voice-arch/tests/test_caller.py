@@ -1,7 +1,7 @@
 import pytest
 from livekit.agents import APIConnectionError, APIConnectOptions, llm
 
-from tests.test_llm_guard import _Llm  # pyright: ignore[reportPrivateUsage]
+from tests.test_llm_guard import _Llm  # pyright: ignore[reportPrivateUsage]  # test reads private attr
 from voice_arch.caller import make_caller_session
 from voice_arch.settings import VoiceSettings
 
@@ -33,6 +33,7 @@ async def test_caller_session_llm_fails_loud_instead_of_staying_silent_when_alwa
 
     no_wait = APIConnectOptions(max_retry=1, retry_interval=0.0, timeout=5.0)
     with pytest.raises(APIConnectionError):
+        # Llm is set by the factory.
         async with session.llm.chat(chat_ctx=llm.ChatContext(), conn_options=no_wait) as stream:  # type: ignore[union-attr]
             async for _ in stream:
                 pass

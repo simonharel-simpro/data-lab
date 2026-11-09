@@ -48,11 +48,12 @@ class LiveCaller:
         self._tasks: set[asyncio.Task[None]] = set()
         room.register_text_stream_handler(RESULT_TOPIC, self._on_stream)
         # EventEmitter.on takes an unparameterised callback in the SDK, hence the ignores below.
-        room.on("participant_connected", self._on_joined)  # pyright: ignore[reportUnknownMemberType]
-        room.on("participant_disconnected", self._on_left)  # pyright: ignore[reportUnknownMemberType]
+        room.on("participant_connected", self._on_joined)  # pyright: ignore[reportUnknownMemberType]  # untyped SDK
+        room.on("participant_disconnected", self._on_left)  # pyright: ignore[reportUnknownMemberType]  # untyped SDK
+        # Untyped LiveKit member.
         room.on("participant_attributes_changed", self._on_attributes)  # pyright: ignore[reportUnknownMemberType]
-        session.on("error", self._on_error)  # pyright: ignore[reportUnknownMemberType]
-        session.on("close", self._on_close)  # pyright: ignore[reportUnknownMemberType]
+        session.on("error", self._on_error)  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
+        session.on("close", self._on_close)  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
 
     def scan(self) -> None:
         """Agents already in the room when we connected raise no `participant_connected`."""

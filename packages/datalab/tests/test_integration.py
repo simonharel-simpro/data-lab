@@ -100,5 +100,6 @@ def test_f_4_rest_insert_visible_via_grpc_query(tmp_path: Path) -> None:
         finally:
             cleanup(client.collections, mlflow_client, name, experiment)
     assert mlflow_client.get_experiment_by_name(experiment) is None or (
+        # None-checked just above.
         mlflow_client.get_experiment_by_name(experiment).lifecycle_stage == "deleted"  # type: ignore[union-attr]
     )

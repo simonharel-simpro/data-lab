@@ -8,7 +8,8 @@ from unittest.mock import patch
 import mlflow
 import pytest
 from mlflow import MlflowClient
-from mlflow.entities import Run
+from mlflow.entities import Run, RunStatus
+from mlflow.exceptions import MlflowException
 
 from datalab.tags import Tag
 from datalab.tracking import OUTCOMES, TrialError, project_spend, tracked_run, tracked_trial
@@ -162,6 +163,43 @@ def test_tracked_trial_surfaces_the_body_error_when_cost_log_fails(sqlite_uri: s
         raise KeyError("body")
 
     assert any("logging the trial cost failed" in note for note in caught.value.__notes__)
+
+
+def _ending_as_failed_fails() -> AbstractContextManager[object]:
+    real = MlflowClient.set_terminated
+
+    def flaky(self: MlflowClient, run_id: str, status: str | None = None, end_time: int | None = None) -> None:
+        if status == RunStatus.to_string(RunStatus.FAILED):
+            raise MlflowException("store down")
+        real(self, run_id, status, end_time)
+
+    return patch.object(MlflowClient, "set_terminated", flaky)
+
+
+def test_tracked_trial_surfaces_the_body_error_when_end_run_fails(sqlite_uri: str, tmp_path: Path) -> None:
+    with (
+        _ending_as_failed_fails(),
+        pytest.raises(KeyError, match="body") as caught,
+        _parent(sqlite_uri, tmp_path),
+        tracked_trial("a"),
+    ):
+        raise KeyError("body")
+
+    assert any("ending the run as FAILED failed" in note for note in caught.value.__notes__)
+
+
+def test_trial_slot_freed_when_end_run_fails(sqlite_uri: str, tmp_path: Path) -> None:
+    with _ending_as_failed_fails():
+        with (
+            pytest.raises(KeyError, match="body"),
+            _parent(sqlite_uri, tmp_path, "first"),
+            tracked_trial("a"),
+        ):
+            raise KeyError("body")
+        with _parent(sqlite_uri, tmp_path, "second") as second_id, tracked_trial("b"):
+            pass
+
+    assert MlflowClient(tracking_uri=sqlite_uri).get_run(second_id).data.tags["n_children"] == "1"
 
 
 def test_u_10_trial_name_and_candidate(sqlite_uri: str, tmp_path: Path) -> None:

@@ -38,7 +38,7 @@ def _key_client(usages: list[float], status: int = 200) -> httpx.Client:
 @pytest.fixture
 def env_for(tmp_path: Path, sqlite_uri: str, voice_settings: VoiceSettings) -> Callable[..., BenchEnv]:
     def make(client: httpx.Client | None = None) -> BenchEnv:
-        dl = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
+        dl = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]  # settings kwarg
         client = client or _key_client([1.0, 1.4])
         return BenchEnv(Project("voice-arch", tmp_path), dl, voice_settings, tmp_path / "results", client)
 

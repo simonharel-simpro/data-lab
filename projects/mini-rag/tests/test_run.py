@@ -45,8 +45,8 @@ def _run(  # every knob a config-identity test varies is a keyword
     base_url: str = "http://llm.invalid",
     served_by: dict[str, int] | None = None,
 ) -> str:
-    settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
-    pilot = PilotSettings(  # type: ignore[call-arg]
+    settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]  # settings kwarg
+    pilot = PilotSettings(  # type: ignore[call-arg]  # settings kwarg
         _env_file=None,  # pyright: ignore[reportCallIssue]  # pydantic-settings accepts _env_file at runtime
         llm_base_url=base_url,
         llm_api_key="sk-or-test",

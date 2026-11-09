@@ -37,4 +37,4 @@ class BookingState:
 
 def session_of(agent: Agent) -> AgentSession[BookingState]:
     """The agent's session typed with this call's userdata; `Agent.session` is `AgentSession[Unknown]` in the SDK."""
-    return cast("AgentSession[BookingState]", agent.session)  # pyright: ignore[reportUnknownMemberType]
+    return cast("AgentSession[BookingState]", agent.session)  # pyright: ignore[reportUnknownMemberType]  # untyped SDK

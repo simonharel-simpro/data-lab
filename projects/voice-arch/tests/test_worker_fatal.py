@@ -37,7 +37,7 @@ def _llm_error(*, recoverable: bool) -> ErrorEvent:
 
 def _watch(session: FakeSession) -> SessionWatch:
     watch = SessionWatch()
-    watch.attach(session)  # pyright: ignore[reportArgumentType]
+    watch.attach(session)  # pyright: ignore[reportArgumentType]  # loose test fake
     return watch
 
 

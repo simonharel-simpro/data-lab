@@ -24,17 +24,17 @@ async def test_f_15_taskgroup_summarize_flag_is_off_and_logged() -> None:
     group = build_task_group()
 
     assert SUMMARIZE_CHAT_CTX is False
-    assert group._summarize_chat_ctx is False  # pyright: ignore[reportPrivateUsage]
+    assert group._summarize_chat_ctx is False  # pyright: ignore[reportPrivateUsage]  # test reads private attr
 
 
 async def test_task_group_has_the_six_steps_in_order() -> None:
     group = build_task_group()
 
-    assert list(group._registered_factories) == STEP_IDS  # pyright: ignore[reportPrivateUsage]
+    assert list(group._registered_factories) == STEP_IDS  # pyright: ignore[reportPrivateUsage]  # private attr
 
 
 async def test_task_group_factories_make_fresh_tasks_of_the_right_class() -> None:
-    factories = build_task_group()._registered_factories  # pyright: ignore[reportPrivateUsage]
+    factories = build_task_group()._registered_factories  # pyright: ignore[reportPrivateUsage]  # private attr
     classes = [NameTask, PhoneTask, AddressTask, ProblemTask, SlotTask, ConfirmTask]
 
     made = [factories[step].task_factory() for step in STEP_IDS]
@@ -58,17 +58,17 @@ async def test_task_instructions_carry_the_shared_context_and_its_own_ask() -> N
 
 
 async def test_slot_task_has_check_and_choose_tools_only() -> None:
-    names = {tool.info.name for tool in SlotTask().tools}  # pyright: ignore[reportAttributeAccessIssue]
+    names = {tool.info.name for tool in SlotTask().tools}  # pyright: ignore[reportAttributeAccessIssue]  # not in stubs
 
     assert names == {"check_slots", "choose_slot"}
 
 
 async def test_arch_c_tasks_add_the_record_tools_and_keep_the_same_steps() -> None:
     group = build_task_group_c()
-    task = group._registered_factories["phone"].task_factory()  # pyright: ignore[reportPrivateUsage]
-    names = {tool.info.name for tool in task.tools}  # pyright: ignore[reportAttributeAccessIssue]
+    task = group._registered_factories["phone"].task_factory()  # pyright: ignore[reportPrivateUsage]  # private attr
+    names = {tool.info.name for tool in task.tools}  # pyright: ignore[reportAttributeAccessIssue]  # not in stubs
 
-    assert list(group._registered_factories) == STEP_IDS  # pyright: ignore[reportPrivateUsage]
+    assert list(group._registered_factories) == STEP_IDS  # pyright: ignore[reportPrivateUsage]  # private attr
     assert names == {"record_phone", "read_record", "update_record"}
 
 
@@ -78,7 +78,7 @@ async def test_orchestrator_carries_every_instruction_and_all_tools() -> None:
 
     for part in (text.CONTEXT, text.GREETING, text.ASK_NAME, text.ASK_PHONE, text.ASK_ADDRESS, text.ASK_PROBLEM):
         assert part in body
-    assert {t.info.name for t in agent.tools} == {  # pyright: ignore[reportAttributeAccessIssue]
+    assert {t.info.name for t in agent.tools} == {  # pyright: ignore[reportAttributeAccessIssue]  # not in stubs
         "record_name",
         "record_phone",
         "record_address",
@@ -98,6 +98,7 @@ async def test_registry_builds_the_agent_for_each_arch() -> None:
 def _ctx_of(*roles: str) -> llm.ChatContext:
     ctx = llm.ChatContext.empty()
     for role in roles:
+        # Loose test fake.
         ctx.add_message(role=role, content=[f"{role} said something"])  # pyright: ignore[reportArgumentType]
     return ctx
 

@@ -61,7 +61,7 @@ def test_read_rows_bad_line_names_it(tmp_path: Path) -> None:
 def test_load_split_index_out_of_range(tmp_path: Path) -> None:
     folder = _write(tmp_path / "e", {"splits": {"train": [0, 9], "val": [3, 4], "test": [5, 6]}})
 
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match="an index is out of range for 7 rows"):
         load_split(folder, [Partition.TRAIN], rows=_rows(7))
 
 
@@ -69,9 +69,9 @@ def test_load_split_index_split_not_covering_rows_rejected(tmp_path: Path) -> No
     short = _write(tmp_path / "a", {"splits": {"train": [0, 1, 2], "val": [3, 4], "test": [5]}})
     long = _write(tmp_path / "b", {"splits": {"train": [0, 1, 2], "val": [3, 4], "test": [5, 6, 7]}})
 
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match=r"split\.json does not cover data_file row for row"):
         load_split(short, [Partition.TRAIN], rows=_rows(7))
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match="an index is out of range for 7 rows"):
         load_split(long, [Partition.TRAIN], rows=_rows(7))
     ok = load_split(FIXTURES, [Partition.TRAIN], rows=_rows(7))
     assert [r["x"] for r in ok[Partition.TRAIN]] == [0, 1, 2]

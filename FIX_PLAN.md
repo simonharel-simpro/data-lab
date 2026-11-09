@@ -56,7 +56,7 @@ Reviewer: `simplicity-reviewer` (fable), 2026-11-08. Before: 9 phases / 44 units
 |---|------|------|---------|----------|
 | D-1 | decision | voice-arch budget reuses `datalab.tracking_queries.project_spend` (every status, every `voice-arch/*` experiment) instead of patching `spent_so_far`'s status filter | — | — |
 | D-2 | decision | #12: `fcntl.flock` per collection name around `ensure_collection`, plus a re-check once the lock is held (mechanism answer is P-1) | #12 | — |
-| D-3 | decision | split leakage property: exhaustive enumeration over a small index domain instead of adding Hypothesis (same property, no new dependency) | — | — |
+| D-3 | decision | split leakage property: exhaustive enumeration over a small index domain instead of adding Hypothesis (same property, no new dependency) | — | user, 2026-11-09 (/heal-review) |
 | D-4 | decision | a hung LiveKit step (dispatch / connect) aborts the sweep with a named error; cleanup steps are bounded and logged (behaviour answer is P-4) | — | — |
 | D-5 | decision | project-card status stays a manual label: the doc says so, no FSM code (REVIEW §3's own recommendation) | — | — |
 | D-6 | cut | `PLR0913`: group only `run_sweep` + `build_result`; the other 7 functions over 5 args keep their signatures with a `noqa: PLR0913` and a reason (P-5 option A) | #39 | user, AskUserQuestion 2026-11-08 |

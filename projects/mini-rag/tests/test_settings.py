@@ -16,7 +16,7 @@ def test_f_13_missing_llm_api_key_fails_at_settings(monkeypatch: pytest.MonkeyPa
 
 
 def test_api_key_is_masked_in_repr() -> None:
-    pilot = PilotSettings(_env_file=None, llm_api_key=_KEY)  # type: ignore[call-arg]
+    pilot = PilotSettings(_env_file=None, llm_api_key=_KEY)  # type: ignore[call-arg]  # settings kwarg
 
     assert _KEY not in repr(pilot)
     assert pilot.llm_api_key is not None
@@ -40,7 +40,7 @@ def test_settings_read_only_the_mini_rag_prefix(
     else:
         monkeypatch.setenv("MINI_RAG_GEN_MODEL", prefixed_model)
 
-    pilot = PilotSettings(_env_file=None)  # type: ignore[call-arg]
+    pilot = PilotSettings(_env_file=None)  # type: ignore[call-arg]  # settings kwarg
 
     assert pilot.llm_base_url == "https://eu.openrouter.ai/api"
     assert pilot.gen_model == expected_model
@@ -48,17 +48,20 @@ def test_settings_read_only_the_mini_rag_prefix(
 
 def test_scheme_less_llm_url_fails_at_settings() -> None:
     with pytest.raises(ValidationError, match="scheme"):
+        # Settings kwarg.
         PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url="dgx.lan:8000", gen_model="m")  # type: ignore[call-arg]
 
 
 @pytest.mark.parametrize("url", ["http://", "://", "garbage://", "x ://y", "http:// host"])
 def test_malformed_llm_url_fails_at_settings(url: str) -> None:
     with pytest.raises(ValidationError, match="scheme"):
+        # Settings kwarg.
         PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url=url, gen_model="m")  # type: ignore[call-arg]
 
 
 @pytest.mark.parametrize("url", ["http://dgx.lan:8000", "https://openrouter.ai/api"])
 def test_llm_url_with_scheme_and_host_validates(url: str) -> None:
+    # Settings kwarg.
     pilot = PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url=url, gen_model="m")  # type: ignore[call-arg]
 
     assert pilot.llm_base_url == url
@@ -69,12 +72,13 @@ def test_unprefixed_llm_api_key_is_not_picked_up(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("LLM_API_KEY", "another-tools-key")
 
     with pytest.raises(ValidationError, match="MINI_RAG_LLM_API_KEY is required"):
-        PilotSettings(_env_file=None)  # type: ignore[call-arg]
+        PilotSettings(_env_file=None)  # type: ignore[call-arg]  # settings kwarg
 
 
 def test_dgx_needs_no_key_when_the_model_is_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MINI_RAG_LLM_API_KEY", raising=False)
 
+    # Settings kwarg.
     pilot = PilotSettings(_env_file=None, llm_base_url="http://dgx.lan:8000", gen_model="deepseek-v4-flash")  # type: ignore[call-arg]
 
     assert pilot.llm_api_key is None
@@ -82,22 +86,22 @@ def test_dgx_needs_no_key_when_the_model_is_set(monkeypatch: pytest.MonkeyPatch)
 
 def test_non_openrouter_endpoint_refuses_the_openrouter_default_model() -> None:
     with pytest.raises(ValidationError, match=re.escape("set MINI_RAG_GEN_MODEL for http://dgx.lan:8000")):
-        PilotSettings(_env_file=None, llm_base_url="http://dgx.lan:8000")  # type: ignore[call-arg]
+        PilotSettings(_env_file=None, llm_base_url="http://dgx.lan:8000")  # type: ignore[call-arg]  # settings kwarg
 
 
 def test_legacy_dgx_base_url_is_refused_not_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MINI_RAG_DGX_BASE_URL", "http://dgx.lan:8000")
 
     with pytest.raises(ValidationError, match="MINI_RAG_DGX_BASE_URL was renamed"):
-        PilotSettings(_env_file=None, llm_api_key=_KEY)  # type: ignore[call-arg]
+        PilotSettings(_env_file=None, llm_api_key=_KEY)  # type: ignore[call-arg]  # settings kwarg
 
 
 def test_legacy_dgx_base_url_in_env_file_is_refused(tmp_path: pytest.TempPathFactory) -> None:
-    env = tmp_path / ".env"  # type: ignore[operator]
+    env = tmp_path / ".env"  # type: ignore[operator]  # test-only typing quirk
     env.write_text("MINI_RAG_DGX_BASE_URL=http://dgx.lan:8000\nMINI_RAG_LLM_API_KEY=k\n")
 
     with pytest.raises(ValidationError, match="MINI_RAG_DGX_BASE_URL was renamed"):
-        PilotSettings(_env_file=env)  # type: ignore[call-arg]
+        PilotSettings(_env_file=env)  # type: ignore[call-arg]  # settings kwarg
 
 
 @pytest.mark.parametrize(
@@ -116,7 +120,7 @@ def test_validation_error_never_echoes_the_api_key(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("MINI_RAG_DGX_BASE_URL", "http://dgx.lan:8000")
 
     with pytest.raises(ValidationError) as err:
-        PilotSettings(_env_file=None, llm_api_key="sk-or-v1-very-secret")  # type: ignore[call-arg]
+        PilotSettings(_env_file=None, llm_api_key="sk-or-v1-very-secret")  # type: ignore[call-arg]  # settings kwarg
 
     assert "sk-or" not in str(err.value)
 
@@ -124,10 +128,12 @@ def test_validation_error_never_echoes_the_api_key(monkeypatch: pytest.MonkeyPat
 @pytest.mark.parametrize("bad", ["Deep Infra", "a,,b", "a;b"])
 def test_provider_list_must_be_slugs(bad: str) -> None:
     with pytest.raises(ValidationError, match="provider slugs"):
+        # Settings kwarg.
         PilotSettings(_env_file=None, llm_api_key=_KEY, openrouter_providers=bad)  # type: ignore[call-arg]
 
 
 def test_provider_list_is_trimmed_and_ordered() -> None:
+    # Settings kwarg.
     pilot = PilotSettings(_env_file=None, llm_api_key=_KEY, openrouter_providers=" deepinfra , parasail ")  # type: ignore[call-arg]
 
     assert pilot.provider_list == ["deepinfra", "parasail"]

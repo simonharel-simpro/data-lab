@@ -78,7 +78,7 @@ def test_exact_record_after_normalisation() -> None:
 def test_u_25_expected_record_keys_equal_scored_fields() -> None:
     assert tuple(ExpectedRecord.model_fields) == SCORED_FIELDS
     with pytest.raises(ValidationError):
-        ExpectedRecord(**EXPECTED.model_dump(), extra_key="x")  # pyright: ignore[reportCallIssue]
+        ExpectedRecord(**EXPECTED.model_dump(), extra_key="x")  # pyright: ignore[reportCallIssue]  # bad kwarg
 
 
 def test_invalid_problem_type_rejected() -> None:

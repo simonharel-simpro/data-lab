@@ -102,6 +102,7 @@ class Sweep:
         mlflow.log_metrics(aggregate(self.rows, full=full))
         per_conversation = [row.model_dump(mode="json") for row in self.rows]
         # mlflow's stub says `dict`; it logs a list as JSON just as well.
+        # List logged as JSON.
         mlflow.log_dict(per_conversation, "per_conversation.json")  # pyright: ignore[reportArgumentType]
         faults = sum(r.outcome is Outcome.CALLER_FAULT for r in self.rows)
         if faults * 100 > MAX_CALLER_FAULT_PERCENT * len(self.rows):
