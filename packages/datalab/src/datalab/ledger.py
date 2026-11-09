@@ -28,13 +28,13 @@ from datalab.ledger_model import (
     describe,
 )
 from datalab.ledger_ops import (
-    _revalidate,
     decide,
     freeze_split,
     new_ledger,
     produce,
     record_data,
     redo,
+    revalidate,
 )
 from datalab.split import Partition, Split, SplitError, SplitStrategy, partition, read_split, split_sha256
 
@@ -115,7 +115,7 @@ def _publish(path: Path, text: str) -> None:
 
 
 def write_atomic(project_dir: Path, ledger: RunLedger, *, replace_corrupt: bool = False) -> None:
-    checked = _revalidate(ledger.model_dump(mode="json"))
+    checked = revalidate(ledger.model_dump(mode="json"))
     path = project_dir / RUN_JSON
     if path.exists():
         _check_overwrite(project_dir, checked, replace_corrupt)

@@ -9,7 +9,7 @@ events (`type == "error"`).
 import difflib
 import re
 from collections.abc import Mapping
-from typing import Final
+from typing import Final, cast
 
 LONG_SILENCE_S: Final = 2.0
 SAME_REPLY_RATIO: Final = 0.9  # U-12: a reply at least this similar to the interrupted one is a verbatim repeat
@@ -21,23 +21,33 @@ class ReportShapeError(ValueError):
     """The report does not have the keys this module reads: LiveKit's schema changed, or the mapping is wrong."""
 
 
+def _as_item(value: object) -> Item | None:
+    # `isinstance(x, dict)` narrows JSON-decoded data to `dict[Unknown, Unknown]`; its keys are strings.
+    return cast("Item", value) if isinstance(value, dict) else None
+
+
+def _as_list(value: object) -> list[object] | None:
+    return cast("list[object]", value) if isinstance(value, list) else None
+
+
 def _messages(report: Mapping[str, object]) -> list[Item]:
-    history = report.get("chat_history")
-    items = history.get("items") if isinstance(history, dict) else None
-    if not isinstance(items, list):
+    history = _as_item(report.get("chat_history"))
+    items = _as_list(history.get("items")) if history is not None else None
+    if items is None:
         raise ReportShapeError("report has no chat_history.items list")
-    return [item for item in items if isinstance(item, dict) and item.get("type") == "message"]
+    found = (_as_item(item) for item in items)
+    return [item for item in found if item is not None and item.get("type") == "message"]
 
 
 def _metric(item: Item, key: str) -> float | None:
-    metrics = item.get("metrics")
-    value = metrics.get(key) if isinstance(metrics, dict) else None
+    metrics = _as_item(item.get("metrics"))
+    value = metrics.get(key) if metrics is not None else None
     return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
 
 
 def _text(item: Item) -> str:
     content = item.get("content")
-    parts = content if isinstance(content, list) else []
+    parts = _as_list(content) or []
     return " ".join(part for part in parts if isinstance(part, str))
 
 
@@ -80,7 +90,8 @@ def barge_ins(report: Mapping[str, object]) -> tuple[int, int]:
 
 
 def session_errors(report: Mapping[str, object]) -> int:
-    events = report.get("events")
-    if not isinstance(events, list):
+    events = _as_list(report.get("events"))
+    if events is None:
         raise ReportShapeError("report has no events list")
-    return sum(1 for event in events if isinstance(event, dict) and event.get("type") == "error")
+    found = (_as_item(event) for event in events)
+    return sum(1 for event in found if event is not None and event.get("type") == "error")

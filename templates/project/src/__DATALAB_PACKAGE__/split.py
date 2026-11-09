@@ -4,6 +4,7 @@ import json
 from collections.abc import Collection, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from datalab.split import GroupBound, Partition, PartitionSpec, Split, SplitError, TimeBound, partition, read_split
 
@@ -25,7 +26,7 @@ def read_rows(path: Path) -> list[Row]:
             raise ValueError(f"{path}: line {number} is not valid JSON: {err}") from err
         if not isinstance(row, dict):
             raise ValueError(f"{path}: line {number} is not a JSON object")
-        rows.append(row)
+        rows.append(cast("Row", row))  # json.loads is untyped; just checked to be an object
     return rows
 
 

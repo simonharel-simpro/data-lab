@@ -84,5 +84,8 @@ fail_under = 70
 
 [tool.pyright]
 include = ["src", "tests"]
+typeCheckingMode = "basic"
+strict = ["src"]
+pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"

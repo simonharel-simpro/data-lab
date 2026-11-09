@@ -1,4 +1,4 @@
-"""Pure transitions on a `RunLedger`; each rebuilds via `_revalidate`, never `model_copy` (strict needs JSON mode)."""
+"""Pure transitions on a `RunLedger`; each rebuilds via `revalidate`, never `model_copy` (strict needs JSON mode)."""
 
 import hashlib
 import json
@@ -28,14 +28,14 @@ from datalab.split import SplitError, read_split, split_sha256
 Doc = dict[str, Any]
 
 
-def _revalidate(data: Doc) -> RunLedger:
+def revalidate(data: Doc) -> RunLedger:
     try:
         return RunLedger.model_validate_json(json.dumps(data))
     except ValidationError as err:
         raise LedgerError(describe(err)) from err
 
 
-def _dump(lg: RunLedger) -> Doc:
+def dump(lg: RunLedger) -> Doc:
     return lg.model_dump(mode="json")
 
 
@@ -45,7 +45,7 @@ def _todo() -> Doc:
 
 def new_ledger(kind: Kind, metric: str) -> RunLedger:
     seq = contract().sequences[kind]
-    return _revalidate(
+    return revalidate(
         {
             "schema_version": 1,
             "kind": kind.value,
@@ -82,9 +82,9 @@ def _next(status: Status, decision: Decision | None, milestone: str) -> Status:
 
 def produce(lg: RunLedger, milestone: str, artifacts: Sequence[str]) -> RunLedger:
     _next(_require_current(lg, milestone), None, milestone)
-    data = _dump(lg)
+    data = dump(lg)
     data["milestones"][milestone] = {"status": Status.PRODUCED.value, "artifacts": list(artifacts), "decision": None}
-    return _revalidate(data)
+    return revalidate(data)
 
 
 def _check_decide_options(
@@ -111,7 +111,7 @@ def decide(  # noqa: PLR0913  # redo_from / winner: optional kw-only, passed by 
 ) -> RunLedger:
     _next(_require_current(lg, milestone), decision, milestone)
     _check_decide_options(lg, milestone, decision, redo_from, winner)
-    data = _dump(lg)
+    data = dump(lg)
     data["decisions_log"].append({"milestone": milestone, "decision": decision.value, "note": note})
     if decision is not Decision.VALIDATE:  # a redo clears a prior `correct` so I-8 sees the log's redo entry
         data["milestones"][milestone]["decision"] = Decision.CORRECT.value if decision is Decision.CORRECT else None
@@ -120,7 +120,7 @@ def decide(  # noqa: PLR0913  # redo_from / winner: optional kw-only, passed by 
         data["milestones"][milestone].update(status=Status.VALIDATED.value, decision=Decision.VALIDATE.value)
         data["current_milestone"] = seq[min(seq.index(milestone) + 1, len(seq) - 1)]
         data["winner"] = winner.model_dump(mode="json") if winner is not None else data["winner"]
-    updated = _revalidate(data)
+    updated = revalidate(data)
     return redo(updated, redo_from or milestone) if decision is Decision.REDO else updated
 
 
@@ -131,7 +131,7 @@ def redo(lg: RunLedger, milestone: str) -> RunLedger:
     index = seq.index(milestone)
     if index > seq.index(lg.current_milestone):
         raise LedgerError(f"cannot redo {milestone}: it has not started (current is {lg.current_milestone})")
-    data = _dump(lg)
+    data = dump(lg)
     for later in seq[index:]:
         data["milestones"][later] = _todo()
     data["current_milestone"] = milestone
@@ -144,7 +144,7 @@ def redo(lg: RunLedger, milestone: str) -> RunLedger:
     for anchor, fields in resets:
         if anchor in seq and index <= seq.index(anchor):
             data.update({field: None for field in fields})
-    return _revalidate(data)
+    return revalidate(data)
 
 
 def freeze_split(lg: RunLedger, split_path: Path, summary: str) -> RunLedger:
@@ -157,7 +157,7 @@ def freeze_split(lg: RunLedger, split_path: Path, summary: str) -> RunLedger:
         digest = split_sha256(split_path)
     except (SplitError, OSError) as err:
         raise LedgerError(str(err)) from err
-    return _revalidate(_dump(lg) | {"split_sha256": digest, "split_summary": summary})
+    return revalidate(dump(lg) | {"split_sha256": digest, "split_summary": summary})
 
 
 def record_data(lg: RunLedger, data_path: Path) -> RunLedger:
@@ -170,4 +170,4 @@ def record_data(lg: RunLedger, data_path: Path) -> RunLedger:
             digest = hashlib.file_digest(handle, "sha256").hexdigest()
     except OSError as err:
         raise LedgerError(f"{data_path}: cannot read: {err}") from err
-    return _revalidate(_dump(lg) | {"data_sha256": digest})
+    return revalidate(dump(lg) | {"data_sha256": digest})

@@ -5,7 +5,8 @@ import asyncio
 import json
 from urllib.parse import urlsplit, urlunsplit
 
-from livekit.api import CreateAgentDispatchRequest, LiveKitAPI
+from livekit.api import LiveKitAPI
+from livekit.protocol.agent_dispatch import CreateAgentDispatchRequest
 
 from voice_arch.settings import VoiceSettings, load_settings
 

@@ -73,7 +73,7 @@ class Sweep:
     settings: VoiceSettings
     results: Path
     spent: float
-    rows: list[CallRow] = field(default_factory=list)
+    rows: list[CallRow] = field(default_factory=list[CallRow])
 
     def _check_spend(self, tracker: Tracker, index: int, *, last: bool) -> None:
         now = tracker.spent_now()
@@ -100,7 +100,9 @@ class Sweep:
     def log_summary(self, full: bool) -> None:
         mlflow.log_params(worker_params(self.rows))
         mlflow.log_metrics(aggregate(self.rows, full=full))
-        mlflow.log_dict([row.model_dump(mode="json") for row in self.rows], "per_conversation.json")
+        per_conversation = [row.model_dump(mode="json") for row in self.rows]
+        # mlflow's stub says `dict`; it logs a list as JSON just as well.
+        mlflow.log_dict(per_conversation, "per_conversation.json")  # pyright: ignore[reportArgumentType]
         faults = sum(r.outcome is Outcome.CALLER_FAULT for r in self.rows)
         if faults * 100 > MAX_CALLER_FAULT_PERCENT * len(self.rows):
             raise CallerFaultRate(f"{faults} of {len(self.rows)} calls failed on the caller's side (F-6)")

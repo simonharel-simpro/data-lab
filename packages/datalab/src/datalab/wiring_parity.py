@@ -1,7 +1,7 @@
 """Check that every project folder is wired into .pre-commit-config.yaml and ci.yml."""
 
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import yaml
 
@@ -18,11 +18,17 @@ def _project_names(root: Path) -> list[str]:
     return sorted(p.name for p in wired)
 
 
+def _as_dict(value: object) -> dict[str, object] | None:
+    # Parsed YAML is untyped; a mapping's keys are strings in a workflow file.
+    return cast("dict[str, object]", value) if isinstance(value, dict) else None
+
+
 def _ci_problems(ci: object, names: list[str]) -> list[str]:
-    job = ci.get("jobs", {}).get("projects") if isinstance(ci, dict) else None
-    if not isinstance(job, dict):
+    jobs = _as_dict((_as_dict(ci) or {}).get("jobs")) or {}
+    job = _as_dict(jobs.get("projects"))
+    if job is None:
         return ["ci.yml has no jobs.projects"]
-    strategy = job.get("strategy") or {}
+    strategy = _as_dict(job.get("strategy")) or {}
     try:
         matrix = matrix_entries(ci)
     except ProjectError as err:
@@ -34,7 +40,10 @@ def _ci_problems(ci: object, names: list[str]) -> list[str]:
     problems += [f"matrix entry {m} has no projects/{m} directory" for m in matrix if m not in names]
     if strategy.get("fail-fast") is not False:
         problems.append("jobs.projects.strategy.fail-fast must be false")
-    runs = [str(step.get("run", "")) for step in job.get("steps") or []]
+    steps = job.get("steps")
+    step_list = cast("list[object]", steps) if isinstance(steps, list) else []
+    step_maps = [_as_dict(step) or {} for step in step_list]
+    runs = [str(step.get("run", "")) for step in step_maps]
     if not any(_HYDRA_STEP in run for run in runs):
         problems.append(f"jobs.projects has no step running {_HYDRA_STEP}")
     if not any(_LEDGER_STEP in run for run in runs):

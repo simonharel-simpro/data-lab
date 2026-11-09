@@ -3,6 +3,7 @@
 import itertools
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import cast
 
 Scalar = str | int | float | bool
 
@@ -25,10 +26,11 @@ class Combo:
 def _values(candidate: str, param: str, values: object) -> list[Scalar]:
     if not isinstance(values, list | tuple) or not values:
         raise GridError(f"hparams_search.{candidate}.{param} must be a non-empty list, got {values!r}")
-    bad = [v for v in values if not isinstance(v, str | int | float | bool)]
+    items = cast("Sequence[object]", values)  # a non-empty list/tuple from parsed YAML: element types unknown
+    bad = [v for v in items if not isinstance(v, str | int | float | bool)]
     if bad:
         raise GridError(f"hparams_search.{candidate}.{param} holds non-scalar values: {bad!r}")
-    return list(values)
+    return cast("list[Scalar]", list(items))
 
 
 def expand(candidates: Sequence[str], search: Mapping[str, Mapping[str, Sequence[Scalar]]]) -> list[Combo]:

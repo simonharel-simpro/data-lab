@@ -188,7 +188,7 @@ def test_card_metric_reads_frontmatter(tmp_path: Path) -> None:
     folder = tmp_path / "demo"
     _card(folder, "---\nname: demo\nmetric:\n  key: score\n  goal: max\n---\n")
 
-    assert card_metric(folder) == CardMetric("score", "max")
+    assert card_metric(folder) == CardMetric("score", Goal.MAX)
     bad_cards = [
         "---\nname: demo\n---\n",
         "---\nname: demo\nmetric: {key: a b, goal: max}\n---\n",

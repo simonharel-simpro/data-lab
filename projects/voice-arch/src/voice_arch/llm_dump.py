@@ -6,10 +6,16 @@ conversation, so that directory must stay outside the repository.
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from livekit.agents import llm
+
+
+def private_attr(stream: llm.LLMStream, name: str) -> object:
+    """A private attribute of LiveKit's OpenAI stream: untyped there, so read by name and cast at the call."""
+    return getattr(stream, name)
 
 
 def dump_empty_request(
@@ -19,9 +25,13 @@ def dump_empty_request(
     if directory is None:
         return None
     # The same formatting the OpenAI-compatible stream applies before sending (private attributes, like the guard).
-    fmt: str = stream._provider_fmt  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
-    strict: bool = stream._strict_tool_schema  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
-    messages, _ = stream.chat_ctx.to_provider_format(format=fmt)
+    fmt = cast("str", private_attr(stream, "_provider_fmt"))
+    strict = cast("bool", private_attr(stream, "_strict_tool_schema"))
+    to_provider = cast(
+        "Callable[..., tuple[list[dict[str, Any]], object]]",
+        stream.chat_ctx.to_provider_format,  # pyright: ignore[reportUnknownMemberType]
+    )
+    messages, _ = to_provider(format=fmt)
     tools = llm.ToolContext(stream.tools).parse_function_tools("openai", strict=strict)
     params = {k: v for k, v in request.items() if k != "extra_headers"}
     directory.mkdir(parents=True, exist_ok=True)

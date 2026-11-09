@@ -61,7 +61,8 @@ repos:
       # because they need the network.
       - id: gates-datalab
         name: datalab gates (contracts, types) + unit tests + coverage floor
-        entry: bash -c 'cd packages/datalab && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov=datalab'
+        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+        entry: bash -c 'cd packages/datalab && uv run --locked lint-imports && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov=datalab'
         language: system
         pass_filenames: false
         stages: [pre-push]
@@ -69,14 +70,16 @@ repos:
       # >>> datalab-new: gates
       - id: gates-mini-rag
         name: mini-rag gates (contracts, types) + unit tests + coverage floor
-        entry: bash -c 'cd projects/mini-rag && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
+        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+        entry: bash -c 'cd projects/mini-rag && uv run --locked lint-imports && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov'
         language: system
         pass_filenames: false
         stages: [pre-push]
         files: ^(projects/mini-rag/|packages/datalab/src/)
       - id: gates-voice-arch
         name: voice-arch gates (contracts, types) + unit tests + coverage floor
-        entry: bash -c 'cd projects/voice-arch && uv run --locked lint-imports && uv run --locked pyright && uv run --locked pytest -q --cov'
+        # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+        entry: bash -c 'cd projects/voice-arch && uv run --locked lint-imports && uv run --locked pyright -p pyproject.toml && uv run --locked pytest -q --cov'
         language: system
         pass_filenames: false
         stages: [pre-push]

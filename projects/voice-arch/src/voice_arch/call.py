@@ -129,8 +129,9 @@ def _classify(handle: CallerHandle, result: CallResult | None) -> Outcome:
 
 def _stop_on_auth(handle: CallerHandle, result: CallResult | None) -> None:
     statuses = {handle.caller_http_status, None if result is None else result.http_status}
-    if statuses & AUTH_STATUSES:
-        raise ProviderAuthStop(f"OpenRouter refused the call (HTTP {sorted(statuses & AUTH_STATUSES)[0]})")
+    refused = {status for status in statuses if status is not None and status in AUTH_STATUSES}
+    if refused:
+        raise ProviderAuthStop(f"OpenRouter refused the call (HTTP {sorted(refused)[0]})")
 
 
 async def _bounded[T](step: str, aw: Awaitable[T]) -> T:

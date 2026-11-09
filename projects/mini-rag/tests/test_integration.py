@@ -7,7 +7,7 @@ import pytest
 
 from datalab.settings import Settings, connect_weaviate
 from mini_rag.corpus import load_corpus
-from mini_rag.index import Retrieval, ensure_collection, search
+from mini_rag.index import Retrieval, corpus_hash, ensure_collection, search
 from tests.conftest import CORPUS_DIR
 
 pytestmark = pytest.mark.integration
@@ -17,7 +17,7 @@ pytestmark = pytest.mark.integration
 def test_integration_bm25_and_vector_return_hits(mode: Retrieval) -> None:
     chunks = load_corpus(CORPUS_DIR, size=120, overlap=20)
     with connect_weaviate(Settings(_env_file=None)) as client:  # type: ignore[call-arg]
-        name = ensure_collection(client, chunks, size=120, overlap=20)
+        name = ensure_collection(client, chunks, size=120, overlap=20, corpus=corpus_hash(chunks))
         hits = search(client, name, "Which port does MLflow use?", mode, 3)
 
     assert len(hits) == 3

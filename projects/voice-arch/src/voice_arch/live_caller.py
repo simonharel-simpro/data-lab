@@ -47,11 +47,12 @@ class LiveCaller:
         self._started = False
         self._tasks: set[asyncio.Task[None]] = set()
         room.register_text_stream_handler(RESULT_TOPIC, self._on_stream)
-        room.on("participant_connected", self._on_joined)
-        room.on("participant_disconnected", self._on_left)
-        room.on("participant_attributes_changed", self._on_attributes)
-        session.on("error", self._on_error)
-        session.on("close", self._on_close)
+        # EventEmitter.on takes an unparameterised callback in the SDK, hence the ignores below.
+        room.on("participant_connected", self._on_joined)  # pyright: ignore[reportUnknownMemberType]
+        room.on("participant_disconnected", self._on_left)  # pyright: ignore[reportUnknownMemberType]
+        room.on("participant_attributes_changed", self._on_attributes)  # pyright: ignore[reportUnknownMemberType]
+        session.on("error", self._on_error)  # pyright: ignore[reportUnknownMemberType]
+        session.on("close", self._on_close)  # pyright: ignore[reportUnknownMemberType]
 
     def scan(self) -> None:
         """Agents already in the room when we connected raise no `participant_connected`."""
@@ -71,7 +72,7 @@ class LiveCaller:
         """`start` waits for an agent participant to link, so it runs in the background (F-2 needs the timeout)."""
         try:
             with fake_job_context(room=self._room):
-                await self._session.start(
+                await self._session.start(  # pyright: ignore[reportUnknownMemberType]  # SDK overloads
                     agent,
                     room=self._room,
                     room_options=RoomOptions(participant_kinds=[_AGENT]),

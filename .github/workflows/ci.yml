@@ -35,7 +35,8 @@ jobs:
         run: |
           uv sync --locked
           uv run --locked lint-imports
-          uv run --locked pyright
+          # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+          uv run --locked pyright -p pyproject.toml
           uv run --locked pip-audit
           uv run --locked pytest --cov=datalab
       - name: scaffold a fresh project and run its gates (F-3; network for uv lock)
@@ -112,7 +113,8 @@ jobs:
         run: |
           uv sync --locked
           uv run --locked lint-imports
-          uv run --locked pyright
+          # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)
+          uv run --locked pyright -p pyproject.toml
           uv run --locked pip-audit
           uv run --locked pytest --cov
       - name: Hydra gate (skips a project without configs/)

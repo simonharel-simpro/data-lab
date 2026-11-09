@@ -12,17 +12,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class _Outcome:
+class Outcome:
     children: int = 0
-    failed: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list[str])
 
 
 # Outcomes of the trials of each open parent run, keyed by parent run id; popped by `tracked_run` when it closes.
-_OUTCOMES: dict[str, _Outcome] = {}
+OUTCOMES: dict[str, Outcome] = {}
 
 
-def _tag_outcome(parent_id: str) -> None:
-    outcome = _OUTCOMES.pop(parent_id, None)
+def tag_outcome(parent_id: str) -> None:
+    outcome = OUTCOMES.pop(parent_id, None)
     if outcome is None:
         return
     mlflow.set_tags(
@@ -34,7 +34,7 @@ def _tag_outcome(parent_id: str) -> None:
     )
 
 
-def _after_failure(err: BaseException, what: str, cleanup: Callable[[], None]) -> None:
+def after_failure(err: BaseException, what: str, cleanup: Callable[[], object]) -> None:
     """Run `cleanup` while `err` propagates; if it fails too, note that on `err` so the body's error stays raised."""
     try:
         cleanup()

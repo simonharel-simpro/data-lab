@@ -5,7 +5,7 @@ import hashlib
 import json
 import logging
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from enum import StrEnum
 from pathlib import Path
@@ -97,7 +97,7 @@ def _complete(client: WeaviateClient, name: str, chunks: list[Chunk]) -> bool:
 
 
 @contextmanager
-def _build_lock(name: str) -> Iterator[None]:
+def _build_lock(name: str) -> Generator[None]:
     """One builder per collection name on this host; Weaviate is local (127.0.0.1), so the host is the scope."""
     LOCK_DIR.mkdir(parents=True, exist_ok=True)
     with (LOCK_DIR / f"{name}.lock").open("w") as handle:

@@ -27,7 +27,8 @@ def _sections(text: str) -> list[str]:
 
 def _windows(words: list[str], size: int, overlap: int) -> list[list[str]]:
     """Windows of `size` words, each sharing `overlap` words with the previous one; none is overlap only."""
-    out, start = [], 0
+    out: list[list[str]] = []
+    start = 0
     while True:
         out.append(words[start : start + size])
         if start + size >= len(words):
@@ -38,7 +39,7 @@ def _windows(words: list[str], size: int, overlap: int) -> list[list[str]]:
 def chunk_doc(doc: str, text: str, *, size: int = SIZE, overlap: int = OVERLAP) -> list[Chunk]:
     if not 0 <= overlap < size:
         raise ValueError(f"overlap must be in [0, size), got size={size} overlap={overlap}")
-    chunks = []
+    chunks: list[Chunk] = []
     for s, section in enumerate(_sections(text)):
         words = section.split()
         if not words:

@@ -48,6 +48,6 @@ def appender(sink: Path) -> Emit:
 
 
 def record_outcome(outcome: Outcome) -> None:
-    mlflow.log_params(outcome.params)
+    mlflow.log_params(dict(outcome.params))
     mlflow.log_metrics(dict(outcome.metrics))
     mlflow.set_tags({"winner": outcome.choice.model if outcome.choice else "none", "winner_reason": outcome.reason})

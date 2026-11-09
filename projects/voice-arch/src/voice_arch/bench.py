@@ -71,7 +71,7 @@ async def _logged_run(
         tracked_run(env.project, env.dl, run_name=component, sub="bench") as run_id,
         SpendTracker(key, client=env.key_client, on_exit=on_exit),
     ):
-        mlflow.log_params(params)
+        mlflow.log_params(dict(params))
         record_outcome(await measure(appender(env.results_dir / f"{run_id}.jsonl")))
     return run_id
 

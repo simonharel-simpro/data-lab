@@ -22,8 +22,8 @@ from datalab.split import Partition, SplitError, split_sha256
 from datalab.tags import Tag
 from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracked_trial
 
-from .candidates import Row, config_sha256
-from .grid import Combo, GridError, expand
+from .candidates import Row, config_sha256, plain_mapping
+from .grid import Combo, GridError, Scalar, expand
 from .paths import AUDIT_EXPERIMENT, PROJECT_DIR, register_resolvers
 from .prepare import PrepareError, compose_model, file_sha256, frozen_score_on, refuse_multirun, resolve_config
 from .scoring import label, metric_key_problems, score
@@ -68,12 +68,12 @@ def _candidates(cfg: DictConfig) -> list[str]:
 
 
 def _children(resolved: dict[str, object], overrides: Sequence[str], candidates: list[str]) -> list[_Child]:
-    search = resolved.get("hparams_search") or {}
-    if not isinstance(search, dict):
+    search = plain_mapping(resolved.get("hparams_search") or {})
+    if search is None:
         raise PrepareError("hparams_search must map candidates to parameter lists")
     nodes = {name: compose_model("train", overrides, name) for name in candidates}
-    children = []
-    for combo in expand(candidates, search):
+    children: list[_Child] = []
+    for combo in expand(candidates, cast("dict[str, dict[str, list[Scalar]]]", search)):
         try:
             merged = OmegaConf.merge(nodes[combo.candidate], dict(combo.params))
         except OmegaConfBaseException as err:
@@ -81,10 +81,9 @@ def _children(resolved: dict[str, object], overrides: Sequence[str], candidates:
             raise PrepareError(
                 f"hparams_search: {combo.candidate} has no parameter {unknown} in configs/model/{combo.candidate}.yaml"
             ) from err
-        model = OmegaConf.to_container(merged, resolve=True)
-        if not isinstance(model, dict):
+        plain = plain_mapping(OmegaConf.to_container(merged, resolve=True))
+        if plain is None:
             raise PrepareError(f"model {combo.candidate!r} is not a mapping")
-        plain = {str(k): v for k, v in model.items()}
         children.append(_Child(combo, plain, config_sha256(plain)))
     return children
 

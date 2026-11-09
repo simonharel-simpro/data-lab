@@ -23,7 +23,7 @@ from voice_arch.openrouter_key import SpendTracker
 from voice_arch.personas import load_personas
 from voice_arch.runner import run_sweep
 from voice_arch.settings import VoiceSettings
-from voice_arch.sweep import CallerFaultRate, SweepContext, SweepPlan
+from voice_arch.sweep import CallerFaultRate, SweepContext, SweepPlan, Tracker
 
 EXPERIMENT = "voice-arch/conversations"
 NO_FULL_COST: Callable[[], float | None] = lambda: None  # noqa: E731
@@ -45,7 +45,7 @@ class Sweep:
         *,
         spent: float = 0.0,
         last_full: Callable[[], float | None] = NO_FULL_COST,
-        tracker: Callable[..., FakeTracker] | None = None,
+        tracker: Callable[..., Tracker] | None = None,
     ) -> str:
         chosen = [p for p in load_personas(SHIPPED) if p.id in personas]
         factory = tracker or partial(FakeTracker)

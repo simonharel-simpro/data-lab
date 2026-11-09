@@ -144,6 +144,7 @@ def test_f_8_caller_does_not_speak_before_first_agent_turn() -> None:
     agent = CallerAgent(who.instructions)
 
     assert CallerAgent.on_enter is Agent.on_enter
+    assert isinstance(agent.instructions, str)
     assert "Never speak first." in agent.instructions
     assert who.instructions in agent.instructions
 

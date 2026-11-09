@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Callable
 
 from livekit import rtc
 from livekit.agents import llm, stt, tts
+from livekit.agents.language import LanguageCode
 from livekit.agents.utils import AudioBuffer
 
 SAMPLE_RATE = 24000
@@ -73,7 +74,7 @@ class FakeStt:
         if self._error is not None:
             raise self._error
         await asyncio.sleep(self._delay)
-        data = stt.SpeechData(language="en", text=self._hear(frame_text(buffer)))
+        data = stt.SpeechData(language=LanguageCode("en"), text=self._hear(frame_text(buffer)))
         return stt.SpeechEvent(type=stt.SpeechEventType.FINAL_TRANSCRIPT, alternatives=[data])
 
 

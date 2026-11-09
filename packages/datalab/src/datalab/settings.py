@@ -1,7 +1,7 @@
 """Connection settings for the shared stack; only `DATALAB_*` env vars are read (F-5)."""
 
 import re
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 import weaviate
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
 
 @contextmanager
-def connect_weaviate(settings: Settings) -> Iterator[weaviate.WeaviateClient]:
+def connect_weaviate(settings: Settings) -> Generator[weaviate.WeaviateClient, None, None]:
     """Both ports explicit: a default gRPC port would reach Demo-RAG's Weaviate (split brain, F-4)."""
     client = weaviate.connect_to_local(
         host=settings.weaviate_host,

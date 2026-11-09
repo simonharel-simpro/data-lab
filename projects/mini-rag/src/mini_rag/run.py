@@ -70,7 +70,7 @@ def _answer_all(  # noqa: PLR0913  # one step of run(): selection, retrieval, k,
 ) -> list[Result]:
     """Each scored answer is appended to `sink` at once: the crash copy survives a kill or an MLflow outage."""
     sink.parent.mkdir(parents=True, exist_ok=True)
-    results = []
+    results: list[Result] = []
     for q in selected:
         passages = find(q.question, retrieval, k)
         if not passages:  # before `answer`: no LLM spend, and the run ends FAILED instead of scoring on nothing

@@ -11,7 +11,7 @@ from mlflow import MlflowClient
 from mlflow.entities import Run
 
 from datalab.tags import Tag
-from datalab.tracking import _OUTCOMES, TrialError, project_spend, tracked_run, tracked_trial
+from datalab.tracking import OUTCOMES, TrialError, project_spend, tracked_run, tracked_trial
 from tests.tracking_support import make_project, make_settings
 
 
@@ -66,7 +66,7 @@ def test_f_8_parent_lists_failed_candidates(sqlite_uri: str, tmp_path: Path) -> 
     client = MlflowClient(tracking_uri=sqlite_uri)
     tags = client.get_run(parent_id).data.tags
     assert (tags["n_children"], tags["n_failed"], tags["failed_candidates"]) == ("2", "1", "b")
-    assert _OUTCOMES == {}
+    assert OUTCOMES == {}
     assert "n_children" not in client.get_run(plain_id).data.tags
 
 
@@ -116,7 +116,7 @@ def test_f_15_concurrent_trial_refused(sqlite_uri: str, tmp_path: Path) -> None:
         with tracked_trial(name):
             await asyncio.sleep(0)
 
-    async def both() -> list[object]:
+    async def both() -> tuple[BaseException | None, BaseException | None]:
         return await asyncio.gather(trial("a"), trial("b"), return_exceptions=True)
 
     with _parent(sqlite_uri, tmp_path):

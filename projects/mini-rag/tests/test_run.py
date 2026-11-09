@@ -47,7 +47,11 @@ def _run(  # every knob a config-identity test varies is a keyword
 ) -> str:
     settings = Settings(_env_file=None, mlflow_tracking_uri=sqlite_uri)  # type: ignore[call-arg]
     pilot = PilotSettings(  # type: ignore[call-arg]
-        _env_file=None, llm_base_url=base_url, llm_api_key="sk-or-test", gen_model=gen_model, max_tokens=384
+        _env_file=None,  # pyright: ignore[reportCallIssue]  # pydantic-settings accepts _env_file at runtime
+        llm_base_url=base_url,
+        llm_api_key="sk-or-test",
+        gen_model=gen_model,
+        max_tokens=384,
     )
     project = Project(name="mini-rag", root=tmp_path)
     config = RunConfig(

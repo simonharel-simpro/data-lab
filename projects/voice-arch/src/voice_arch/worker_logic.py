@@ -7,7 +7,7 @@ import asyncio
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Final, cast
 
 from livekit.agents import AgentSession
 from livekit.agents.llm import LLMError
@@ -37,10 +37,11 @@ def parse_metadata(raw: str) -> tuple[Arch, str]:
         raise UnknownArchError(f"dispatch metadata is not JSON: {raw[:40]!r}") from err
     if not isinstance(data, dict):
         raise UnknownArchError("dispatch metadata must be a JSON object")
-    arch = data.get("arch")
-    if arch is not None and not isinstance(arch, str):
+    fields = cast("dict[str, object]", data)  # JSON object keys are strings
+    arch = fields.get("arch")
+    if not (arch is None or isinstance(arch, str)):
         raise UnknownArchError(f"arch must be a string, got {type(arch).__name__}")
-    run_id = data.get("run_id") or _DEFAULT_RUN_ID
+    run_id = fields.get("run_id") or _DEFAULT_RUN_ID
     if not isinstance(run_id, str):
         raise UnknownArchError(f"run_id must be a string, got {type(run_id).__name__}")
     return parse_arch(arch), run_id
@@ -74,8 +75,9 @@ class SessionWatch:
 
     def attach(self, session: AgentSession[BookingState]) -> None:
         self._session = session
-        session.on("error", self.on_error)
-        session.on("close", self.on_close)
+        # EventEmitter.on is typed with an unparameterised callback in the SDK.
+        session.on("error", self.on_error)  # pyright: ignore[reportUnknownMemberType]
+        session.on("close", self.on_close)  # pyright: ignore[reportUnknownMemberType]
 
 
 def error_result(room: str, message: str) -> CallResult:

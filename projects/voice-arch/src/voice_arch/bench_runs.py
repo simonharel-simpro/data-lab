@@ -9,7 +9,7 @@ import wave
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 from livekit import rtc
 from livekit.agents import llm
@@ -67,7 +67,7 @@ async def run_stt(
     """Errors = wrong fields over every utterance; a call error (402 included) propagates and aborts the bench."""
     rows: list[SttRow] = []
     for name, model in stts.items():
-        errors, latencies = 0, []
+        errors, latencies = 0, list[float]()
         for utterance in utterances:
             text, elapsed = await _transcribe(model, read_wav(corpus.paths[utterance.id]))
             latencies.append(elapsed)
@@ -91,7 +91,7 @@ async def _speak(model: Synthesizer, line: str) -> tuple[rtc.AudioFrame, float] 
 
 
 async def _measure_tts(model: Synthesizer, name: str, lines: list[str], judge_stt: Transcriber, reps: int) -> TtsRow:
-    ttfbs, heard_ok = [], True
+    ttfbs, heard_ok = list[float](), True
     for line in lines:
         for rep in range(reps):
             spoken = await _speak(model, line)
@@ -132,7 +132,7 @@ def _is_correct(case: LlmCase, calls: list[llm.FunctionToolCall]) -> bool:
         args = json.loads(calls[0].arguments)
     except ValueError:
         return False
-    return isinstance(args, dict) and args_correct(args, case.expected_args)
+    return isinstance(args, dict) and args_correct(cast("dict[str, object]", args), case.expected_args)
 
 
 async def _ask(model: ChatModel, case: LlmCase) -> tuple[bool, float | None]:

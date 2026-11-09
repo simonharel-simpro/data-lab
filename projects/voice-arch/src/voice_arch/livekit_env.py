@@ -4,7 +4,8 @@ import logging
 from typing import Final
 
 from livekit import rtc
-from livekit.api import DeleteRoomRequest, LiveKitAPI
+from livekit.api import LiveKitAPI
+from livekit.protocol.room import DeleteRoomRequest
 
 from voice_arch.arch import Arch
 from voice_arch.call_env import CallerHandle

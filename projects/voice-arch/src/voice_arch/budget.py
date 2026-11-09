@@ -1,7 +1,7 @@
 """Software experiment budget (D-1, F-4b) over the shared OpenRouter key, summed from the MLflow runs."""
 
 import logging
-from typing import Final
+from typing import Final, cast
 
 from mlflow import MlflowClient
 from mlflow.entities import RunStatus, ViewType
@@ -46,7 +46,7 @@ def _unmeasured_estimates(client: MlflowClient) -> float:
                 if run.info.status != _FINISHED and "cost_usd" not in run.data.metrics:
                     logger.warning("run %s has no cost_usd: counted at the %.2f $ estimate", run.info.run_id, estimate)
                     total += estimate
-            token = page.token
+            token = cast("str | None", page.token)  # pyright: ignore[reportUnknownMemberType]  # PagedList.token
             if not token:
                 break
     return total

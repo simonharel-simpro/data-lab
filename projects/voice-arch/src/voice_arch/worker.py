@@ -5,7 +5,8 @@ One job = one call: build the session, run the chosen architecture until the ses
 """
 
 import logging
-from typing import Final
+from collections.abc import Callable
+from typing import Final, cast
 
 from livekit import rtc
 from livekit.agents import AgentServer, AgentSession, JobContext, cli
@@ -49,6 +50,15 @@ async def send_result(room: rtc.Room, result: CallResult) -> None:
         logger.exception("could not send the call result for room %s", room.name)
 
 
+def session_report(ctx: JobContext, session: AgentSession[BookingState]) -> dict[str, object]:
+    # SessionReport.to_dict is annotated `dict` without parameters in the SDK.
+    to_dict = cast(
+        "Callable[[], dict[str, object]]",
+        ctx.make_session_report(session).to_dict,  # pyright: ignore[reportUnknownMemberType]
+    )
+    return to_dict()
+
+
 async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingState], SessionWatch]:
     session = AgentSession[BookingState](
         stt=make_stt(settings),
@@ -63,7 +73,7 @@ async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingSta
     )
     watch = SessionWatch()
     watch.attach(session)
-    await session.start(agent=build_agent(arch), room=ctx.room)
+    await session.start(agent=build_agent(arch), room=ctx.room)  # pyright: ignore[reportUnknownMemberType]  # SDK
     await watch.closed.wait()
     return session, watch
 
@@ -86,9 +96,7 @@ async def entry(ctx: JobContext) -> None:
         max_tool_steps=MAX_TOOL_STEPS,
         fatal=watch.fatal,
     )
-    result = build_result(
-        CallIdentity(ctx.room.name, arch, run_id), outcome, lambda: ctx.make_session_report(session).to_dict()
-    )
+    result = build_result(CallIdentity(ctx.room.name, arch, run_id), outcome, lambda: session_report(ctx, session))
     await send_result(ctx.room, result)
 
 

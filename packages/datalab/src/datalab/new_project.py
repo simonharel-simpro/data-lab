@@ -19,7 +19,7 @@ _PACKAGE = "__DATALAB_PACKAGE__"
 
 
 def _text_files(tree: Path) -> list[tuple[Path, str]]:
-    found = []
+    found: list[tuple[Path, str]] = []
     for path in sorted(tree.rglob("*")):
         if path.is_file() and not path.is_symlink():
             try:

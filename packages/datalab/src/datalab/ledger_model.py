@@ -147,7 +147,7 @@ class RunLedger(_Frozen):
 
         violation = first_violation(self)
         if violation is not None:
-            raise PydanticCustomError("ledger_invariant", violation)
+            raise PydanticCustomError("ledger_invariant", "{msg}", {"msg": violation})
         return self
 
 

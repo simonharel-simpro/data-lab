@@ -114,8 +114,8 @@ class FakeEnv:
     async def create_dispatch(self, room: str, arch: Arch, run_id: str) -> None:
         self.rooms.append(room)
 
-    async def connect_caller(self, room: str, who: Persona, arch: Arch) -> CallerHandle:
-        handle = next(self._scripted, None) or FakeHandle(result_for(who))
+    async def connect_caller(self, room: str, persona: Persona, arch: Arch) -> CallerHandle:
+        handle = next(self._scripted, None) or FakeHandle(result_for(persona))
         self.handles.append(handle)
         return handle
 

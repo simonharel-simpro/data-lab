@@ -13,14 +13,18 @@ NEVER_SPEAK_FIRST: Final = "Never speak first."
 
 
 class LlmFactory(Protocol):
-    def __call__(self, settings: VoiceSettings, *, model: str, temperature: float, retry_empty: bool) -> llm.LLM: ...
+    def __call__(
+        self, settings: VoiceSettings, *, model: str, temperature: float, retry_empty: bool
+    ) -> llm.LLM[object]: ...
 
 
 class CallerAgent(Agent):
     """No `on_enter`: the booking agent greets and asks first, the caller only answers."""
 
     def __init__(self, persona_instructions: str) -> None:
-        super().__init__(instructions=f"{persona_instructions} {NEVER_SPEAK_FIRST}")
+        super().__init__(  # pyright: ignore[reportUnknownMemberType]  # Agent.__init__ takes STT[Unknown]
+            instructions=f"{persona_instructions} {NEVER_SPEAK_FIRST}"
+        )
 
 
 def make_caller_session(settings: VoiceSettings, llm_factory: LlmFactory = make_llm) -> AgentSession[None]:

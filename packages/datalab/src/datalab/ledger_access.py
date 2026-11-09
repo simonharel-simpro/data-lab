@@ -1,7 +1,7 @@
 """The test partition's access rules and the append-only record of test looks. Pure."""
 
 from datalab.ledger_model import AUDIT, LedgerError, RunLedger, Status, TestLook
-from datalab.ledger_ops import _dump, _revalidate
+from datalab.ledger_ops import dump, revalidate
 
 
 def look_number(lg: RunLedger, split_sha: str) -> int:
@@ -29,9 +29,9 @@ def record_test_look(lg: RunLedger, split_sha: str, run_id: str, note: str | Non
     if problem is not None:
         raise LedgerError(problem)
     look = TestLook(split_sha256=split_sha, run_id=run_id, note=note or "").model_dump(mode="json")
-    data = _dump(lg)
+    data = dump(lg)
     data["test_looks"].append(look)
-    return _revalidate(data)
+    return revalidate(data)
 
 
 # The names start with "test_" (the contract's wording): keep pytest from collecting them out of test modules.

@@ -25,7 +25,7 @@ from datalab.split import Partition, SplitError, read_split, split_sha256
 from datalab.tags import Tag
 from datalab.tracking import TrackingUnavailable, preflight, tracked_run, tracked_trial
 
-from .candidates import config_sha256
+from .candidates import config_sha256, plain_mapping
 from .paths import AUDIT_EXPERIMENT, PROJECT_DIR, register_resolvers
 from .prepare import PrepareError, check_data_hash, compose_model, refuse_multirun
 from .scoring import label, score
@@ -88,10 +88,9 @@ def _gate(cfg: DictConfig, overrides: Sequence[str]) -> _Gate:
         raise PrepareError("run.json has no winner")
     candidate = str(cfg.candidate or lg.winner.candidate)  # (4)
     node = compose_model("eval", overrides, candidate)
-    model = OmegaConf.to_container(node, resolve=True)
-    if not isinstance(model, dict):
+    plain = plain_mapping(OmegaConf.to_container(node, resolve=True))
+    if plain is None:
         raise PrepareError(f"model {candidate!r} is not a mapping")
-    plain = {str(k): v for k, v in model.items()}
     return _Gate(project, metric, lg, lg.winner, folder, data_file, split_sha, candidate, plain,
                  config_sha256(plain), str(cfg.data.target), note)  # fmt: skip
 
@@ -103,7 +102,7 @@ def _cli_value(value: object) -> str:
 def _cli_form(family: str, logged: dict[str, str]) -> str:
     """`model=<family> model.<k>=<v> ...`: the family's current defaults, then the winner's logged grid values."""
     defaults = OmegaConf.to_container(compose_model("eval", [], family), resolve=True)
-    params: dict[str, object] = {str(k): v for k, v in (defaults if isinstance(defaults, dict) else {}).items()}
+    params = plain_mapping(defaults) or {}
     params.pop("_target_", None)
     params |= logged
     return " ".join([f"model={family}", *(f"model.{k}={_cli_value(params[k])}" for k in sorted(params))])

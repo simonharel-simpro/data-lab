@@ -8,11 +8,11 @@ identical request can come back empty every time, so a retry raises the temperat
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from livekit.agents import APIConnectionError, llm
 
-from voice_arch.llm_dump import dump_empty_request
+from voice_arch.llm_dump import dump_empty_request, private_attr
 
 logger = logging.getLogger("voice_arch.llm_guard")
 
@@ -26,16 +26,17 @@ def retry_temperature(base: float, retry: int) -> float:
     return max(base, min(base + RETRY_TEMPERATURE_STEP * retry, MAX_RETRY_TEMPERATURE))
 
 
-def retry_on_empty_completion(model: llm.LLM, dump_dir: Path | None = None) -> llm.LLM:
+def retry_on_empty_completion(model: llm.LLM[object], dump_dir: Path | None = None) -> llm.LLM[object]:
     """Same model; an empty stream raises a retryable error, so LiveKit re-sends it (`conn_options.max_retry`)."""
-    chat: Callable[..., llm.LLMStream] = model.chat
+    chat: Callable[..., llm.LLMStream] = model.chat  # LiveKit's `LLM.chat` is keyword-heavy; forwarded as is
 
     def guarded_chat(*args: Any, **kwargs: Any) -> llm.LLMStream:  # forwards LiveKit's signature
         stream = chat(*args, **kwargs)
         run = stream._run  # pyright: ignore[reportPrivateUsage]  # the only hook on a stream's attempt
         # The dict LiveKit's OpenAI stream sends as request parameters on every attempt. Read directly: if a
         # LiveKit upgrade drops it, the first call fails loudly rather than retrying at an unchanged temperature.
-        request: dict[str, Any] = stream._extra_kwargs  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
+        # The OpenAI stream's private kwargs dict is untyped in the plugin; cast to the shape it has.
+        request = cast("dict[str, Any]", private_attr(stream, "_extra_kwargs"))
         base = float(request.get("temperature", 0.0))
         attempts = 0
 

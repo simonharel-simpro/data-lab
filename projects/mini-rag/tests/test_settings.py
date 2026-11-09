@@ -19,6 +19,7 @@ def test_api_key_is_masked_in_repr() -> None:
     pilot = PilotSettings(_env_file=None, llm_api_key=_KEY)  # type: ignore[call-arg]
 
     assert _KEY not in repr(pilot)
+    assert pilot.llm_api_key is not None
     assert pilot.llm_api_key.get_secret_value() == _KEY
 
 

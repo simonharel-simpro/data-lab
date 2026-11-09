@@ -70,7 +70,7 @@ class Split(_Frozen):
     def _rules(self) -> Self:
         problem = _first_problem(self)
         if problem is not None:
-            raise PydanticCustomError("split_invariant", problem)
+            raise PydanticCustomError("split_invariant", "{msg}", {"msg": problem})
         return self
 
 

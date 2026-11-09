@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from livekit.agents import llm
 
@@ -29,7 +30,7 @@ def test_tool_names_are_the_five_booking_tools() -> None:
 
 
 def test_openai_tools_are_flat_dicts_with_enum_for_problem_type() -> None:
-    tools = {t["name"]: t for t in to_openai_tools()}
+    tools = {t["name"]: cast("dict[str, Any]", t) for t in to_openai_tools()}
 
     problem = tools["record_problem"]["parameters"]["properties"]["problem_type"]
     assert problem["enum"] == ["plumbing", "electrical", "hvac", "appliance", "other"]

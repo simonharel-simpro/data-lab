@@ -21,7 +21,7 @@ def test_make_llm_pins_providers_without_fallback_or_quantization(settings: Voic
     llm = make_llm(settings, providers=["prov-a", "prov-b"])
 
     assert llm.model == "test/llm-x"
-    # pyright: private options are the only place the request preferences are visible without a network call.
+    # Private options are the only place the request preferences are visible without a network call.
     assert llm._opts.extra_body == {  # pyright: ignore[reportAttributeAccessIssue]
         "provider": {"order": ["prov-a", "prov-b"], "allow_fallbacks": False}
     }

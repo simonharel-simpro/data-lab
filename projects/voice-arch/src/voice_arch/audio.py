@@ -10,7 +10,7 @@ from voice_arch.settings import VoiceSettings
 OPENROUTER = "https://openrouter.ai/api/v1"
 
 
-def make_stt(settings: VoiceSettings, model: str | None = None) -> stt.STT:
+def make_stt(settings: VoiceSettings, model: str | None = None) -> stt.STT[object]:
     """Non-streaming: `AgentSession` wraps it with its VAD automatically."""
     return openai.STT(
         model=model or settings.stt_model,
@@ -20,7 +20,7 @@ def make_stt(settings: VoiceSettings, model: str | None = None) -> stt.STT:
     )
 
 
-def make_tts(settings: VoiceSettings, model: str | None = None, voice: str | None = None) -> tts.TTS:
+def make_tts(settings: VoiceSettings, model: str | None = None, voice: str | None = None) -> tts.TTS[object]:
     return openai.TTS(
         model=model or settings.tts_model,
         voice=voice or settings.tts_voice,
@@ -37,7 +37,7 @@ def make_llm(  # noqa: PLR0913  # all options but settings are defaulted (#39)
     providers: list[str] | None = None,
     retry_empty: bool = False,
     reasoning_effort: ReasoningEffort | None = None,
-) -> llm.LLM:
+) -> llm.LLM[object]:
     """With `providers`, only those upstreams may serve it, without fallback (and at the quantization, if set).
 
     `reasoning_effort` is sent only when given: the caller's LLM and the bench never set it.
@@ -57,7 +57,7 @@ def make_llm(  # noqa: PLR0913  # all options but settings are defaulted (#39)
     return retry_on_empty_completion(model_llm, settings.dump_empty_dir) if retry_empty else model_llm
 
 
-def make_agent_llm(settings: VoiceSettings) -> llm.LLM:
+def make_agent_llm(settings: VoiceSettings) -> llm.LLM[object]:
     """The booking agent's LLM, the same for A, B and C: pinned, retried on empty, and at a set reasoning effort.
 
     Without `reasoning_effort` Gemini answers a tool turn with MALFORMED_FUNCTION_CALL most of the time (see

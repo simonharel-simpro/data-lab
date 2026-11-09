@@ -2,7 +2,9 @@
 
 import argparse
 
-from livekit.api import AccessToken, RoomAgentDispatch, RoomConfiguration, VideoGrants
+from livekit.api import AccessToken, VideoGrants
+from livekit.protocol.agent_dispatch import RoomAgentDispatch
+from livekit.protocol.room import RoomConfiguration
 
 from voice_arch.settings import VoiceSettings, load_settings
 

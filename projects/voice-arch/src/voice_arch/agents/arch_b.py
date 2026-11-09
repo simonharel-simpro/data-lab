@@ -11,7 +11,7 @@ from typing import ClassVar, Final
 from livekit.agents import Agent, AgentTask, llm
 from livekit.agents.beta.workflows import TaskGroup
 
-from voice_arch.agents.state import BookingState
+from voice_arch.agents.state import session_of
 from voice_arch.agents.tools import (
     check_slots,
     choose_slot,
@@ -46,14 +46,16 @@ class StepTask(AgentTask[None]):
     def __init__(self, *, memory: bool = False, extra_tools: Tools = ()) -> None:
         self._base = f"{text.CONTEXT} {self.ASK}"
         self._memory = memory
-        super().__init__(instructions=self._base, tools=[*self.STEP_TOOLS, *extra_tools])
+        super().__init__(  # pyright: ignore[reportUnknownMemberType]  # AgentTask.__init__ takes STT[Unknown]
+            instructions=self._base, tools=[*self.STEP_TOOLS, *extra_tools]
+        )
 
     async def on_enter(self) -> None:
         # An AgentTask's default on_enter says nothing, so without this the task stays silent.
         if self._memory:
-            state: BookingState = self.session.userdata
+            state = session_of(self).userdata
             await self.update_instructions(f"{self._base}\n\n{render_call_record(state.record)}")
-        self.session.generate_reply(chat_ctx=ends_with_user_turn(self.chat_ctx))
+        session_of(self).generate_reply(chat_ctx=ends_with_user_turn(self.chat_ctx))
 
 
 class NameTask(StepTask):
@@ -99,15 +101,19 @@ def _plain(cls: type[StepTask]) -> StepTask:
 def build_task_group(make: StepFactory = _plain) -> TaskGroup:
     group = TaskGroup(summarize_chat_ctx=SUMMARIZE_CHAT_CTX)
     for step_id, description, cls in STEPS:
-        group.add(partial(make, cls), id=step_id, description=description)
+        group.add(  # pyright: ignore[reportUnknownMemberType]  # TaskGroup.add takes AgentTask[Unknown]
+            partial(make, cls), id=step_id, description=description
+        )
     return group
 
 
 class BookingFlowAgent(Agent):
     def __init__(self, make_group: Callable[[], TaskGroup] = build_task_group) -> None:
-        super().__init__(instructions=f"{text.CONTEXT} {text.GREETING}")
+        super().__init__(  # pyright: ignore[reportUnknownMemberType]  # Agent.__init__ takes STT[Unknown]
+            instructions=f"{text.CONTEXT} {text.GREETING}"
+        )
         self._make_group = make_group
 
     async def on_enter(self) -> None:
-        await self.session.generate_reply(instructions=text.GREETING)  # F-8: the only greeting
+        await session_of(self).generate_reply(instructions=text.GREETING)  # F-8: the only greeting
         await self._make_group()

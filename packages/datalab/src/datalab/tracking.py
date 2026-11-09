@@ -4,7 +4,7 @@ import logging
 import math
 import os
 import threading
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Final
@@ -17,8 +17,8 @@ from mlflow.exceptions import MlflowException
 from datalab.project import Project, experiment_name
 from datalab.settings import Settings
 from datalab.tags import Tag
-from datalab.tracking_outcome import _OUTCOMES, _after_failure, _Outcome, _tag_outcome
-from datalab.tracking_queries import StaleRun, close_runs, project_spend, stale_runs
+from datalab.tracking_outcome import OUTCOMES, Outcome, after_failure, tag_outcome
+from datalab.tracking_queries import StaleRun, close_runs, experiments_page, project_spend, stale_runs
 
 __all__ = [
     "StaleRun", "TrackingUnavailable", "Trial", "TrialError", "close_runs", "preflight", "project_spend",
@@ -79,7 +79,7 @@ def preflight(uri: str) -> None:
         except httpx.HTTPError as err:
             raise TrackingUnavailable(f"MLflow not reachable at {uri}: {err}") from err
     try:
-        MlflowClient(tracking_uri=uri).search_experiments(max_results=1)
+        experiments_page(MlflowClient(tracking_uri=uri), max_results=1)
     except MlflowException as err:
         raise TrackingUnavailable(f"MLflow at {uri} rejected a query: {err}") from err
 
@@ -91,7 +91,7 @@ def tracked_run(
     run_name: str,
     sub: str | None = None,
     tags: Mapping[str, str] | None = None,
-) -> Iterator[str]:
+) -> Generator[str, None, None]:
     """Open a run in `<name>` or `<name>/<sub>`; an exception inside marks it FAILED and is re-raised."""
     _bound_http_retries()
     extra = dict(tags or {})
@@ -99,16 +99,17 @@ def tracked_run(
         raise ValueError("tags may not override 'project': it always equals the project name")
     # Set explicitly, so a project that skips preflight never logs through an inherited MLFLOW_TRACKING_URI (F-5).
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-    mlflow.set_experiment(experiment_name(project.name, sub))
+    # mlflow annotates `trace_location` with an unresolved type, so the function is partially unknown.
+    mlflow.set_experiment(experiment_name(project.name, sub))  # pyright: ignore[reportUnknownMemberType]  # see above
     with mlflow.start_run(run_name=run_name) as run:
         mlflow.set_tags({"project": project.name} | extra)
         try:
             yield run.info.run_id
         except BaseException as err:
-            _after_failure(err, "tagging the outcome", lambda: _tag_outcome(run.info.run_id))
+            after_failure(err, "tagging the outcome", lambda: tag_outcome(run.info.run_id))
             raise
         else:
-            _tag_outcome(run.info.run_id)
+            tag_outcome(run.info.run_id)
 
 
 def _claim_slot(run_name: str) -> None:
@@ -142,7 +143,7 @@ def _trial_tags(tags: Mapping[str, str] | None) -> dict[str, str]:
 @contextmanager
 def tracked_trial(
     run_name: str, tags: Mapping[str, str] | None = None, *, candidate: str | None = None
-) -> Iterator[Trial]:
+) -> Generator[Trial, None, None]:
     """One child run of the open `tracked_run`, in the parent's experiment; it alone logs `cost_usd` (D-5)."""
     extra = _trial_tags(tags)
     active = mlflow.active_run()
@@ -160,13 +161,13 @@ def tracked_trial(
                 yield trial
             except BaseException as err:
                 failed = True
-                _after_failure(err, "logging the trial cost", lambda: mlflow.log_metric("cost_usd", trial.cost_usd))
+                after_failure(err, "logging the trial cost", lambda: mlflow.log_metric("cost_usd", trial.cost_usd))
                 raise
             else:
                 mlflow.log_metric("cost_usd", trial.cost_usd)
     finally:
         _release_slot()
         if opened:
-            outcome = _OUTCOMES.setdefault(parent_id, _Outcome())
+            outcome = OUTCOMES.setdefault(parent_id, Outcome())
             outcome.children += 1
             outcome.failed += [run_name] if failed else []

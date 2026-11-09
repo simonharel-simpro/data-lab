@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import yaml
 
@@ -93,7 +93,7 @@ def _frontmatter(card: Path) -> dict[object, object]:
         raise ProjectError(f"{card}: frontmatter is not valid YAML: {err}") from err
     if not isinstance(data, dict):
         raise ProjectError(f"{card}: frontmatter must be a mapping, got {type(data).__name__}")
-    return data
+    return cast(dict[object, object], data)  # yaml.safe_load is untyped; just checked to be a mapping
 
 
 class Goal(StrEnum):
@@ -118,7 +118,8 @@ def card_metric(project_dir: Path) -> CardMetric:
         raise ProjectError(f"{card}: cannot read: {err}") from err
     if not isinstance(metric, dict):
         raise ProjectError(f"{card}: frontmatter needs metric: {{key, goal}}")
-    key, goal = metric.get("key"), metric.get("goal")
+    fields = cast(dict[object, object], metric)  # isinstance(dict) leaves the key/value types unknown
+    key, goal = fields.get("key"), fields.get("goal")
     if not isinstance(key, str) or not METRIC_KEY_RE.fullmatch(key):
         raise ProjectError(f"{card}: metric.key must match {METRIC_KEY_RE.pattern}, got {key!r}")
     try:
@@ -149,6 +150,11 @@ def load(start: Path | None = None, *, root: Path | None = None) -> Project:
     return Project(name=name, root=folder)
 
 
+def _not_str(value: object) -> bool:
+    # `object`, so the runtime guard survives strict mode: callers outside the type system may pass a non-str.
+    return not isinstance(value, str)
+
+
 def _check_name_shape(project: object) -> str:
     # Shape only, not RESERVED: integration tests own the reserved `datalab-test` namespace on purpose.
     if not isinstance(project, str) or not NAME_RE.fullmatch(project):
@@ -159,7 +165,7 @@ def _check_name_shape(project: object) -> str:
 def collection_name(project: str, *parts: str) -> str:
     """`<Pascal(project)>_<parts>_<hash8>`; the hash covers the raw name and part boundaries (U-2, U-3)."""
     _check_name_shape(project)
-    bad = [p for p in parts if not isinstance(p, str)]
+    bad = [p for p in parts if _not_str(p)]
     if bad:
         raise TypeError(f"collection name parts must be str, got {bad!r}")
     pascal = "".join(word.capitalize() for word in project.split("-"))
@@ -172,6 +178,6 @@ def experiment_name(project: str, sub: str | None = None) -> str:
     _check_name_shape(project)
     if sub is None:
         return project
-    if not isinstance(sub, str) or not NAME_RE.fullmatch(sub):
+    if _not_str(sub) or not NAME_RE.fullmatch(sub):
         raise ProjectError(f"invalid experiment sub-name {sub!r}: must match {NAME_RE.pattern}")
     return f"{project}/{sub}"

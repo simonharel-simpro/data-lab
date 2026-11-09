@@ -18,6 +18,8 @@ from datalab import ledger
 from datalab.ledger import Kind, LedgerError, RunLedger
 from datalab.split import Partition
 
+from .candidates import plain_mapping
+
 _MODEL_CHOICE: Final = re.compile(r"^[~+]*model=")
 
 
@@ -30,9 +32,10 @@ def resolve_config(cfg: DictConfig) -> dict[str, object]:
         resolved = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     except OmegaConfBaseException as err:
         raise PrepareError(f"config does not resolve: {err}") from err
-    if not isinstance(resolved, dict):
+    plain = plain_mapping(resolved)
+    if plain is None:
         raise PrepareError("config is not a mapping")
-    return {str(k): v for k, v in resolved.items()}
+    return plain
 
 
 def compose_model(config_name: str, overrides: Sequence[str], candidate: str) -> DictConfig:

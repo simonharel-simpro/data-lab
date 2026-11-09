@@ -3,7 +3,9 @@
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import cast
 
+from livekit.agents import Agent, AgentSession
 from livekit.agents.llm import ChatItem, ChatMessage
 
 from voice_arch.booking.record import BookingRecord
@@ -12,7 +14,7 @@ from voice_arch.booking.record import BookingRecord
 @dataclass
 class BookingState:
     record: BookingRecord = field(default_factory=BookingRecord)
-    taken: set[str] = field(default_factory=set)
+    taken: set[str] = field(default_factory=set[str])
     # When the agent last changed the record. The read-back that follows a change is spoken text, not a tool call,
     # so this is the nearest observable point: the caller has had no say on the record until they speak after it.
     last_write_at: float | None = None
@@ -31,3 +33,8 @@ class BookingState:
             isinstance(item, ChatMessage) and item.role == "user" and item.created_at > self.last_write_at
             for item in history()
         )
+
+
+def session_of(agent: Agent) -> AgentSession[BookingState]:
+    """The agent's session typed with this call's userdata; `Agent.session` is `AgentSession[Unknown]` in the SDK."""
+    return cast("AgentSession[BookingState]", agent.session)  # pyright: ignore[reportUnknownMemberType]
