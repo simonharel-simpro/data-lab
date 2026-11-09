@@ -11,7 +11,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 1 | Run integrity: empty index, #12 build race, voice-arch budget | ✅ landed (4/4) | fix-phase-1-run-integrity | clean @ 2e50ef7 (1 fix-check iter) |
 | 2 | Resilience at the trust boundaries | ✅ landed (7/7) | fix-phase-2-trust-boundaries | clean @ 2e1bc20 (1 fix-check iter) |
 | 3 | Ledger contract, enum discipline & datalab test quality | ✅ landed (9/9) | fix-phase-3-ledger-enums | clean @ 95ea6d2 (first pass) |
-| 4 | Signatures, settings & error-handling style | pending | — | — |
+| 4 | Signatures, settings & error-handling style | implemented (10/10), awaiting /check | fix-phase-4-signatures-errors | — |
 | 5 | pyright strict on `src/` (#14) | pending | — | — |
 | 6 | App formatter + linter (#13) | pending | — | — |
 | 7 | Docs & dependency hygiene | pending | — | — |
@@ -59,4 +59,18 @@ A phase is complete only when merged into the integration branch AND marked here
 - Red-first: `6c1eae6` (datalab collection errors, app 1 fail on old source) → fix `561de87`
 - Low-stakes deviation: `_next` keeps the existing error wording (takes the milestone id) so existing tests stay unchanged.
 - **Follow-up (pre-existing, found by 3.8):** a non-ISO `time_max` is rejected by `read_split`, but the message is the first pydantic union error ("valid array"), not the ISO rule — pick the best union error. Not in plan scope.
+- Cross-phase regressions: none
+
+## Phase 4 — Signatures, settings & error-handling style (🟡)
+
+**Implemented:** 2026-11-08 · **Branch:** fix-phase-4-signatures-errors · **Agents:** python-fastapi ×2 (A: voice-arch structure 4.2–4.5; B: lint rules 4.1, 4.6–4.10, sole owner of ruff.toml)
+**Tooling:** ✅ pre-push exit 0 on the committed tree · scaffold 1 passed · `uvx ruff check .` clean with BLE + PLR0913 on
+
+- ✅ 4.1 BLE on; reasons on broad excepts (+ `livekit_env.py`, `tracking_outcome.py` surfaced by enabling BLE) — grep → 0
+- ✅ 4.2 `load_settings()` — grep 1 (expected) · ✅ 4.3 `dump_empty_dir` setting, threaded via `audio.make_llm` — grep → 0
+- ✅ 4.4 `run_sweep(env, SweepPlan, SweepContext)`; `Sweep` moved to new `voice_arch/sweep.py` (runner 112 lines) · ✅ 4.5 `build_result(CallIdentity, SessionOutcome, report_fn)`
+- ✅ 4.6–4.8 seven `# noqa: PLR0913 … (#39)`, landed in the same commit as 4.10's rule enable
+- ✅ 4.9 three functions ≤ 30 lines (`_params`, `_extra_body`, `_trial_tags`); `_layout.py` untouched (#41) · ✅ 4.10 annotations (`test_bench._corpus` returns `Callable[[], Awaitable[Corpus]]`)
+- Red-first: `6653b52` (collection errors on old source) → fix `36b8620`
+- Deviations (low-stakes): two noqa reasons shortened for the 120-col limit; `_trial_tags(tags)` takes only `tags`; test renamed `test_dump_is_off_without_a_directory` (trailer `Test-Change: #39`).
 - Cross-phase regressions: none

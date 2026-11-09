@@ -1,5 +1,6 @@
 # Fix Plan — Phase 4: Signatures, settings & error-handling style
 
+**Status:** ✅ Complete — branch fix-phase-4-signatures-errors, 2026-11-08
 **Severity:** 🟡
 **Agent:** python-fastapi. This is generic Python: ignore the FastAPI layering rules (routers/services/repositories).
 **Depends on:** Phase 1 (1.3 changes `ensure_collection`, 1.4 changes `runner.py`), Phase 2 (2.5/2.6 change `call.py`)
