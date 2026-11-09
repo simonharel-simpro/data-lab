@@ -9,7 +9,7 @@ from livekit.agents.voice.events import CloseEvent, CloseReason, ErrorEvent
 from voice_arch.agents.state import BookingState
 from voice_arch.arch import Arch
 from voice_arch.result import CallResult
-from voice_arch.worker_logic import SessionWatch, build_result
+from voice_arch.worker_logic import CallIdentity, SessionOutcome, SessionWatch, build_result
 
 
 class ProviderError(Exception):
@@ -42,10 +42,8 @@ def _watch(session: FakeSession) -> SessionWatch:
 
 
 def _result(watch: SessionWatch) -> CallResult:
-    return build_result(
-        "r", Arch.C, "x", BookingState(), watch.close, watch.errors, lambda: {}, summarize_chat_ctx=False,
-        max_tool_steps=6, fatal=watch.fatal,
-    )  # fmt: skip
+    outcome = SessionOutcome(BookingState(), watch.close, watch.errors, False, max_tool_steps=6, fatal=watch.fatal)
+    return build_result(CallIdentity("r", Arch.C, "x"), outcome, lambda: {})
 
 
 def test_unrecoverable_llm_error_shuts_the_session_down_without_draining() -> None:

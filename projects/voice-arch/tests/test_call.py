@@ -8,7 +8,7 @@ from tests.call_fakes import FakeEnv, FakeHandle, persona, result_for
 from voice_arch import call
 from voice_arch.arch import Arch
 from voice_arch.booking.record import SCORED_FIELDS
-from voice_arch.call import AgentNeverJoined, LiveKitUnresponsive, Outcome, ProviderAuthStop, run_one_call
+from voice_arch.call import AgentNeverJoined, CallRow, LiveKitUnresponsive, Outcome, ProviderAuthStop, run_one_call
 from voice_arch.call_env import CallerHandle
 from voice_arch.caller import CallerAgent
 from voice_arch.personas import Persona
@@ -17,7 +17,7 @@ TIMEOUT_S = 0.1
 JOIN_S = 1.0
 
 
-async def _call(env: FakeEnv, who_id: str = "self_correction", timeout: float = TIMEOUT_S):
+async def _call(env: FakeEnv, who_id: str = "self_correction", timeout: float = TIMEOUT_S) -> CallRow:
     return await run_one_call(
         env, persona(who_id), Arch.A, "0123456789abcdef", 0, call_timeout_s=timeout, join_timeout_s=JOIN_S
     )

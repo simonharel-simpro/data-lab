@@ -21,8 +21,9 @@ from voice_arch.call import AgentNeverJoined, ProviderAuthStop
 from voice_arch.caller import make_caller_session
 from voice_arch.openrouter_key import SpendTracker
 from voice_arch.personas import load_personas
-from voice_arch.runner import CallerFaultRate, run_sweep
+from voice_arch.runner import run_sweep
 from voice_arch.settings import VoiceSettings
+from voice_arch.sweep import CallerFaultRate, SweepContext, SweepPlan
 
 EXPERIMENT = "voice-arch/conversations"
 NO_FULL_COST: Callable[[], float | None] = lambda: None  # noqa: E731
@@ -48,10 +49,9 @@ class Sweep:
     ) -> str:
         chosen = [p for p in load_personas(SHIPPED) if p.id in personas]
         factory = tracker or partial(FakeTracker)
-        return await run_sweep(
-            env, chosen, Arch.A, reps, self.settings, project=self.project, dl_settings=self.dl,
-            spent=spent, last_full_cost=last_full, spend_tracker=factory,
-        )  # fmt: skip
+        plan = SweepPlan(chosen, Arch.A, reps)
+        ctx = SweepContext(self.project, self.dl, self.settings, spent, last_full, factory)
+        return await run_sweep(env, plan, ctx)
 
     def only_run(self) -> Run:
         experiment = self.client.get_experiment_by_name(EXPERIMENT)
