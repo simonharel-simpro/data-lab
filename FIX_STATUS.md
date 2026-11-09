@@ -13,7 +13,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | 3 | Ledger contract, enum discipline & datalab test quality | ✅ landed (9/9) | fix-phase-3-ledger-enums | clean @ 95ea6d2 (first pass) |
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
 | 5 | pyright strict on `src/` (#14) | ✅ landed (8/8 + 5.9) | fix-phase-5-pyright-strict | clean @ 31023ee (2 approved deviations) |
-| 6 | App formatter + linter (#13) | 🔄 implemented (3/3) | fix-phase-6-app-format-lint | — |
+| 6 | App formatter + linter (#13) | ✅ landed (3/3) | fix-phase-6-app-format-lint | clean @ 4253893 (1 fix-check iter: red-first tests) |
 | 7 | Docs & dependency hygiene | ✅ landed (2/2) | fix-phase-7-docs-deps-hygiene | clean @ d552f5a (first pass) |
 | 8 | CI gates & tooling | ✅ landed (2/2) | fix-phase-8-ci-gates-tooling | clean @ 53f7a66 (first pass; gate-scope deviation) |
 
