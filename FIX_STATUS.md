@@ -10,7 +10,7 @@ A phase is complete only when merged into the integration branch AND marked here
 |-------|-------|--------|--------|--------|
 | 1 | Run integrity: empty index, #12 build race, voice-arch budget | ✅ landed (4/4) | fix-phase-1-run-integrity | clean @ 2e50ef7 (1 fix-check iter) |
 | 2 | Resilience at the trust boundaries | ✅ landed (7/7) | fix-phase-2-trust-boundaries | clean @ 2e1bc20 (1 fix-check iter) |
-| 3 | Ledger contract, enum discipline & datalab test quality | pending | — | — |
+| 3 | Ledger contract, enum discipline & datalab test quality | implemented (9/9), awaiting /check | fix-phase-3-ledger-enums | — |
 | 4 | Signatures, settings & error-handling style | pending | — | — |
 | 5 | pyright strict on `src/` (#14) | pending | — | — |
 | 6 | App formatter + linter (#13) | pending | — | — |
@@ -45,3 +45,18 @@ A phase is complete only when merged into the integration branch AND marked here
 - Red-first: `035e8e0` (datalab 2 failed, voice-arch collection error, root 9 failed on old source; template red shown by subagent mutation runs) → fix `3d7114e`
 - Low-stakes deviations: a failed `handle.close()` now logs WARNING (was `logger.exception`/ERROR); new test files `templates/project/tests/test_train_frozen.py` (test_train.py at 274/300); trial note reads "logging the trial cost failed".
 - Cross-phase regressions: none (`assert-zero --done` OK)
+
+## Phase 3 — Ledger contract, enum discipline & datalab test quality (🟡)
+
+**Implemented:** 2026-11-08 · **Branch:** fix-phase-3-ledger-enums · **Agents:** python-fastapi ×3 (ledger / test quality / enums), general-purpose (3.3 TS) + 1 targeted retry (3.5 bench Component literals)
+**Tooling:** ✅ pre-push exit 0 on the committed tree
+
+- ✅ 3.1 `ledger_access.py` split (ledger_ops 166 lines), literals → enums / `DATASET`·`FEATURES`·`MODELING`·`AUDIT` — grep → 0
+- ✅ 3.2 `contracts/value_sets.json` + Python pin · ✅ 3.3 TS pin + typed `SIGN` map — grep → 0
+- ✅ 3.4 `TRANSITIONS` table + `_next`; tests in new `test_ledger_transitions.py`
+- ✅ 3.5 `Goal`, `Component`, `_RUNNING`/`_FINISHED`, `AUDIT_EXPERIMENT` (in template `paths.py`) — grep → 0
+- ✅ 3.6 ADR "Milestone ids stay data-driven strings" · ✅ 3.7 skip cites #8, issue #8 body updated (gh) · ✅ 3.8 match= + 6 rule cases + 256-case property (new `test_split_rules.py`) · ✅ 3.9 sequences pinned
+- Red-first: `6c1eae6` (datalab collection errors, app 1 fail on old source) → fix `561de87`
+- Low-stakes deviation: `_next` keeps the existing error wording (takes the milestone id) so existing tests stay unchanged.
+- **Follow-up (pre-existing, found by 3.8):** a non-ISO `time_max` is rejected by `read_split`, but the message is the first pydantic union error ("valid array"), not the ISO rule — pick the best union error. Not in plan scope.
+- Cross-phase regressions: none
