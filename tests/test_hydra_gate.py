@@ -1,13 +1,14 @@
 import hashlib
 import importlib.util
 import re
+import time
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 import yaml
 
-from tests.conftest import REPO_ROOT
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 _VENDORED = REPO_ROOT / "tools" / "check_hydra_project.py"
 _SHA = "312f6242dc31e4d7930a13d33df9cbed3537aa2ff3fc444f0c9dcf67252a61b2"
@@ -48,7 +49,7 @@ def test_f_1_hook_entry_with_two_changed_configs_in_one_project_exits_0(
     code = _load().main(["projects/demo/configs/train.yaml", "projects/demo/configs/model/a.yaml"], repo_root=tmp_path)
 
     assert code == 0
-    assert capfd.readouterr().out.count("hydra-gate projects/demo") == 1
+    assert capfd.readouterr().err.count("hydra-gate projects/demo") == 1
 
 
 def test_f_2_hydra_hook_files_regex_matches_src_and_pyproject() -> None:
@@ -73,7 +74,7 @@ def test_project_without_configs_skipped(tmp_path: Path, capfd: pytest.CaptureFi
     code = _load().main(["projects/legacy/src/legacy/x.py"], repo_root=tmp_path)
 
     assert code == 0
-    assert capfd.readouterr().out == "skip projects/legacy: no configs/\n"
+    assert capfd.readouterr().err == "skip projects/legacy: no configs/\n"
 
 
 def test_oc_env_in_configs_fails(tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
@@ -112,3 +113,20 @@ def test_vendored_gate_body_matches_trouvetou_sha256() -> None:
     body = re.sub(r"# >>> vendored header\n.*?# <<< vendored header\n", "", text, count=1, flags=re.DOTALL)
 
     assert hashlib.sha256(body.encode("utf-8")).hexdigest() == _SHA
+
+
+def test_gate_subprocess_timeout_fails_with_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    _wired_demo(tmp_path)
+    stub = _write(tmp_path / "slow_gate.py", "import time\ntime.sleep(5)\n")
+    module = _load()
+    monkeypatch.setattr(module, "GATE", stub)
+    monkeypatch.setattr(module, "GATE_TIMEOUT_S", 0.01)
+
+    started = time.monotonic()
+    code = module.main(["projects/demo/configs/train.yaml"], repo_root=tmp_path)
+
+    assert code == 1
+    assert "hydra-gate projects/demo: timed out after 0.01 s" in capfd.readouterr().err
+    assert time.monotonic() - started < 4

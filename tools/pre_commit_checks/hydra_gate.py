@@ -9,6 +9,7 @@ from typing import Final
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 GATE: Final = REPO_ROOT / "tools" / "check_hydra_project.py"
+GATE_TIMEOUT_S: Final = 120
 _OC_ENV: Final = re.compile(r"\$\{\s*oc\.env\s*:")
 
 
@@ -39,18 +40,30 @@ def env_interpolations(project: Path) -> list[str]:
     return hits
 
 
+def _say(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def _run_gate(root: Path, rel: str) -> bool:
+    try:
+        done = subprocess.run(  # noqa: S603  # fixed argv: this interpreter + the vendored gate + a repo path, no shell
+            [sys.executable, str(GATE), str(root)], check=False, timeout=GATE_TIMEOUT_S
+        )
+    except subprocess.TimeoutExpired:
+        _say(f"hydra-gate {rel}: timed out after {GATE_TIMEOUT_S} s")
+        return False
+    return done.returncode == 0
+
+
 def _check(root: Path, repo_root: Path) -> bool:
     rel = root.relative_to(repo_root).as_posix()
     if not (root / "configs").is_dir():
-        print(f"skip {rel}: no configs/")
+        _say(f"skip {rel}: no configs/")
         return True
-    print(f"hydra-gate {rel}", flush=True)
-    done = subprocess.run(  # noqa: S603  # fixed argv: this interpreter + the vendored gate + a repo path, no shell
-        [sys.executable, str(GATE), str(root)], check=False
-    )
-    ok = done.returncode == 0
+    _say(f"hydra-gate {rel}")
+    ok = _run_gate(root, rel)
     for hit in env_interpolations(root):
-        print(f"{rel}/{hit}: ${{oc.env:}} interpolation is forbidden in configs", file=sys.stderr)
+        _say(f"{rel}/{hit}: ${{oc.env:}} interpolation is forbidden in configs")
         ok = False
     return ok
 

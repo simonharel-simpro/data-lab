@@ -13,9 +13,9 @@ A phase is complete only when merged into the integration branch AND marked here
 | 3 | Ledger contract, enum discipline & datalab test quality | ✅ landed (9/9) | fix-phase-3-ledger-enums | clean @ 95ea6d2 (first pass) |
 | 4 | Signatures, settings & error-handling style | ✅ landed (10/10) | fix-phase-4-signatures-errors | clean @ fc8f158 (first pass) |
 | 5 | pyright strict on `src/` (#14) | ✅ landed (8/8 + 5.9) | fix-phase-5-pyright-strict | clean @ 31023ee (2 approved deviations) |
-| 6 | App formatter + linter (#13) | pending | — | — |
+| 6 | App formatter + linter (#13) | ⏸ parked: ESC-6-1 (pins fail npm audit), awaiting amended + re-validated plan | — | — |
 | 7 | Docs & dependency hygiene | pending | — | — |
-| 8 | CI gates & tooling | pending | — | — |
+| 8 | CI gates & tooling | 🔄 implemented (2/2) | fix-phase-8-ci-gates-tooling | — |
 
 ## Phase 1 — Run integrity (🔴)
 
@@ -85,3 +85,16 @@ A phase is complete only when merged into the integration branch AND marked here
 - ✅ **5.9 (user-approved deviation, 2026-11-08):** hooks + CI + `wiring.gates_block` generator run `pyright -p pyproject.toml`; 15 basic-mode errors in tests/ fixed type-only.
 - Commit: `d4345ea` (single commit: typing refactor, no behavioural tests; `Test-Change: #14`)
 - Follow-ups: S-14 stale-cast risk on livekit upgrades (casts in llm_dump, llm_guard, worker, naturalness, agents/tools, agents/state); the plan's "every ignore has a reason" grep cannot fail (the `# pyright:` itself matches `  # `).
+
+## Phase 8 — CI gates & tooling (🟡)
+
+**Implemented:** 2026-11-08 · **Branch:** fix-phase-8-ci-gates-tooling · **Agent:** python-fastapi
+**Order:** run before Phase 6 (deviation recorded: Phase 6 parked on ESC-6-1, user resolved to override minimatch 11.0.1; plan amendment pending)
+**Tooling:** ✅ `pre-commit run gates-root --hook-stage pre-push --all-files` (orchestrator re-run); subagent ran default + pre-push stages green
+
+- ✅ 8.1 `gates-root` pre-push hook (pyright + pytest + coverage ≥70 on `tools/`, one ad-hoc env), CI step, `.coveragerc`, `pyrightconfig.json` include, root pytest exemption removed — grep 1→0. `test_hydra_gate.py` moved to root `tests/` (REPO_ROOT computed locally); `check_enum_discipline.py` added to the vendored omit list
+- ✅ 8.2 size warn band (190–200, stderr, exit unchanged); hydra gate diagnostics on stderr + `GATE_TIMEOUT_S = 120` — grep 2→0. New tests seen red: warn band, timeout
+- Test change: two moved hydra-gate assertions read stderr instead of stdout (required by 8.2; expected values unchanged) → `Test-Change:` trailer
+- Extra: `.ci-gate-exemptions.json` ruff / lint-imports reasons reworded to name `gates-root`
+- Cross-phase regressions: none (`assert-zero --done` OK)
+

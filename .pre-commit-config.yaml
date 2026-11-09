@@ -79,6 +79,13 @@ repos:
         files: ^projects/[^/]+/(run|split)\.json$
       # Pre-push parity with ci.yml's gates + tests. pip-audit, npm audit and the gitleaks history scan stay CI-only
       # because they need the network.
+      - id: gates-root
+        name: root tree (tools/ + tests/) types + tests + coverage floor (#7)
+        # One ad-hoc env (no root uv project, ADR 3): pyright resolves pytest/yaml from it. Single home of the pins.
+        entry: bash -c 'uv run --no-project --python 3.12 --with pyright==1.1.414 --with pytest==9.2.0 --with pytest-cov==7.1.0 --with pyyaml==6.0.3 sh -c "pyright && pytest -q tests/ --cov=tools --cov-report=term-missing --cov-fail-under=70"'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: gates-datalab
         name: datalab gates (contracts, types) + unit tests + coverage floor
         # -p: the root pyrightconfig.json would otherwise win config discovery and skip this tree (#14)

@@ -1,5 +1,6 @@
 # Fix Plan — Phase 8: CI gates & tooling
 
+**Status:** ✅ Complete — branch fix-phase-8-ci-gates-tooling, 2026-11-08
 **Severity:** 🟡
 **Agent:** python-fastapi. This is generic Python: ignore the FastAPI layering rules. CI YAML and pre-commit config are part of 8.1.
 **Depends on:** none (independent of every other phase)

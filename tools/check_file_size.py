@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 MAX_LINES = 200
+WARN_LINES = 190
 ROOTS = ("packages", "projects")
 
 
@@ -15,13 +16,16 @@ def _in_scope(path: Path) -> bool:
 def main(argv: list[str]) -> int:
     paths = [Path(a) for a in argv] or [p for root in ROOTS for p in Path(root).glob("*/src/**/*.py")]
     too_long = []
+    warnings = []
     for path in paths:
         if not _in_scope(path):
             continue
         n = len(path.read_text(encoding="utf-8").splitlines())
         if n > MAX_LINES:
             too_long.append(f"{path}: {n} lines > {MAX_LINES}")
-    for line in too_long:
+        elif n >= WARN_LINES:
+            warnings.append(f"warning: {path}: {n} lines (cap {MAX_LINES}): split before adding")
+    for line in [*warnings, *too_long]:
         print(line, file=sys.stderr)
     return 1 if too_long else 0
 

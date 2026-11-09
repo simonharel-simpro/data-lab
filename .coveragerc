@@ -1,0 +1,9 @@
+[run]
+source = tools
+omit =
+    tools/check_hydra_project.py
+    tools/pre_commit_checks/_base.py
+    tools/pre_commit_checks/_layout.py
+    tools/pre_commit_checks/check_declared_dependencies.py
+    tools/pre_commit_checks/check_enum_discipline.py
+    tools/weavit-ui/*
