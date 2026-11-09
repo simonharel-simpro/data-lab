@@ -26,7 +26,7 @@ from voice_arch.settings import VoiceSettings
 from voice_arch.sweep import CallerFaultRate, SweepContext, SweepPlan, Tracker
 
 EXPERIMENT = "voice-arch/conversations"
-NO_FULL_COST: Callable[[], float | None] = lambda: None  # noqa: E731
+NO_FULL_COST: Callable[[], float | None] = lambda: None  # noqa: E731  # one-line test constant
 
 
 class Sweep:

@@ -76,8 +76,8 @@ class SessionWatch:
     def attach(self, session: AgentSession[BookingState]) -> None:
         self._session = session
         # EventEmitter.on is typed with an unparameterised callback in the SDK.
-        session.on("error", self.on_error)  # pyright: ignore[reportUnknownMemberType]
-        session.on("close", self.on_close)  # pyright: ignore[reportUnknownMemberType]
+        session.on("error", self.on_error)  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
+        session.on("close", self.on_close)  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
 
 
 def error_result(room: str, message: str) -> CallResult:

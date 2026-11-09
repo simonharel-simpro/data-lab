@@ -14,13 +14,14 @@ class _Stream(llm.LLMStream):
     """Like LiveKit's OpenAI stream, it reads its request parameters from `_extra_kwargs` on every attempt."""
 
     def __init__(self, model: llm.LLM, *, temperature: float, **kwargs: object) -> None:
-        super().__init__(model, **kwargs)  # pyright: ignore[reportArgumentType]
+        super().__init__(model, **kwargs)  # pyright: ignore[reportArgumentType]  # loose test fake
         self._extra_kwargs = {"temperature": temperature}
 
     async def _run(self) -> None:
+        # Attr missing in stubs.
         self._llm.temperatures.append(self._extra_kwargs["temperature"])  # pyright: ignore[reportAttributeAccessIssue]
-        self._llm.attempts += 1  # pyright: ignore[reportAttributeAccessIssue]
-        if self._llm.attempts > self._llm.empty_attempts:  # pyright: ignore[reportAttributeAccessIssue]
+        self._llm.attempts += 1  # pyright: ignore[reportAttributeAccessIssue]  # attr missing in stubs
+        if self._llm.attempts > self._llm.empty_attempts:  # pyright: ignore[reportAttributeAccessIssue]  # not in stubs
             delta = llm.ChoiceDelta(role="assistant", content="Hello")
             self._event_ch.send_nowait(llm.ChatChunk(id="c", delta=delta))
 
@@ -58,7 +59,7 @@ async def test_guarded_empty_completion_is_retried_until_it_answers() -> None:
     model = retry_on_empty_completion(_Llm(empty_attempts=2))
 
     assert await _text(model) == "Hello"
-    assert model.attempts == 3  # type: ignore[attr-defined]
+    assert model.attempts == 3  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_guarded_completion_that_is_always_empty_fails_loud_after_the_retries() -> None:
@@ -67,7 +68,7 @@ async def test_guarded_completion_that_is_always_empty_fails_loud_after_the_retr
     with pytest.raises(APIConnectionError) as err:
         await _text(model)
 
-    assert model.attempts == NO_WAIT.max_retry + 1  # type: ignore[attr-defined]
+    assert model.attempts == NO_WAIT.max_retry + 1  # type: ignore[attr-defined]  # private LiveKit attr
     assert EMPTY_COMPLETION in str(err.value.__cause__)
 
 
@@ -75,7 +76,7 @@ async def test_guarded_non_empty_completion_is_not_retried() -> None:
     model = retry_on_empty_completion(_Llm(empty_attempts=0))
 
     assert await _text(model) == "Hello"
-    assert model.attempts == 1  # type: ignore[attr-defined]
+    assert model.attempts == 1  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_first_attempt_uses_the_base_temperature() -> None:
@@ -83,7 +84,7 @@ async def test_first_attempt_uses_the_base_temperature() -> None:
 
     await _text(model)
 
-    assert model.temperatures == [0.0]  # type: ignore[attr-defined]
+    assert model.temperatures == [0.0]  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_each_retry_raises_the_temperature_by_a_step() -> None:
@@ -91,7 +92,7 @@ async def test_each_retry_raises_the_temperature_by_a_step() -> None:
 
     assert await _text(model) == "Hello"
 
-    assert model.temperatures == pytest.approx([0.0, 0.3, 0.6])  # type: ignore[attr-defined]
+    assert model.temperatures == pytest.approx([0.0, 0.3, 0.6])  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_retry_temperature_is_capped() -> None:
@@ -99,7 +100,7 @@ async def test_retry_temperature_is_capped() -> None:
 
     await _text(model)
 
-    assert model.temperatures == pytest.approx([0.7, 1.0, 1.0])  # type: ignore[attr-defined]
+    assert model.temperatures == pytest.approx([0.7, 1.0, 1.0])  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_always_empty_completion_still_fails_loud_with_rising_temperatures() -> None:
@@ -108,7 +109,7 @@ async def test_always_empty_completion_still_fails_loud_with_rising_temperatures
     with pytest.raises(APIConnectionError):
         await _text(model)
 
-    assert model.temperatures == pytest.approx([0.0, 0.3, 0.6])  # type: ignore[attr-defined]
+    assert model.temperatures == pytest.approx([0.0, 0.3, 0.6])  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_each_retry_is_logged_at_warning_with_its_number_and_no_text(caplog: pytest.LogCaptureFixture) -> None:
@@ -128,12 +129,12 @@ async def test_each_retry_is_logged_at_warning_with_its_number_and_no_text(caplo
 async def test_each_call_starts_again_from_the_base_temperature() -> None:
     model = retry_on_empty_completion(_Llm(empty_attempts=1, temperature=0.0))
     await _text(model)
-    model.attempts = 0  # type: ignore[attr-defined]
-    model.temperatures.clear()  # type: ignore[attr-defined]
+    model.attempts = 0  # type: ignore[attr-defined]  # private LiveKit attr
+    model.temperatures.clear()  # type: ignore[attr-defined]  # private LiveKit attr
 
     await _text(model)
 
-    assert model.temperatures == pytest.approx([0.0, 0.3])  # type: ignore[attr-defined]
+    assert model.temperatures == pytest.approx([0.0, 0.3])  # type: ignore[attr-defined]  # private LiveKit attr
 
 
 async def test_guard_wraps_the_real_openrouter_stream_and_keeps_its_temperature(
@@ -144,6 +145,7 @@ async def test_guard_wraps_the_real_openrouter_stream_and_keeps_its_temperature(
     stream = model.chat(chat_ctx=llm.ChatContext())
     await stream.aclose()  # cancelled before its first await: nothing is sent
 
+    # Private LiveKit attr.
     assert stream._extra_kwargs["temperature"] == 0.4  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
 
 

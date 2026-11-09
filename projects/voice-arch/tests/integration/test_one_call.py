@@ -48,6 +48,7 @@ class RecordingEnv(LiveKitCallEnv):
 
 @pytest.fixture
 def live() -> VoiceSettings:
+    # Pydantic-settings kwarg.
     return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]
 
 

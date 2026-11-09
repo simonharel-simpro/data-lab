@@ -85,7 +85,7 @@ async def test_record_problem_with_invalid_type_returns_error_text() -> None:
     state = BookingState()
     ctx = _ctx(FakeSession(object()), state)
 
-    reply = await tools.record_problem(ctx, "roofing")  # pyright: ignore[reportArgumentType]
+    reply = await tools.record_problem(ctx, "roofing")  # pyright: ignore[reportArgumentType]  # loose test fake
 
     assert "not a problem type" in reply
     assert state.record.problem_type is None
@@ -110,7 +110,7 @@ async def test_f_1_confirm_booking_says_goodbye_and_schedules_a_draining_shutdow
         ("problem_type", ProblemType.PLUMBING.value),
         ("slot_id", "ST_20261110_1400"),
     ):
-        state.record.set_field(field, value)  # pyright: ignore[reportArgumentType]
+        state.record.set_field(field, value)  # pyright: ignore[reportArgumentType]  # loose test fake
     session = FakeSession(object())
 
     reply = await tools.confirm_booking(_ctx(session, state))

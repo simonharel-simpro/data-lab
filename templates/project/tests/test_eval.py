@@ -214,6 +214,7 @@ def test_eval_refuses_mixed_timezones_before_recording_a_test_look(
     (exp_dir / "sample.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     bounds = {"train": "2024-12-03", "val": "2024-12-05", "test": "2024-12-31"}  # naive bounds, aware rows
     split = {"strategy": "temporal", "seed": 0, "target": "y", "group_key": None, "time_col": "t"}
+    # Split dict built loosely in test.
     split["splits"] = {name: {"time_max": bound} for name, bound in bounds.items()}  # type: ignore[assignment]
     (exp_dir / "split.json").write_text(json.dumps(split), encoding="utf-8")
     before = with_winner(ledger_at_modeling(exp_dir), "dummy", "f" * 32)

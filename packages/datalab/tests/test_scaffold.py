@@ -78,4 +78,4 @@ def test_f_3_scaffolded_project_passes_its_gates(fake_repo: Path, capfd: pytest.
     assert size.returncode == 0, size.stderr
     capfd.readouterr()
     assert _hydra_gate(fake_repo / "tools").main(["projects/ci-scaffold"], repo_root=fake_repo) == 0
-    assert "hydra-gate projects/ci-scaffold" in capfd.readouterr().out
+    assert "hydra-gate projects/ci-scaffold" in capfd.readouterr().err

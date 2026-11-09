@@ -54,12 +54,13 @@ def session_report(ctx: JobContext, session: AgentSession[BookingState]) -> dict
     # SessionReport.to_dict is annotated `dict` without parameters in the SDK.
     to_dict = cast(
         "Callable[[], dict[str, object]]",
+        # livekit's SessionReport is untyped.
         ctx.make_session_report(session).to_dict,  # pyright: ignore[reportUnknownMemberType]
     )
     return to_dict()
 
 
-async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingState], SessionWatch]:
+async def start_session(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingState], SessionWatch]:
     session = AgentSession[BookingState](
         stt=make_stt(settings),
         # Pinned to Google's providers (ESC-2-1 option C). Only the agent is pinned: the simulated caller's LLM
@@ -74,7 +75,6 @@ async def run_call(ctx: JobContext, arch: Arch) -> tuple[AgentSession[BookingSta
     watch = SessionWatch()
     watch.attach(session)
     await session.start(agent=build_agent(arch), room=ctx.room)  # pyright: ignore[reportUnknownMemberType]  # SDK
-    await watch.closed.wait()
     return session, watch
 
 
@@ -87,7 +87,13 @@ async def entry(ctx: JobContext) -> None:
         logger.error("refusing the dispatch: %s", err)
         await send_result(ctx.room, error_result(ctx.room.name, str(err)))
         return
-    session, watch = await run_call(ctx, arch)
+    try:
+        session, watch = await start_session(ctx, arch)
+    except Exception as err:  # any setup failure must reach the caller as an error result, not a timeout
+        logger.exception("worker setup failed for room %s", ctx.room.name)
+        await send_result(ctx.room, error_result(ctx.room.name, f"worker setup failed: {err!r}"))
+        return
+    await watch.closed.wait()
     outcome = SessionOutcome(
         state=session.userdata,
         close=watch.close,

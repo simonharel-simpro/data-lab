@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(BASH is None, reason="bash absent (#8)")
 
 def _read_env_key(env_file: Path) -> str:
     # Fixed argv, no shell, absolute bash path: the env file path is passed as $1, never interpolated.
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603  # fixed argv list, no shell
         [str(BASH), "-c", 'source tools/weavit-web.sh; read_env_key "$1"', "_", str(env_file)],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -58,7 +58,7 @@ def test_launcher_with_empty_submodule_exits_with_init_hint(tmp_path: Path) -> N
     script = tools / "weavit-web.sh"
     shutil.copy(SCRIPT, script)
 
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603  # fixed argv list, no shell
         [str(BASH), str(script)], capture_output=True, text=True, check=False, timeout=30
     )
 

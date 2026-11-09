@@ -1,6 +1,7 @@
 # Architecture Review — data-lab
 
 **Date:** 2026-11-08
+**Last healed:** 2026-11-09 — 6/6 gaps resolved (`/heal-review`, branch `fix/heal-review-2026-11-09`)
 **Commit:** `main` @ `8f3add8` (previous cycle archived in `archive/2026-11-05-review-2026-11-04/`)
 **Project type:** Mixed — Python (generic, no FastAPI): `packages/datalab`, `projects/mini-rag`, `projects/voice-arch`, `templates/project` (Hydra template), `tools/*.py` + root `tests/`; Astro / TypeScript read-only static app — `app/`; docs + ADRs (`ARCHITECTURE.md`, `decisions.md`, `contracts/`). Out of scope: `tools/weavit-ui/` (git submodule → separate fork repo with its own review).
 **Scope since last review:** OpenRouter default (#17), weavit-web (#19), voice-arch (#26/#27), experiment / trouvetou methodology (#33: `datalab` ledger/split/tags/tracking/wiring, Hydra project template, `/experiment` skill, app stepper), weavit projector docs + submodule bump (#35), compose stop grace (#36).
@@ -133,7 +134,7 @@ Clean: ARCHITECTURE.md has every mandatory section; `decisions.md` has 19 comple
 | 🟡 Warning | **Train never checks split.json / data against the hashes frozen in run.json**: `_prepare` reads the ledger only for `score_on` (`on = score_on(cfg, read_ledger(...))`); an edit after the freeze trains the full grid tagged with the new hashes, caught only later by the `ledger` hook (V-2) or at eval, after the compute is spent | `templates/project/src/__DATALAB_PACKAGE__/train.py:111-123,87-104` | 5 input · 7 contract | CONFIRMED (orchestrator re-read `_prepare`) | No (only eval is tested) | `test_train_refuses_split_changed_after_freeze_before_any_run` (exit 2, zero MLflow runs); same for `data_sha256` |
 | 🟡 Warning | **Parts of a call have no deadline**: only `wait_agent` and `_wait_for_result` are bounded; `create_dispatch`, `connect_caller` (`lk_room.connect`) and the `_cleanup` awaits (`session.aclose`, `room.disconnect`, `delete_room`) have no `wait_for` — a LiveKit that accepts TCP but never answers stalls the sweep before `call_timeout_s` applies | `projects/voice-arch/src/voice_arch/call.py:142-161`, `livekit_env.py:27-48`, `live_caller.py:151-160` | 1 timeout | CONFIRMED in code; SDK default timeout SUSPECTED | No | `test_run_one_call_bounds_a_dispatch_that_never_returns` (fake `create_dispatch` awaiting an unset Event, short injected deadline); same with a hanging `close` |
 | 🟡 Warning | **Interjection on a caller session that never started can kill the sweep**: when `_run_session` fails it sets `caller_error`, but `_wait_for_result` may still `interject` → `session.say(...)`; if `say` raises, the exception escapes `run_one_call` instead of a CALLER_FAULT row | `projects/voice-arch/src/voice_arch/live_caller.py:73-86,141-142`, `call.py:110-121` | 4 partial failure | SUSPECTED (depends on `AgentSession.say` before start) | No — tests force `_started = True` | `test_interject_on_unstarted_caller_yields_caller_fault_row` |
-| 🟡 Warning | **Original error masked during an MLflow outage; run can stay RUNNING**: `finally: _tag_outcome` → `mlflow.set_tags` and the trial's `finally: log_metric("cost_usd")` call MLflow during the outage, their exception replaces the body's, and `end_run(FAILED)` then fails too. Partial supersession of last cycle's 🔴 (retries now bounded by `_HTTP_DEFAULTS`; `stale_runs` / `close_runs` exist) | `packages/datalab/src/datalab/tracking.py:110-128,175-183` | 10 observability · 4 | CONFIRMED | Partly (`test_trial_slot_freed_when_cost_log_fails` covers the slot only) | `test_tracked_run_surfaces_the_body_error_when_tagging_fails` |
+| ✅ Resolved (was 🟡 Warning) | **Original error masked during an MLflow outage; run can stay RUNNING**: `finally: _tag_outcome` → `mlflow.set_tags` and the trial's `finally: log_metric("cost_usd")` call MLflow during the outage, their exception replaces the body's, and `end_run(FAILED)` then fails too. Partial supersession of last cycle's 🔴 (retries now bounded by `_HTTP_DEFAULTS`; `stale_runs` / `close_runs` exist) | `packages/datalab/src/datalab/tracking.py:110-128,175-183` | 10 observability · 4 | CONFIRMED | Partly (`test_trial_slot_freed_when_cost_log_fails` covers the slot only) | `test_tracked_run_surfaces_the_body_error_when_tagging_fails` |
 | 🟡 Warning | **Eval reports a deleted / missing winner run as "tracking failed" (exit 1)**: `client.get_run` raises `MlflowException(RESOURCE_DOES_NOT_EXIST)`, caught by the outage branch — the operator cannot tell "MLflow down" from "winner gone" | `templates/project/src/__DATALAB_PACKAGE__/eval.py:95-97,147-152` | 10 · 7 | CONFIRMED | No | `test_eval_with_deleted_winner_run_exits_2_naming_run` |
 | 🟡 Warning | **Temporal split, tz-aware rows vs naive `time_max` (or reverse) → raw `TypeError`**, not in `_REFUSALS`: train dies with a traceback; in eval it happens after `write_atomic` recorded the test look, so a look is spent for nothing (next attempt needs a look note, U-28). Same gap as the untested datalab split rule in §4 | `templates/project/src/__DATALAB_PACKAGE__/split.py:44-63`, `eval.py:116-120`, `train.py:33` | 6 time/TZ | CONFIRMED | No (naive dates only) | `test_load_split_tz_aware_rows_with_naive_bound_raises_split_error` |
 | 🟡 Warning | **`tools/weavit-web.sh` can pass a malformed key / fail opaquely**: `cut -d= -f2-` keeps surrounding quotes and a CRLF `\r` (RAG preset gets 401s with no hint); an uninitialised submodule leaves `tools/weavit-ui` empty and `pnpm install` fails with its own error; an interrupted `pnpm install` leaves a `node_modules` the `[ ! -d node_modules ]` check then skips | `tools/weavit-web.sh:20-22,33-36` | 5 config · 8 subprocess | CONFIRMED | No | Pytest running the key-extraction snippet on `OPENROUTER_API_KEY="k"\r` ⇒ `k`; `[ -f package.json ] \|\| { echo "run git submodule update --init"; exit 1; }` + test on an empty dir |
@@ -165,10 +166,10 @@ Already covered (not re-filed): atomic ledger writes + tmp cleanup + corrupt ref
 ## Migration Plan
 
 ### Phase 0 — Quick Wins (mechanical, low risk)
-- [ ] WHY comments on `call.py:132`, `live_caller.py:160`, `ledger_ops.py:25` (`Any`), `llm_dump.py:18`, `dispatch.py:42` and the listed test pragmas (§2, §5)
+- [x] WHY comments on `call.py:132`, `live_caller.py:160`, `ledger_ops.py:25` (`Any`), `llm_dump.py:18`, `dispatch.py:42` and the listed test pragmas (§2, §5)
 - [ ] Pin the floating dev dependencies `==` (§5)
 - [ ] Annotate the three voice-arch test helpers; `def` for the `bench.py:62` lambda; diagnostic `print` → stderr in `hydra_gate.py` (§2)
-- [ ] `match=` on every `pytest.raises(SplitError)`; assert the milestone id lists in `test_contract_matches_kind_enum` (§4)
+- [x] `match=` on every `pytest.raises(SplitError)`; assert the milestone id lists in `test_contract_matches_kind_enum` (§4)
 - [ ] Docs: `.claude/skills/experiment` in Project Structure, #36 grace period in Infra, card-status FSM marked "manual label", datalab module list in the Shared-package layer (§1, §3, §5)
 - [ ] Add a "platform-conditional" category to #8 for `test_new_project.py:221` (§4)
 - [ ] `hydra_gate.py` subprocess timeout; strip quotes/`\r` and guard the empty submodule in `tools/weavit-web.sh` (§6)
@@ -177,7 +178,7 @@ Already covered (not re-filed): atomic ledger writes + tmp cleanup + corrupt ref
 - [ ] Split `ledger_ops.py` (199/200) and in the same refactor replace raw status/decision/milestone literals with enum values / contract-derived constants (§3, §5)
 - [ ] Ledger enum contract: `statuses`/`decisions`/`kinds` in `contracts/` + one Python and one TS equality test (§3)
 - [ ] `VoiceSettings` factory: one `load_settings()` with one justified ignore; `dump_empty_dir` as a settings field (§1, §2)
-- [ ] Missing split rules as parametrized tests + one Hypothesis property (§4)
+- [x] Missing split rules as parametrized tests + one Hypothesis property (§4)
 - [ ] voice-arch module→layer table in ARCHITECTURE.md; fix the `sweep_query` purity contract (§1)
 - [ ] Group the 10-arg `run_sweep` / `build_result` parameters into dataclasses (§2, §5)
 - [ ] mini-rag: vector probe before reusing a collection + fail the run on zero passages (§6 🔴)
@@ -189,12 +190,12 @@ Already covered (not re-filed): atomic ledger writes + tmp cleanup + corrupt ref
 - [ ] Declarative milestone `TRANSITIONS` table consulted by `produce`/`decide`/`redo`, with a test enumerating it against ARCHITECTURE.md (§3)
 - [ ] #12: serialize Weaviate index builds (lock or create-if-absent) + interleaving test (§4, §6)
 - [ ] #14: pyright strict on `src/` per tree, explicit mode for voice-arch and the template (§2, §7)
-- [ ] voice-arch call deadlines: bound `create_dispatch`, `connect_caller` and cleanup in `run_one_call`; CALLER_FAULT on an unstarted caller session; error `CallResult` on worker setup failure (§6)
+- [x] voice-arch call deadlines: bound `create_dispatch`, `connect_caller` and cleanup in `run_one_call`; CALLER_FAULT on an unstarted caller session; error `CallResult` on worker setup failure (§6)
 
 ### Phase 3 — Ongoing Discipline
 - [ ] #13: eslint + prettier in `app/`, wired into `gates-app` and CI (§2)
 - [ ] Enable ruff `PLR0913` (max-args 5), `BLE001`, and decide `FA` (§2, Linter Candidates)
-- [ ] Extend `check_file_size.py` to `templates/*/src`; consider a function-length check (§5)
+- [x] Extend `check_file_size.py` to `templates/*/src`; consider a function-length check (§5)
 - [ ] #7: give `tools/` a type + test gate (§7)
 - [ ] Keep the hand audit of the Python trees in §7 until the inventory harness gap is closed
 

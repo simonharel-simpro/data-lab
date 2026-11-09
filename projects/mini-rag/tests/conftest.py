@@ -23,7 +23,7 @@ def _isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]
         import mlflow
 
         # None is handled at runtime (unsets the URI); the stub omits it.
-        mlflow.set_tracking_uri(None)  # pyright: ignore[reportArgumentType]
+        mlflow.set_tracking_uri(None)  # pyright: ignore[reportArgumentType]  # None resets the URI
 
 
 @pytest.fixture

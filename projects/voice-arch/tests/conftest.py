@@ -22,7 +22,7 @@ def _isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]
         import mlflow
 
         # None is handled at runtime (unsets the URI); the stub omits it.
-        mlflow.set_tracking_uri(None)  # pyright: ignore[reportArgumentType]
+        mlflow.set_tracking_uri(None)  # pyright: ignore[reportArgumentType]  # None resets the URI
 
 
 @pytest.fixture
@@ -35,4 +35,4 @@ def voice_settings(monkeypatch: pytest.MonkeyPatch) -> VoiceSettings:
     monkeypatch.setenv("OPENROUTER_API_KEY", "k1")
     monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_KEY", "devkey")
     monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_SECRET", "s" * 32)
-    return VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]
+    return VoiceSettings(_env_file=None)  # pyright: ignore[reportCallIssue]  # pydantic-settings kwarg

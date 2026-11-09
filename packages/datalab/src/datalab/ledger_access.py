@@ -35,5 +35,5 @@ def record_test_look(lg: RunLedger, split_sha: str, run_id: str, note: str | Non
 
 
 # The names start with "test_" (the contract's wording): keep pytest from collecting them out of test modules.
-test_access_problem.__test__ = False  # pyright: ignore[reportFunctionMemberAccess]
-test_access_allowed.__test__ = False  # pyright: ignore[reportFunctionMemberAccess]
+test_access_problem.__test__ = False  # pyright: ignore[reportFunctionMemberAccess]  # stops pytest collecting it
+test_access_allowed.__test__ = False  # pyright: ignore[reportFunctionMemberAccess]  # stops pytest collecting it

@@ -72,7 +72,7 @@ tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; we
 tools/weavit-ui/native/projector/  `weavit-projector` Rust sidecar (PCA, exact kNN, UMAP; NDJSON on stdout)
 tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY,
                         builds the projector incrementally; serves even if cargo is missing or the build fails)
-tools/check_file_size.py  pre-commit hook: Python modules under src/ <= 200 lines
+tools/check_file_size.py  pre-commit hook: Python modules under src/ of packages/, projects/ and templates/ <= 200 lines (warns from 190)
 tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency;
                         hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root;
                         check_enum_discipline.py (hooks `enum-discipline`, `-mini-rag`, `-voice-arch`, one per tree):

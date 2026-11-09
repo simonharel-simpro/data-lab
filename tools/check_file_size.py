@@ -1,11 +1,11 @@
-"""Fail if any Python module under packages/*/src/ or projects/*/src/ exceeds the line budget."""
+"""Fail if any Python module under packages/*/src/, projects/*/src/ or templates/*/src/ exceeds the line budget."""
 
 import sys
 from pathlib import Path
 
 MAX_LINES = 200
 WARN_LINES = 190
-ROOTS = ("packages", "projects")
+ROOTS = ("packages", "projects", "templates")
 
 
 def _in_scope(path: Path) -> bool:

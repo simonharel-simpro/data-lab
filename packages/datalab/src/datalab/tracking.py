@@ -17,7 +17,7 @@ from mlflow.exceptions import MlflowException
 from datalab.project import Project, experiment_name
 from datalab.settings import Settings
 from datalab.tags import Tag
-from datalab.tracking_outcome import OUTCOMES, Outcome, after_failure, tag_outcome
+from datalab.tracking_outcome import OUTCOMES, Outcome, after_failure, ending_run, tag_outcome
 from datalab.tracking_queries import StaleRun, close_runs, experiments_page, project_spend, stale_runs
 
 __all__ = [
@@ -101,7 +101,8 @@ def tracked_run(
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
     # mlflow annotates `trace_location` with an unresolved type, so the function is partially unknown.
     mlflow.set_experiment(experiment_name(project.name, sub))  # pyright: ignore[reportUnknownMemberType]  # see above
-    with mlflow.start_run(run_name=run_name) as run:
+    run = mlflow.start_run(run_name=run_name)
+    with ending_run():
         mlflow.set_tags({"project": project.name} | extra)
         try:
             yield run.info.run_id
@@ -140,6 +141,12 @@ def _trial_tags(tags: Mapping[str, str] | None) -> dict[str, str]:
     return extra
 
 
+def _record_child(parent_id: str, run_name: str, failed: bool) -> None:
+    outcome = OUTCOMES.setdefault(parent_id, Outcome())
+    outcome.children += 1
+    outcome.failed += [run_name] if failed else []
+
+
 @contextmanager
 def tracked_trial(
     run_name: str, tags: Mapping[str, str] | None = None, *, candidate: str | None = None
@@ -153,8 +160,9 @@ def tracked_trial(
     parent_id, opened, failed = active.info.run_id, False, False
     try:
         experiment_id, project = _parent_of(parent_id)
-        with mlflow.start_run(run_name=run_name, nested=True, experiment_id=experiment_id) as child:
-            opened = True
+        child = mlflow.start_run(run_name=run_name, nested=True, experiment_id=experiment_id)
+        opened = True
+        with ending_run():
             mlflow.set_tags({"project": project, Tag.CANDIDATE.value: candidate or run_name} | extra)
             trial = Trial(child.info.run_id, candidate or run_name)
             try:
@@ -168,6 +176,4 @@ def tracked_trial(
     finally:
         _release_slot()
         if opened:
-            outcome = OUTCOMES.setdefault(parent_id, Outcome())
-            outcome.children += 1
-            outcome.failed += [run_name] if failed else []
+            _record_child(parent_id, run_name, failed)
