@@ -13,6 +13,20 @@
       "root": ".",
       "tracker": "#7",
       "reason": "no root uv project by design (ADR 3); covered by pre-commit ruff + the `gates-root` pre-push hook"
+    },
+    {
+      "stack": "python-fastapi",
+      "tool": "pyright",
+      "root": ".",
+      "tracker": "#7",
+      "reason": "no root uv project by design (ADR 3), so `uv run pyright` cannot spawn at the root; covered by the `gates-root` pre-push hook (pyright 1.1.414, root pyrightconfig.json)"
+    },
+    {
+      "stack": "python-fastapi",
+      "tool": "pytest",
+      "root": ".",
+      "tracker": "#7",
+      "reason": "no root uv project by design (ADR 3), so `uv run pytest` cannot spawn at the root; covered by the `gates-root` pre-push hook (pytest + coverage floor 70 on tools/)"
     }
   ],
   "exemptions": [
