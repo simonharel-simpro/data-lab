@@ -9,7 +9,7 @@ A phase is complete only when merged into the integration branch AND marked here
 | Phase | Theme | Status | Branch | /check |
 |-------|-------|--------|--------|--------|
 | 1 | Run integrity: empty index, #12 build race, voice-arch budget | ✅ landed (4/4) | fix-phase-1-run-integrity | clean @ 2e50ef7 (1 fix-check iter) |
-| 2 | Resilience at the trust boundaries | implemented (7/7), awaiting /check | fix-phase-2-trust-boundaries | — |
+| 2 | Resilience at the trust boundaries | ✅ landed (7/7) | fix-phase-2-trust-boundaries | clean @ 2e1bc20 (1 fix-check iter) |
 | 3 | Ledger contract, enum discipline & datalab test quality | pending | — | — |
 | 4 | Signatures, settings & error-handling style | pending | — | — |
 | 5 | pyright strict on `src/` (#14) | pending | — | — |
