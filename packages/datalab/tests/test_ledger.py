@@ -20,6 +20,8 @@ from datalab.ledger import (
     record_test_look,
     redo,
 )
+from datalab.ledger_model import AUDIT, DATASET, FEATURES, MODELING
+from tests.conftest import REPO_ROOT
 from tests.ledger_support import VECTORS, at_modeling, h, vector
 from tests.ledger_support import ledger as vec_ledger
 
@@ -46,7 +48,26 @@ def test_contract_matches_kind_enum() -> None:
     sequences = contract().sequences
 
     assert set(sequences) == {Kind.TRAINING, Kind.COMPARISON}
-    assert (len(sequences[Kind.TRAINING]), len(sequences[Kind.COMPARISON])) == (9, 7)
+    assert sequences[Kind.TRAINING] == (
+        "scoping", "dataset", "cleaning", "eda", "features", "modeling", "audit", "tracking", "report",
+    )  # fmt: skip
+    assert sequences[Kind.COMPARISON] == ("scoping", "dataset", "eda", "modeling", "audit", "tracking", "report")
+
+
+def test_named_milestones_exist_in_contract() -> None:
+    sequences = contract().sequences
+
+    assert {MODELING, AUDIT} <= set(contract().agents)
+    assert all(m in sequences[Kind.TRAINING] for m in (DATASET, FEATURES, MODELING, AUDIT))
+    assert all(m in sequences[Kind.COMPARISON] for m in (DATASET, MODELING, AUDIT))
+
+
+def test_ledger_enums_match_contract() -> None:
+    sets = json.loads((REPO_ROOT / "contracts" / "value_sets.json").read_text(encoding="utf-8"))
+
+    assert [s.value for s in Status] == sets["statuses"]
+    assert [d.value for d in Decision] == sets["decisions"]
+    assert [k.value for k in Kind] == sets["kinds"]
 
 
 def test_u_2_redo_resets_later_milestones_to_todo() -> None:

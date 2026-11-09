@@ -3,7 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { ledgerState, MILESTONES, parseLedger, readLedger, type LedgerFs, type LedgerState } from './ledger.ts';
+import {
+  DECISIONS,
+  KINDS,
+  ledgerState,
+  MILESTONES,
+  parseLedger,
+  readLedger,
+  STATUSES,
+  type LedgerFs,
+  type LedgerState,
+} from './ledger.ts';
 import { readReport } from './report.ts';
 import { checkReport } from '../integrations/export-guard.ts';
 
@@ -16,6 +26,9 @@ const vector = (name: string): Vector => {
   assert.ok(v, name);
   return v;
 };
+const contract = JSON.parse(
+  readFileSync(new URL('../../../contracts/value_sets.json', import.meta.url), 'utf8'),
+) as { statuses: string[]; decisions: string[]; kinds: string[] };
 const PREFIX: Record<string, string> = { schema: 'schema:', 'U-13': 'unsupported schema (kind missing)', 'I-1': 'I-1:' };
 const fixture = fileURLToPath(new URL('../../test-fixtures/ledger/valid', import.meta.url));
 
@@ -65,6 +78,12 @@ test('F-18: milestones contract', () => {
   assert.equal(MILESTONES.sequences.training.length, 9);
   assert.equal(MILESTONES.sequences.comparison.length, 7);
   assert.equal(MILESTONES.freeze_after, 'dataset');
+});
+
+test('ledger value sets match contracts/value_sets.json', () => {
+  assert.deepEqual([...STATUSES], contract.statuses);
+  assert.deepEqual([...DECISIONS], contract.decisions);
+  assert.deepEqual([...KINDS], contract.kinds);
 });
 
 test('F-20: missing run.json renders nothing', () => {

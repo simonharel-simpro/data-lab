@@ -70,12 +70,12 @@ def test_temporal_bounds_not_increasing_rejected(tmp_path: Path) -> None:
         splits=_splits({"time_max": "2024-01-01"}, {"time_max": "2024-12-31"}, {"time_max": "2024-12-31"}),
     )
 
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match="time_max must strictly increase from train to val to test"):
         read_split(_write(tmp_path, data))
 
 
 def test_empty_test_rejected(tmp_path: Path) -> None:
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match="test must not be empty"):
         read_split(_write(tmp_path, _split(splits=_splits([0, 1], [2], []))))
 
     split = read_split(_write(tmp_path, _split(splits=_splits([0, 1], [], [2]))))
@@ -86,7 +86,7 @@ def test_empty_test_rejected(tmp_path: Path) -> None:
 def test_mixed_shapes_rejected(tmp_path: Path) -> None:
     data = _split(strategy="grouped", group_key="g", splits=_splits([0, 1], {"groups": ["b"]}, {"groups": ["c"]}))
 
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match="partitions mix shapes"):
         read_split(_write(tmp_path, data))
 
 
@@ -110,5 +110,5 @@ def test_read_split_strips_bom(tmp_path: Path) -> None:
 
 
 def test_split_seed_string_rejected(tmp_path: Path) -> None:
-    with pytest.raises(SplitError):
+    with pytest.raises(SplitError, match="Input should be a valid integer"):
         read_split(_write(tmp_path, _split(seed="0")))
