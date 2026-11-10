@@ -83,6 +83,7 @@ test('F-18: Python-only vectors are accepted by the app', () => {
 test('F-18: milestones contract', () => {
   assert.equal(MILESTONES.sequences.training.length, 9);
   assert.equal(MILESTONES.sequences.comparison.length, 7);
+  assert.equal(MILESTONES.sequences.exploration.length, 3);
   assert.equal(MILESTONES.freeze_after, 'dataset');
 });
 
@@ -182,6 +183,17 @@ test('no current step once all are validated', () => {
   const state = ok(readLedger('/x/p', fakeFs(files)));
   assert.equal(state.steps.length, 7);
   assert.ok(state.steps.every((s) => !s.current));
+});
+
+test('an exploration ledger reads as three validated steps, none current', () => {
+  const files = new Map([[join('/x/p', 'run.json'), JSON.stringify(vector('exploration-complete').run)]]);
+  const state = ok(readLedger('/x/p', fakeFs(files)));
+  assert.equal(state.ledgerKind, 'exploration');
+  assert.deepEqual(
+    state.steps.map((s) => s.id),
+    ['scoping', 'eda', 'report'],
+  );
+  assert.ok(state.steps.every((s) => s.status === 'validated' && !s.current));
 });
 
 test('an unreadable run.json is invalid, never a throw', () => {

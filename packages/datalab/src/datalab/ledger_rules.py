@@ -5,12 +5,20 @@ from collections.abc import Callable
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final
 
-from datalab.ledger_model import DATASET, MODELING, Decision, Kind, Status, contract
+from datalab.ledger_model import AUDIT, DATASET, FEATURES, MODELING, Decision, Status, contract
 
 if TYPE_CHECKING:
     from datalab.ledger_model import RunLedger
 
 _DRIVE: Final = re.compile(r"^[A-Za-z]:")
+
+
+def _absent(lg: "RunLedger", anchor: str, *fields: str) -> str | None:
+    """A field that belongs to a milestone the kind's sequence lacks must stay null (empty for test_looks)."""
+    if anchor in lg.sequence() or all(getattr(lg, f) in (None, ()) for f in fields):
+        return None
+    must = "empty" if fields == ("test_looks",) else "null"
+    return f"{anchor} is not in the {lg.kind} sequence, so {' and '.join(fields)} must be {must}"
 
 
 def _i1(lg: "RunLedger") -> str | None:
@@ -64,8 +72,8 @@ def _i6(lg: "RunLedger") -> str | None:
 
 
 def _i7(lg: "RunLedger") -> str | None:
-    if lg.kind is Kind.COMPARISON and lg.features is not None:
-        return "I-7: a comparison ledger has no features"
+    if m := _absent(lg, FEATURES, "features"):
+        return f"I-7: {m}"
     return None
 
 
@@ -87,14 +95,22 @@ def _i9(lg: "RunLedger") -> str | None:
 
 
 def _i10(lg: "RunLedger") -> str | None:
-    seq = lg.sequence()
-    for m in seq[seq.index(contract().freeze_after) + 1 :]:
+    seq, freeze_after = lg.sequence(), contract().freeze_after
+    if m := _absent(lg, freeze_after, "split_sha256", "split_summary"):
+        return f"I-10: {m}"
+    if freeze_after not in seq:
+        return None
+    for m in seq[seq.index(freeze_after) + 1 :]:
         if lg.milestones[m].status is not Status.TODO and lg.split_sha256 is None:
             return f"I-10: {m} started but the split is not frozen (split_sha256 is null)"
     return None
 
 
 def _i11(lg: "RunLedger") -> str | None:
+    if m := _absent(lg, DATASET, "dataset"):
+        return f"I-11: {m}"
+    if DATASET not in lg.sequence():
+        return None
     if lg.milestones[DATASET].status is Status.VALIDATED and lg.dataset is None:
         return "I-11: dataset is validated but dataset is null"
     return None
@@ -115,6 +131,10 @@ def _i12(lg: "RunLedger") -> str | None:
 
 
 def _i13(lg: "RunLedger") -> str | None:
+    if m := _absent(lg, MODELING, "winner"):
+        return f"I-13: {m}"
+    if MODELING not in lg.sequence():
+        return None
     validated = lg.milestones[MODELING].status is Status.VALIDATED
     if (lg.winner is not None) != validated:
         return "I-13: winner must be set exactly when modeling is validated"
@@ -122,6 +142,8 @@ def _i13(lg: "RunLedger") -> str | None:
 
 
 def _i14(lg: "RunLedger") -> str | None:
+    if m := _absent(lg, AUDIT, "test_looks"):
+        return f"I-14: {m}"
     seen: set[str] = set()
     for look in lg.test_looks:
         if look.split_sha256 in seen and not look.note.strip():
@@ -131,6 +153,10 @@ def _i14(lg: "RunLedger") -> str | None:
 
 
 def _i15(lg: "RunLedger") -> str | None:
+    if m := _absent(lg, MODELING, "data_sha256"):
+        return f"I-15: {m}"
+    if MODELING not in lg.sequence():
+        return None
     if lg.milestones[MODELING].status is not Status.TODO and lg.data_sha256 is None:
         return "I-15: modeling started but data_sha256 is null"
     return None

@@ -39,7 +39,8 @@ export function tag(run: MlflowRun, key: string): string | undefined {
 }
 
 /**
- * `legacy`: no run.json, today's rule. `ledger`: only children of a parent on run.json's frozen split and data.
+ * `legacy`: no run.json, or an exploration ledger (D-6): today's rule.
+ * `ledger`: only children of a parent on run.json's frozen split and data.
  * `none`: run.json is invalid, so no run can be trusted to be on the frozen split.
  */
 export type BestFilter =
@@ -48,6 +49,7 @@ export type BestFilter =
 export function bestFilter(state: LedgerState): BestFilter {
   if (state.kind === 'absent') return { kind: 'legacy' };
   if (state.kind === 'invalid') return { kind: 'none' };
+  if (state.ledgerKind === 'exploration') return { kind: 'legacy' };
   return { kind: 'ledger', splitSha256: state.splitSha256, dataSha256: state.dataSha256 };
 }
 

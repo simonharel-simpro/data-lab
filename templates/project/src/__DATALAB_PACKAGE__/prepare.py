@@ -100,6 +100,11 @@ def frozen_score_on(cfg: DictConfig) -> Partition:
     """Train's ledger step: read run.json, refuse a split or data moved since the freeze, then pick the partition."""
     experiment_dir = Path(cfg.paths.experiment_dir)
     lg = read_ledger(experiment_dir)
+    if lg is not None and lg.kind is Kind.EXPLORATION:
+        raise PrepareError(
+            "an exploration ledger has no train run: log runs from project code with datalab.tracking, "
+            "or archive run.json and restart with another kind"
+        )
     _check_frozen(lg, experiment_dir, Path(cfg.paths.data_file))
     return score_on(cfg, lg)
 

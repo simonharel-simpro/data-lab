@@ -36,6 +36,7 @@ _DATALAB: dict[str, str] = {
     "redo": "Decision.REDO",
     "training": "Kind.TRAINING",
     "comparison": "Kind.COMPARISON",
+    "exploration": "Kind.EXPLORATION",
     # project.Goal
     "max": "Goal.MAX",
     "min": "Goal.MIN",

@@ -38,6 +38,7 @@ class Decision(StrEnum):
 class Kind(StrEnum):
     TRAINING = "training"
     COMPARISON = "comparison"
+    EXPLORATION = "exploration"
 
 
 # (status before, decision) -> status after; `None` = produce. The ops consult it; ARCHITECTURE.md draws it.

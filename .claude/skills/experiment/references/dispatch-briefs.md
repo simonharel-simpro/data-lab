@@ -42,7 +42,8 @@ split, a tracking URI in any config, `--multirun`, a metric key carrying a candi
 ## eda — `ds-eda`
 
 - **Inputs:** `PROJECT.md`, `scope.md`, `dataset.md`, `split.json`, `data/clean/data.jsonl` (a comparison:
-  `paths.data_file`, the same path).
+  `paths.data_file`, the same path). An exploration: the data `scope.md` names (any source), no `split.json`, every
+  row readable.
 - **Metric:** `{metric}`. Say if a finding means the metric should change.
 - **Deliverable:** `eda.md` and `figures/`.
 - **Allowed reads:** the train and val rows of `split.json`.
@@ -102,7 +103,7 @@ split, a tracking URI in any config, `--multirun`, a metric key carrying a candi
 ## report — `ds-reporter`
 
 - **Inputs:** `PROJECT.md`, `run.json`, `scope.md`, `dataset.md`, `split.json`, `eda.md`, `features.md` (training),
-  `modeling.md`, `audit.md`, `tracking.md`.
+  `modeling.md`, `audit.md`, `tracking.md`. An exploration: `PROJECT.md`, `run.json`, `scope.md`, `eda.md` only.
 - **Metric:** `{metric}`.
 - **Deliverable:** `reports/report.html` (self-contained).
 - **Allowed reads:** the artifacts above; no data rows.

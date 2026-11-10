@@ -47,11 +47,12 @@ def test_f_18_ledger_vectors(name: str, entry: dict[str, Any], valid: bool) -> N
 def test_contract_matches_kind_enum() -> None:
     sequences = contract().sequences
 
-    assert set(sequences) == {Kind.TRAINING, Kind.COMPARISON}
+    assert set(sequences) == {Kind.TRAINING, Kind.COMPARISON, Kind.EXPLORATION}
     assert sequences[Kind.TRAINING] == (
         "scoping", "dataset", "cleaning", "eda", "features", "modeling", "audit", "tracking", "report",
     )  # fmt: skip
     assert sequences[Kind.COMPARISON] == ("scoping", "dataset", "eda", "modeling", "audit", "tracking", "report")
+    assert sequences[Kind.EXPLORATION] == ("scoping", "eda", "report")
 
 
 def test_named_milestones_exist_in_contract() -> None:
@@ -197,3 +198,40 @@ def test_record_test_look_appends() -> None:
     assert [(look.run_id, look.note) for look in result.test_looks] == [("e1", ""), ("e2", "re-check after fix")]
     with pytest.raises(LedgerError, match="note"):
         record_test_look(vec_ledger("audit-first-look"), h("a"), "e2", None)
+
+
+def test_new_exploration_ledger_starts_at_scoping() -> None:
+    fresh = new_ledger(Kind.EXPLORATION, "m (max): x")
+
+    assert fresh.current_milestone == "scoping"
+    assert {m: e.status for m, e in fresh.milestones.items()} == {
+        "scoping": Status.TODO,
+        "eda": Status.TODO,
+        "report": Status.TODO,
+    }
+
+
+def test_redo_exploration_resets_all() -> None:
+    result = redo(vec_ledger("exploration-complete"), "scoping")
+
+    assert [result.milestones[m].status for m in ("scoping", "eda", "report")] == [Status.TODO] * 3
+    assert result.current_milestone == "scoping"
+    assert (result.dataset, result.split_sha256, result.split_summary) == (None, None, None)
+    assert (result.features, result.winner, result.data_sha256, result.test_looks) == (None, None, None, ())
+
+
+def test_test_access_refuses_exploration() -> None:
+    done = vec_ledger("exploration-complete")
+
+    assert ledger.test_access_problem(done, h("a"), None) == (
+        "the test partition is read at the audit; the current milestone is report"
+    )
+    with pytest.raises(LedgerError, match="the test partition is read at the audit"):
+        record_test_look(done, h("a"), "e1", None)
+
+
+def test_u_3_exploration_features_message() -> None:
+    with pytest.raises(LedgerError) as caught:
+        parse(json.dumps(vector("exploration-with-features")))
+
+    assert str(caught.value) == "I-7: features is not in the exploration sequence, so features must be null"

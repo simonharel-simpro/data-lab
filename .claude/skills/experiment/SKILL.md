@@ -17,7 +17,7 @@ never do a specialist's work and you never write Python: code goes through secti
 | Step 0 copies `assets/` into the project (`SKILL.md:36-63`) | no Step 0: `datalab-new` already scaffolded everything |
 | `runs/<name>/`, `requirements.txt`, `python -m src.<p>.train` | `projects/<name>/`, uv env, `python -m <pkg>.train` (`<pkg>` = name with `-` → `_`) |
 | `project.md` narrative | sections of `PROJECT.md` (Approche, Enseignements, Suite) |
-| `run.json` without kind or todo | `run.json` with `kind` (training \| comparison) and `todo` statuses, strict order |
+| `run.json` without kind or todo | `run.json` with `kind` (training \| comparison \| exploration) and `todo` statuses, strict order |
 | `--multirun` sweeps, budget a hard stop | grid in-process, one child per combination (D-4); budget shown, never enforced (D-6) |
 
 Contract: `contracts/EXPERIMENT.md`. Milestone ids, agents and sequences: `contracts/milestones.json` only.
@@ -40,7 +40,7 @@ uv run --locked --project packages/datalab python -m datalab.ledger validate pro
 ```
 
 - The first ledger: replace the `read` and `<op>` lines with `l = ledger.new_ledger(ledger.Kind.TRAINING, """...""")`
-  (or `Kind.COMPARISON`).
+  (or `Kind.COMPARISON` / `Kind.EXPLORATION`).
 - A decision: `ledger.decide(l, "<m>", ledger.Decision.VALIDATE, """<expert's words>""")`; modeling adds
   `winner=ledger.Winner(candidate="<family>", run_id="<child run id>")` (keywords only).
 - The `dataset` and `features` fields (no op sets them): add `import json`, then
@@ -73,8 +73,9 @@ Always resume from disk, never from the conversation.
 a. `projects/<name>/` must exist; else tell the expert to run `uv run --project packages/datalab datalab-new <name>`.
 b. Stale runs: run the MLflow twin, show every stale RUNNING run (> 24 h), ask with AskUserQuestion which to close
    ("none" is a valid answer), then `close_runs` with exactly those ids. Never close a run the expert did not name.
-c. No `run.json`: governance gate (section 4); ask the kind (training | comparison) and the metric (key + goal
-   `max`/`min` + one line). Write the card `metric: {key, goal}` in `PROJECT.md` first, then `new_ledger(kind,
+c. No `run.json`: governance gate (section 4); ask the kind (training | comparison | exploration) and the metric
+   (key + goal `max`/`min` + one line). Pick exploration to look at data, try an architecture or benchmark without
+   a frozen test; it states what it looks at as its metric line. Write the card `metric: {key, goal}` in `PROJECT.md` first, then `new_ledger(kind,
    "<key> (<goal>): <one line>")` + `write_atomic` + `validate` (V-3 ties the two).
 d. `run.json` present: `validate`. Exit 1: quote the FAIL line verbatim and never guess a fix. A corrupt file (invalid
    JSON, schema, `kind missing`): tell the expert, reconstruct from `PROJECT.md` + the artifacts on disk, show the
@@ -91,7 +92,9 @@ Face datasets proceed without sign-off.
 ## 5. The flow
 
 Read the kind's sequence from `contracts/milestones.json` (`sequences.<kind>`, agent per id in `milestones`); never
-hardcode it. Run each milestone with the ⏸️ protocol (section 6). Transition work, which is not a milestone:
+hardcode it. Run each milestone with the ⏸️ protocol (section 6). A transition whose milestone is absent from the
+sequence never runs; an exploration is scoping → eda → report, and logs runs (if any) from project code with
+`datalab.tracking`. Transition work, which is not a milestone:
 
 - After `dataset` is validated: acquire the data exactly as `dataset.md` names it (id + revision). Write the rows as
   JSONL to `data/raw/data.jsonl`; a comparison (no cleaning milestone) also copies it unchanged to

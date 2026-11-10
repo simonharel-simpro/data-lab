@@ -50,3 +50,14 @@ def test_train_runs_when_frozen_split_and_data_are_unchanged(
     ledger.write_atomic(exp_dir, ledger_at_modeling(exp_dir))
 
     assert _train(configs, data_overrides) == 0
+
+
+def test_train_refuses_exploration_ledger_before_any_run(
+    configs: Path, exp_dir: Path, data_overrides: list[str], tracking: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ledger.write_atomic(exp_dir, ledger.new_ledger(ledger.Kind.EXPLORATION, "score (max): x"))
+
+    assert _train(configs, data_overrides) == 2
+
+    assert "an exploration ledger has no train run" in capsys.readouterr().err
+    assert MlflowClient(tracking).get_experiment_by_name(E) is None
