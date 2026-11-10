@@ -387,9 +387,13 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
 - **Card** — `projects/<name>/PROJECT.md`: YAML frontmatter (`name`, `title`, `status`, `tags`, `data`,
   `metric {key, goal}`) plus `##` sections. Schema single-sourced in the app (D-3).
 - **Run** — an MLflow run tagged `project=<name>` in experiment `<name>` or `<name>/<sub>`.
-- **Experiment ledger** — `projects/<name>/run.json` (a `RunLedger`, kind `training|comparison`): one status per
-  milestone, the expert's decisions log, the frozen `split_sha256`, the winner and the test looks. Guarded by
-  invariants I-1..I-15 (`datalab.ledger_rules`) and checks V-1..V-3; `split.json` is its frozen split.
+- **Experiment ledger** — `projects/<name>/run.json` (a `RunLedger`, kind `training|comparison|exploration`): one
+  status per milestone, the expert's decisions log, the frozen `split_sha256`, the winner and the test looks. Guarded
+  by invariants I-1..I-15 (`datalab.ledger_rules`) and checks V-1..V-3; `split.json` is its frozen split. An
+  `exploration` (scoping → eda → report) has no dataset step, split, modeling, audit or tracking: the fields those
+  milestones own stay null (`ledger_rules._absent`). Its runs, if any, are logged from project code via
+  `datalab.tracking`; the template train/eval refuse it, and the card ranks it by the legacy rule (decisions.md,
+  2026-11-09).
   Milestone ids are data from `contracts/milestones.json`; only the ids the code names are `Final` constants
   (`DATASET`, `FEATURES`, `MODELING`, `AUDIT`), tested to exist in the contract (decisions.md, 2026-11-08).
 - **Collection** — a Weaviate collection named from the project name + parts, hashed to avoid collisions.
