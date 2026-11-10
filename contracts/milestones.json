@@ -5,5 +5,6 @@
   {"id": "audit", "agent": "ds-validator"}, {"id": "tracking", "agent": "ds-mlflow-tracker"},
   {"id": "report", "agent": "ds-reporter"}],
  "sequences": {"training": ["scoping", "dataset", "cleaning", "eda", "features", "modeling", "audit", "tracking", "report"],
-  "comparison": ["scoping", "dataset", "eda", "modeling", "audit", "tracking", "report"]},
+  "comparison": ["scoping", "dataset", "eda", "modeling", "audit", "tracking", "report"],
+  "exploration": ["scoping", "eda", "report"]},
  "freeze_after": "dataset"}

@@ -146,3 +146,18 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 - Modified: `new_project.py` (wiring), `conftest.py` (`wired_repo`), `.pre-commit-config.yaml`, `.github/workflows/ci.yml` (matrix `projects`, fail-fast false), `ruff.toml`, ARCHITECTURE.md.
 - Tests: 17 of 21 seen red via targeted mutation; 4 not mutated (two-configs F-1 entry, outside-projects paths, voice-arch byte-equality, missing marker).
 - Follow-up for the user: rename required CI checks (`pilot`/`voice-arch` → `project (mini-rag)`/`project (voice-arch)`).
+
+# exploration — third experiment kind
+
+Integration branch: `feat/exploration` (base `main`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
+Plan: `IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md` (READY stamp).
+
+| Phase | Title | Status | Branch |
+|-------|-------|--------|--------|
+| 1 | Experiment kind `exploration` | ✅ landed 2026-11-09 (/check clean) | `phase-1-exploration-kind` |
+
+## Phase 1 — Experiment kind `exploration`
+**Implemented:** 2026-11-09 · **Agent:** general-purpose · **Tooling:** ✅ pre-push gate green (datalab 248 passed, cov 95 %; app 120 passed); `pytest -m scaffold` 1 passed; ledger validate ok
+- Files (21 modified, 0 new): contracts/{milestones,value_sets,run_ledger_vectors}.json, contracts/{EXPERIMENT,README}.md, datalab ledger_{model,rules,ops}.py + tests, template prepare.py + test_train_frozen.py, check_enum_discipline.py, app ledger.ts/best.ts + tests, /experiment skill + 2 references, tests/TESTING_SCENARIOS.md (EXP-36, EXP-37)
+- Tests: every planned case written with the plan's oracle and seen red first; +1 extra (`test_u_3_exploration_features_message`)
+- Notes: the I-7 comparison message is reworded (planned, S-1; only the prefix is pinned); the vector metric is `score (max)` to match the test card for V-3

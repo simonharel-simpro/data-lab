@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bestFilter, eligibleForBest, type BestFilter } from './best.ts';
+import type { LedgerState } from './ledger.ts';
 import type { MlflowRun } from './mlflow-rest.ts';
 
 const L: BestFilter = { kind: 'ledger', splitSha256: 'a'.repeat(64), dataSha256: 'b'.repeat(64) };
@@ -82,4 +83,21 @@ test('bestFilter on an ok ledger carries the run.json hashes', () => {
     dataSha256: null,
   });
   assert.deepEqual(f, { kind: 'ledger', splitSha256: 'a'.repeat(64), dataSha256: null });
+});
+
+test('D-6: an exploration ledger ranks its runs by the legacy rule; other kinds keep the ledger filter', () => {
+  const state: Extract<LedgerState, { kind: 'ok' }> = {
+    kind: 'ok',
+    ledgerKind: 'exploration',
+    metric: 'm',
+    steps: [],
+    splitSha256: null,
+    dataSha256: null,
+  };
+  assert.deepEqual(bestFilter(state), { kind: 'legacy' });
+  assert.deepEqual(bestFilter({ ...state, ledgerKind: 'comparison' }), {
+    kind: 'ledger',
+    splitSha256: null,
+    dataSha256: null,
+  });
 });

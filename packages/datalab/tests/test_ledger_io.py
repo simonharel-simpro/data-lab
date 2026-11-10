@@ -207,3 +207,35 @@ def test_main_maps_file_paths_to_dirs(tmp_path: Path, capsys: pytest.CaptureFixt
     (bad / "run.json").write_text("{}", encoding="utf-8")
     assert main(["validate", str(bad)]) == 1
     assert capsys.readouterr().err.startswith(f"FAIL {bad.resolve()}: ")
+
+
+def _exploration_after_scoping() -> RunLedger:
+    fresh = new_ledger(Kind.EXPLORATION, "score (max): x")
+    return ledger.decide(ledger.produce(fresh, "scoping", ["scope.md"]), "scoping", Decision.VALIDATE, "ok")
+
+
+def test_exploration_runs_to_report(tmp_path: Path) -> None:
+    lg = new_ledger(Kind.EXPLORATION, "score (max): share of rows with a usable transcript")
+    for m, artifact in (("scoping", "scope.md"), ("eda", "eda.md"), ("report", "reports/report.html")):
+        lg = ledger.decide(ledger.produce(lg, m, [artifact]), m, Decision.VALIDATE, "ok")
+    folder = project(tmp_path, lg.model_dump(mode="json"))
+
+    assert all(e.status is Status.VALIDATED for e in lg.milestones.values())
+    assert lg.current_milestone == "report"
+    assert validate_dir(folder) is None
+
+
+def test_freeze_split_refuses_exploration(tmp_path: Path) -> None:
+    split = tmp_path / "split.json"
+    split.write_text(json.dumps(_split()), encoding="utf-8")
+
+    with pytest.raises(LedgerError, match="dataset is not in the exploration sequence"):
+        freeze_split(_exploration_after_scoping(), split, "random seed 0")
+
+
+def test_record_data_refuses_exploration(tmp_path: Path) -> None:
+    data = tmp_path / "data.jsonl"
+    data.write_bytes(b'{"a": 1}\n')
+
+    with pytest.raises(LedgerError, match="the split must be frozen"):
+        record_data(_exploration_after_scoping(), data)

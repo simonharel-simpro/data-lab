@@ -388,3 +388,22 @@ The property: a split is accepted iff train and test are both non-empty.
 **Alternatives considered:** Hypothesis (a new dev dependency); random sampling of the same small domain.
 **Consequences:** No new dependency, and the domain is small enough to be exhaustive rather than sampled. Revisit if
 the split rules grow beyond what enumeration covers.
+
+## 2026-11-09 — Experiment kind `exploration` (scoping → eda → report)
+
+**Status:** accepted (user asked for flexible, non-training experiments, 2026-11-09)
+**Context:** Experiments in data-lab are often not model training: dataset exploration, an architecture trial, a
+benchmark. The ledger only had `training` and `comparison`, both of which require a dataset step, a frozen split,
+modeling and an audit, and there is no `skipped` status (U-18).
+**Decision:** A third kind, `exploration`, with sequence `scoping, eda, report` (`contracts/milestones.json`). The user
+said that a dataset step is not required. The invariants that index a named milestone (I-7, I-10, I-11, I-13, I-14,
+I-15) now first check whether that milestone is in the kind's sequence. When it is absent, its fields must be null
+(`test_looks` empty). No new invariant ids are added. An exploration may log MLflow runs from project code through
+`datalab.tracking`. The template `train`/`eval` refuse an exploration ledger, because they need a frozen split. The
+card ranks an exploration's runs by the legacy rule (`app/src/lib/best.ts`). `metric` stays required for every kind.
+**Alternatives considered:** optional milestones chosen at scoping (reverses U-18 and weakens I-5/I-6); a
+developer-chosen sequence (the contract would guarantee almost nothing); `metric` optional for exploration (a schema
+change on both sides plus V-3).
+**Consequences:** The I-7 message for a comparison changes wording ("features is not in the comparison sequence, so
+features must be null"); only the `I-7:` prefix is pinned. A future kind that drops a milestone gets the same guards
+for free. Plan: `IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md`.

@@ -2,7 +2,7 @@
 
 One contract for people, the `/experiment` skill and both code sides (the `datalab` package and the app). It adapts
 trouvetou's `CONTRACTS.md` to data-lab: the same milestones and ledger, but one shared MLflow server instead of a
-per-project sqlite store (D-1), and a ledger that can say `kind: training | comparison`.
+per-project sqlite store (D-1), and a ledger that can say `kind: training | comparison | exploration`.
 
 ## 1. Layout
 
@@ -25,9 +25,14 @@ evaluated in this order, the first failure wins:
 3. field errors: `schema: <loc>: <msg>` (pydantic and zod list fields in the same order)
 4. invariants I-1 to I-15 in number order, each message starting with its id.
 
-Milestone ids and the two sequences come only from `contracts/milestones.json`; there is no `skipped` status (U-18).
+Milestone ids and the three sequences come only from `contracts/milestones.json`; there is no `skipped` status (U-18).
 The ledger sits beside the PROJECT.md narrative and `split.json`. `contracts/run_ledger_vectors.json` holds the shared
 cases (`checked_by` says which side must refuse an invalid one); V-1 to V-3 are Python-only.
+
+An exploration (`scoping → eda → report`) has no dataset step, split, modeling, audit or tracking: its `dataset`,
+`split_sha256`, `split_summary`, `features`, `winner` and `data_sha256` stay null and `test_looks` empty (I-7, I-10,
+I-11, I-13, I-14, I-15). Its runs, if any, come from project code via `datalab.tracking` (the template train/eval
+refuse it), and the card ranks them like a project without run.json (D-5, D-6).
 
 ## 3. split.json
 

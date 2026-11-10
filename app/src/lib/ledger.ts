@@ -6,7 +6,7 @@ import { z } from 'astro/zod';
 import milestonesJson from '../../../contracts/milestones.json' with { type: 'json' };
 import { reportInvalidLedger } from './report.ts';
 
-export const KINDS = ['training', 'comparison'] as const;
+export const KINDS = ['training', 'comparison', 'exploration'] as const;
 export const STATUSES = ['todo', 'produced', 'validated'] as const;
 export const DECISIONS = ['validate', 'correct', 'redo'] as const;
 export type Kind = (typeof KINDS)[number];
@@ -20,7 +20,9 @@ const milestonesSchema = z
   .object({
     schema_version: z.literal(1),
     milestones: z.array(z.object({ id: z.string(), agent: z.string() }).strict()),
-    sequences: z.object({ training: z.array(z.string()), comparison: z.array(z.string()) }).strict(),
+    sequences: z
+      .object({ training: z.array(z.string()), comparison: z.array(z.string()), exploration: z.array(z.string()) })
+      .strict(),
     freeze_after: z.string(),
   })
   .strict();

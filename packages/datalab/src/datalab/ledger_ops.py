@@ -148,6 +148,8 @@ def redo(lg: RunLedger, milestone: str) -> RunLedger:
 
 
 def freeze_split(lg: RunLedger, split_path: Path, summary: str) -> RunLedger:
+    if contract().freeze_after not in lg.sequence():
+        raise LedgerError(f"{contract().freeze_after} is not in the {lg.kind} sequence: there is no split to freeze")
     if lg.milestones[contract().freeze_after].status is not Status.VALIDATED:
         raise LedgerError(f"{contract().freeze_after} must be validated before the split is frozen")
     if lg.split_sha256 is not None:

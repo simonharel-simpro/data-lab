@@ -112,6 +112,8 @@
 | EXP-07 | Nested trial runs | parent `tracked_run` + 2 `tracked_trial` children, one failing | children in the parent's experiment, failed child still logs `cost_usd`, parent tags `n_children`, `n_failed`, `failed_candidates` | 🆕 New | exp Phase 1 |
 | EXP-08 | Trial without a parent / inside a trial | `tracked_trial` with no active run, or nested | `TrialError` | 🆕 New | exp Phase 1 |
 | EXP-09 | Project spend | runs of every status incl. RUNNING in `<p>/*` | `project_spend` sums all `cost_usd`; no experiment → 0.0 | 🆕 New | exp Phase 1 |
+| EXP-36 | Exploration ledger runs to report | `new_ledger(kind=exploration)` → produce/validate scoping, eda, report → `validate` | exit 0, no split/dataset fields | 🆕 New | exploration Phase 1 |
+| EXP-37 | Exploration → training via archive | §11 archive run.json, new ledger kind=training | the old ledger kept as `run.<date>.json`, new one at scoping | 🆕 New | exploration Phase 1 |
 
 #### Test Data Dependencies
 - `contracts/run_ledger_vectors.json` (valid + invalid run.json cases), `contracts/milestones.json`, `contracts/mlflow_tags.json`; MLflow through the `sqlite_uri` fixture (no server).
