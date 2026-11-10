@@ -154,7 +154,7 @@ Plan: `IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md` (READY stamp).
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
-| 1 | Experiment kind `exploration` | 🔄 implemented 2026-11-09, awaiting /check | `phase-1-exploration-kind` |
+| 1 | Experiment kind `exploration` | ✅ landed 2026-11-09 (/check clean) | `phase-1-exploration-kind` |
 
 ## Phase 1 — Experiment kind `exploration`
 **Implemented:** 2026-11-09 · **Agent:** general-purpose · **Tooling:** ✅ pre-push gate green (datalab 248 passed, cov 95 %; app 120 passed); `pytest -m scaffold` 1 passed; ledger validate ok
