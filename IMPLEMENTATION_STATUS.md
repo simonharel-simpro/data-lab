@@ -3,6 +3,8 @@
 **v1 (Phases 1–3):** ✅ shipped (PR #11) · 📦 archived 2026-11-05 → [archive/2026-11-04-data-lab-v1/](archive/2026-11-04-data-lab-v1/INDEX.md)
 **Review cycle review-2026-11-04 (5 fix phases):** ✅ shipped (PR #16) · 📦 archived 2026-11-05 →
 [archive/2026-11-05-review-2026-11-04/](archive/2026-11-05-review-2026-11-04/INDEX.md)
+**Review cycle review-2026-11-08 (8 fix phases):** ✅ shipped (PR #42, healed PR #43) · 📦 archived 2026-11-10 →
+[archive/2026-11-10-review-2026-11-08/](archive/2026-11-10-review-2026-11-08/INDEX.md)
 
 Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (mode: checkpoint).
 
@@ -71,7 +73,7 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 - Stage-1 bench (MLflow `voice-arch/bench`, 0.17 $): STT `assemblyai/universal-3-6-pro` (4/40 errors, p50 0.61 s), TTS `deepgram/aura-2` (TTFB p50 0.38 s), LLM `google/gemini-3.5-flash-lite` (20/20, TTFT 0.82 s); per-turn sum ≈ 2.3 s (> 1.2 s bar, as planned, #25)
 - Escalations: ESC-1-1 resolved (plan scoring kept); ESC-1-2 open, reversible: caller model provisionally `anthropic/claude-haiku-5.5` (user to confirm)
 - Deferred to the user (approved deviation): browser smoke (README runbook); LiveKit healthcheck unverified until first `--profile voice up`
-- Deviations logged in IMPLEMENTATION_NOTES.md (fields punctuation fix, extra modules seams/candidates/bench_runs, direct mlflow/pydantic-settings pins)
+- Deviations logged in [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md) (fields punctuation fix, extra modules seams/candidates/bench_runs, direct mlflow/pydantic-settings pins)
 
 ## voice-arch Phase 2 — Booking domain + architectures A/B/C + worker
 
@@ -83,8 +85,8 @@ Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY s
 - ✅ Live text-mode integration: A, B, C each pass the clean caller and U-18 slot change (6/6)
 - ⏳ Browser call per arch — deferred to the user (recorded deviation, VA-16)
 
-Open escalations: ESC-1-2 (caller model), ESC-2-1 (provider pin vs gemini-3.5-flash-lite; worker unpinned provisionally).
-Deviations in IMPLEMENTATION_NOTES.md: worker_logic split, unpinned LLM, non-awaited step-task reply on a user-ended
+Open escalations: ESC-1-2 (caller model). ESC-2-1 addressed by the Google provider pin (`4cf4ff1`, PR #27).
+Deviations in [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md): worker_logic split, unpinned LLM, non-awaited step-task reply on a user-ended
 context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller must wait for the first task question.
 
 ## voice-arch Phase 3 — Simulated caller, sweep runner, scoring, decision, human ratings
@@ -95,9 +97,12 @@ context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller mus
 - ❌ Live call: 2 runs (arch A, self_correction) timed out after the address turn — the agent never replied (ESC-3-2); text-mode replay of the same turns works
 - ⏳ Full sweeps, `decide` into PROJECT.md, human ratings — deferred to the user (approved)
 
-Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall; likely coupled with ESC-2-1 unpinned route).
+Open escalations: ESC-3-1 (provider_error outcome counting). ESC-3-2 partly addressed: the stall is an empty Gemini completion, now retried with rising
+temperature (`llm_guard.py`, PR #27); one `self_correction` turn still came back empty on all 4 attempts, so what to do when the guard gives up is
+an open user decision (see [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md) "Sweep prerequisites").
 
-# experiment — trouvetou experiment methodology (`IMPLEMENTATION_PLAN_EXPERIMENT*.md`, loop on `feat/experiment`)
+
+# experiment — trouvetou experiment methodology — ✅ shipped (PR #33) · 📦 archived 2026-11-10 → [archive/2026-11-10-experiment/](archive/2026-11-10-experiment/INDEX.md)
 
 | Phase | Title | Status | Branch |
 |---|---|---|---|
@@ -107,57 +112,16 @@ Open escalations: ESC-3-1 (provider_error outcome counting), ESC-3-2 (live stall
 | 4 | `/experiment` skill | ✅ landed on feat/experiment @ 8480b2b (/check clean first pass) | `phase-4-experiment-skill` |
 | 5 | App stepper + run groups + card best | ✅ landed on feat/experiment @ f75d686 (/check clean first pass) | `phase-5-app-stepper` |
 
-## experiment Phase 1 — Contract + ledger, split, tags, trial helpers
-
-**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ gate exit 0 (pre-push hooks, pyright 0, ruff, lint-imports 1 kept, pytest 174 passed, coverage 94 %)
-- New: `contracts/{EXPERIMENT.md,milestones.json,mlflow_tags.json,run_ledger_vectors.json}`, `datalab/{split,ledger_model,ledger_rules,ledger_ops,ledger_checks,ledger,tags,tracking_queries}.py`, tests `test_split`, `test_ledger`, `test_ledger_io`, `ledger_support`.
-- Modified: `datalab/{project,tracking}.py`, `pyproject.toml` (purity contract), tests `test_project`, `test_tracking`, ARCHITECTURE.md, decisions.md (ADR), contracts/README.md, .gitignore.
-- Tests: every planned case seen red once (ModuleNotFoundError or a targeted mutation); one exception noted (F-7 double cost log by design).
-- Deviations: see IMPLEMENTATION_NOTES.md "experiment Phase 1" (extra `ledger_checks.py`/test split for size, extra refusals, queries not HTTP-retry bounded, `test_tracking.py` 332 lines).
-
-## experiment Phase 5 — App stepper + run groups + ledger-aware card best (read-only)
-
-**Implemented:** 2026-11-07 · **Agent:** general-purpose (Astro/TS) · **Tooling (verified):** `npm run check` 0/0/0, `npm test` 114/114, line coverage 99.75 % (floor 70), pre-commit pre-push green, CI build steps run locally (fixture build, strict export refuses the invalid ledger)
-- New: `app/src/lib/{ledger,run-groups,best,tags}.ts` + tests, `components/{Stepper,RunGroups}.astro`, `test-fixtures/ledger/{valid,invalid}`.
-- Modified: `mlflow-rest.ts` (tags, status, paging), `mlflow.ts` (`projectView`, all-status query), `report.ts`, `export-guard.ts`, pages, `.pre-commit-config.yaml` (gates-app files), `ci.yml` (2 build steps), ARCHITECTURE.md.
-- Tests: every planned test seen red; mutation sweep 28/29 (the survivor is equivalent). Existing `mlflow.test.ts` order_by assertion changed as planned.
-- Decision: `Step.decision` admits `redo` (only Python's I-3 refuses it); nested-run children shown as orphans.
-
-## experiment Phase 4 — `/experiment` skill
-
-**Implemented:** 2026-11-07 · **Agent:** general-purpose (+ python-fastapi for the eval hint fix) · **Acceptance:** dry-run walkthrough 19/19 pass (scratch `projects/exp-dryrun`, isolated sqlite MLflow, torn down; config files restored)
-- New: `.claude/skills/experiment/SKILL.md` (204 lines), `references/dispatch-briefs.md` (9 briefs, return citations checked), `references/agent-overrides.md`.
-- Also fixed (user decision, recorded deviation): template eval rerun hint printed `python -m <pkg>` instead of `<pkg>.eval`; `test_u_27` now asserts the full command (seen red).
-- ESC-4-1 settled by the user: on archive, `split.json` moves with `run.json`; the new experiment re-freezes.
-- Gaps for a later cycle (IMPLEMENTATION_NOTES.md): no ledger op sets `dataset`/`features` (the skill goes through `ledger.parse` on a merged dump), so a `set_dataset`/`set_features` op would remove that workaround.
-
-## experiment Phase 3 — Hydra template, package name, scaffold-and-gate
-
-**Implemented:** 2026-11-07 · **Agent:** python-fastapi · **Tooling (agent run, verified by /check):** pre-commit pre-push green, datalab pytest 207 passed (cov 94.1 %), pyright 0, scaffold test (`-m scaffold`, real `uv lock`) 1 passed, template tests 37 passed (cov 87.7 %)
-- New: the template `configs/` (train, eval + 4 groups), `src/__DATALAB_PACKAGE__/{paths,candidates,split,scoring,grid,prepare,train,eval}.py`, template tests + fixtures, `.gitignore`, `packages/datalab/tests/test_scaffold.py`.
-- Modified: `project.py` (`package_name`), `new_project.py` (package rename, path leftover scan), template `pyproject.toml`/`PROJECT.md`/`README.md`, datalab `pyproject.toml` (scaffold marker), `ruff.toml`, `ci.yml` (scaffold step), ARCHITECTURE.md.
-- Tests: all planned tests red first (missing module); 11 also mutation-checked. `test_u_3` tightened (`data.score_on=train`), `test_grid_expand_sorts_param_names_before_the_product` added; `test_model_override_dropped_per_candidate` cannot fail (Hydra keeps the last `model=`), kept as specified.
-- Deviations (IMPLEMENTATION_NOTES.md): scaffold test copies `ruff.toml`; `# isort: split` in template tests; eval hint = family defaults + winner params; a very long project name may re-wrap a template line under `ruff format`.
-
-## experiment Phase 2 — Hydra gate, ledger hook, wiring, CI matrix
-
-**Implemented:** 2026-11-07 · **Agent:** python-fastapi · **Tooling (agent run):** pre-commit default + pre-push exit 0, pyright 0, ruff, lint-imports, pytest green (coverage 93.6 %)
-- New: `tools/check_hydra_project.py` (vendored, sha-checked), `tools/pre_commit_checks/hydra_gate.py`, `datalab/wiring.py`, tests `test_wiring`, `test_hydra_gate`.
-- Modified: `new_project.py` (wiring), `conftest.py` (`wired_repo`), `.pre-commit-config.yaml`, `.github/workflows/ci.yml` (matrix `projects`, fail-fast false), `ruff.toml`, ARCHITECTURE.md.
-- Tests: 17 of 21 seen red via targeted mutation; 4 not mutated (two-configs F-1 entry, outside-projects paths, voice-arch byte-equality, missing marker).
+Per-phase detail (files, tests, deviations) lives in the archived plans and in the archived
+[IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md). Still open:
+- Gap for a later cycle: no ledger op sets `dataset`/`features` (the skill goes through `ledger.parse` on a merged dump); a `set_dataset`/`set_features` op would remove that workaround.
 - Follow-up for the user: rename required CI checks (`pilot`/`voice-arch` → `project (mini-rag)`/`project (voice-arch)`).
 
-# exploration — third experiment kind
-
-Integration branch: `feat/exploration` (base `main`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
-Plan: `IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md` (READY stamp).
+# exploration — third experiment kind — ✅ shipped (PR #44) · 📦 archived 2026-11-10 → [archive/2026-11-10-exploration/](archive/2026-11-10-exploration/INDEX.md)
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
 | 1 | Experiment kind `exploration` | ✅ landed 2026-11-09 (/check clean) | `phase-1-exploration-kind` |
 
-## Phase 1 — Experiment kind `exploration`
-**Implemented:** 2026-11-09 · **Agent:** general-purpose · **Tooling:** ✅ pre-push gate green (datalab 248 passed, cov 95 %; app 120 passed); `pytest -m scaffold` 1 passed; ledger validate ok
-- Files (21 modified, 0 new): contracts/{milestones,value_sets,run_ledger_vectors}.json, contracts/{EXPERIMENT,README}.md, datalab ledger_{model,rules,ops}.py + tests, template prepare.py + test_train_frozen.py, check_enum_discipline.py, app ledger.ts/best.ts + tests, /experiment skill + 2 references, tests/TESTING_SCENARIOS.md (EXP-36, EXP-37)
-- Tests: every planned case written with the plan's oracle and seen red first; +1 extra (`test_u_3_exploration_features_message`)
-- Notes: the I-7 comparison message is reworded (planned, S-1; only the prefix is pinned); the vector metric is `score (max)` to match the test card for V-3
+Implemented 2026-11-09 (general-purpose): 21 files modified across contracts, datalab ledger, template, enum gate, app and
+the `/experiment` skill; pre-push gate green (datalab 248, app 120), `pytest -m scaffold` 1 passed.
