@@ -236,17 +236,15 @@ def test_f5_nearest_marker_wins(tmp_path: Path) -> None:
 def test_f5_marker_dir_ignored(tmp_path: Path) -> None:
     (tmp_path / "a" / "datalab.toml").mkdir(parents=True)
     start = tmp_path / "a"
-    # a stray marker above tmp_path would make the premise false; the walk reaches the filesystem root
-    if any((p / "datalab.toml").is_file() for p in start.resolve().parents):
-        pytest.skip("a datalab.toml exists above the temp dir")
+    # the walk reaches the filesystem root: a stray marker above tmp_path breaks the premise, fail loudly
+    assert not any((p / "datalab.toml").is_file() for p in start.resolve().parents), "datalab.toml above tmp dir"
 
     with pytest.raises(ProjectError):
         workspace_root(start)
 
 
 def test_f5_no_marker_raises(tmp_path: Path) -> None:
-    if any((p / "datalab.toml").is_file() for p in tmp_path.resolve().parents):
-        pytest.skip("a datalab.toml exists above the temp dir")
+    assert not any((p / "datalab.toml").is_file() for p in tmp_path.resolve().parents), "datalab.toml above tmp dir"
 
     with pytest.raises(ProjectError, match=str(tmp_path.resolve())):
         workspace_root(tmp_path)
