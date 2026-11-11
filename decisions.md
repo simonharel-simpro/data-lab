@@ -427,3 +427,21 @@ forces relocks and a tag ritual).
 **Consequences:** `datalab.toml` must exist at a workspace root. An outside project follows `main` until it upgrades.
 A wheel built from a dirty tree must still hold only git-tracked template files (checked by a scaffold test).
 Plan: `IMPLEMENTATION_PLAN_PLATFORM_PHASE_1.md`.
+
+## 2026-11-11 — Claude plugin `datalab` + marketplace `data-lab`
+
+**Status:** accepted
+**Context:** The `/experiment` skill lived in `.claude/skills/experiment/` and only worked inside data-lab (repo paths
+to `packages/datalab`, `contracts/`, `tools/`). A second developer works in their own workspace.
+**Decision:** The skill ships in the Claude Code plugin `datalab` (`plugins/datalab/`), served by the marketplace
+`data-lab` at the repo root (`.claude-plugin/marketplace.json`), and runs as `/datalab:experiment` (D-5).
+`plugin.json` has no `version`: releases are keyed on the git commit, so `claude plugin marketplace update data-lab`
+picks up every push to `main` (D-11). The `ds-*` agents stay out of the plugin; users install them at user level via
+trouvetou (D-1, #47). No Hydra gate outside data-lab (D-2, #48). `.claude/settings.json` is unchanged; unpushed skill
+edits are tested with `claude --plugin-dir plugins/datalab` (S-13).
+**Alternatives considered:** copying the skill with an install script like trouvetou's `team/install.sh` (rejected:
+the plugin is the native channel and updates come from git); a semver `version` (rejected: it needs a bump per
+release, and users miss pushes that skip it).
+**Consequences:** The skill text must stay portable, enforced by `tests/test_plugin.py`. Contracts are read through
+`python -m datalab.resources`. Projects run `uv lock --upgrade-package datalab` after a plugin update so their
+contracts match the skill. Plan: `IMPLEMENTATION_PLAN_PLATFORM_PHASE_2.md`.

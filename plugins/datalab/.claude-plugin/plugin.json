@@ -1,0 +1,4 @@
+{
+  "name": "datalab",
+  "description": "data-lab experiment methodology: /datalab:experiment (milestones, frozen split, ledger, MLflow)"
+}

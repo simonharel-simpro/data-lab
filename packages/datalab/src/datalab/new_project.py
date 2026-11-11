@@ -162,7 +162,7 @@ def _publish(root: Path, name: str, title: str, pkg: str, lock: Callable[[Path],
     if wiring_plan is not None and not _wired(wiring_plan, target):
         return 1
     print(f"created {target} (package {pkg}) in workspace {root}")
-    print(f"next: cd projects/{name} && uv sync, then run /experiment")
+    print(f"next: cd projects/{name} && uv sync, then run /datalab:experiment")
     if not inside:
         print("no hook/CI wiring outside data-lab (#48)")
     return 0

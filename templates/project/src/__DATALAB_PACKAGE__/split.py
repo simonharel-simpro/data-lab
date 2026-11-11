@@ -85,7 +85,7 @@ def load_split(
         raise SplitAccessError("the test partition is read by eval only, at the audit (U-3)")
     path = experiment_dir / "split.json"
     if not path.is_file():
-        raise FileNotFoundError(f"{path} not found: freeze the split first (/experiment)")
+        raise FileNotFoundError(f"{path} not found: freeze the split first (/datalab:experiment)")
     split = read_split(path)
     _check_coverage(split, len(rows), path)
     return {which: _pick(split, which, partition(split, which), rows) for which in Partition if which in partitions}

@@ -144,8 +144,22 @@ are unanswerable and "I don't know" counts as missing (D-7).
 
 ## Claude Code
 
-`.claude/skills/experiment/` holds the `/experiment` skill (runs a project's experiment milestone by milestone, contract
-`contracts/EXPERIMENT.md`); `.claude/hooks/` holds the loop guards and the statusline meter.
+The `/datalab:experiment` skill (runs a project's experiment milestone by milestone, contract
+`contracts/EXPERIMENT.md`) ships in the `datalab` plugin (`plugins/datalab/`), served by the `data-lab` marketplace at
+this repo's root (`.claude-plugin/marketplace.json`). Install it once, for any workspace:
+
+```bash
+claude plugin marketplace add simonharel-simpro/data-lab
+claude plugin install datalab@data-lab
+claude plugin marketplace update data-lab      # later: pull the skill from the latest main
+```
+
+This needs read access to the private repo and git credentials (`gh auth setup-git`). After a plugin update, run
+`uv lock --upgrade-package datalab` in each project so its contracts match the skill (U-12). The skill dispatches the
+`ds-*` agents, which the plugin does not ship: install them separately at user level via trouvetou (#47).
+
+In data-lab, test unpushed skill edits with `claude --plugin-dir plugins/datalab` (disable the installed copy with
+`claude plugin disable datalab@data-lab` if both load). `.claude/hooks/` holds the loop guards and the statusline meter.
 
 ## Checks
 

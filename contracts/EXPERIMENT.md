@@ -1,6 +1,6 @@
 # Experiment contract (kind-agnostic)
 
-One contract for people, the `/experiment` skill and both code sides (the `datalab` package and the app). It adapts
+One contract for people, the `/datalab:experiment` skill and both code sides (the `datalab` package and the app). It adapts
 trouvetou's `CONTRACTS.md` to data-lab: the same milestones and ledger, but one shared MLflow server instead of a
 per-project sqlite store (D-1), and a ledger that can say `kind: training | comparison | exploration`.
 
