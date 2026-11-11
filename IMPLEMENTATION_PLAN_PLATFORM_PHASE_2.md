@@ -30,14 +30,15 @@ the user installs at user level — the README says so. D-5: plugin `datalab`, m
 "description": "data-lab experiment methodology: /datalab:experiment (milestones, frozen split, ledger, MLflow)"}]}`
 
 #### `plugins/datalab/.claude-plugin/plugin.json` (NEW)
-`{"name": "datalab", "version": "0.1.0", "description": "<same sentence>"}`.
+`{"name": "datalab", "description": "<same sentence>"}` — **no `version`** (D-11: Claude Code then keys releases on
+the git commit, so a push to `main` reaches users on `claude plugin marketplace update data-lab`).
 
 #### `plugins/datalab/skills/experiment/**` (MOVE with `git mv` from `.claude/skills/experiment/`, then MODIFY)
 Keep the skill `name: experiment` (namespacing makes it `/datalab:experiment`). Rewrite only the lines below; the
 methodology text is unchanged.
 - **Working directory rule** (new short paragraph near the top): every command runs from the workspace root (the folder
   holding `datalab.toml`); `projects/<name>` paths are relative to it. "Inside data-lab" = the workspace root holds
-  `packages/datalab/`.
+  `packages/datalab/` **and** `compose.yaml` (same predicate as `datalab.project.is_datalab_checkout`, U-17).
 - **Ledger snippets** (:31, :39, :54): `uv run --locked --project projects/<name> python …` (the project env has
   `datalab`). Never `--project packages/datalab`.
 - **Contracts** (:23, :94, :133, dispatch-briefs.md:3): read them through
@@ -51,6 +52,8 @@ methodology text is unchanged.
 - **Hydra gate** (:105, agent-overrides.md:32): "inside data-lab: `python3 tools/pre_commit_checks/hydra_gate.py
   projects/<name>` (mandatory; a missing script is an error). In another workspace: skip it and say `no Hydra gate
   outside data-lab (#48)`" (F-9).
+- Milestone ids and sequences come only from `milestones.json` (read through `datalab.resources`); the skill text
+  names no sequence of its own (U-12).
 - **Agents:** one line: the `ds-*` specialists come from the user-level trouvetou install (#47).
 - Links between skill files: relative and inside `plugins/datalab/` only (F-8).
 
@@ -61,10 +64,13 @@ methodology text is unchanged.
 | `test_skill_frontmatter` | every `plugins/*/skills/*/SKILL.md` → YAML frontmatter with non-empty `name` and `description` | docs |
 | `test_skill_has_no_data_lab_paths` | all `plugins/datalab/**/*.md` → no `--project packages/datalab`, no bare `contracts/` path, `tools/` only on the Hydra-gate line; `packages/datalab` only inside the "inside data-lab" create sentence | S-1 |
 | `test_skill_links_stay_in_plugin` | each relative Markdown link / backticked relative file path in `plugins/datalab/**/*.md` → `resolve().is_relative_to(plugins/datalab)` | F-8 |
-| `test_skill_hydra_gate_guarded_by_checkout` | SKILL.md → the `hydra_gate.py` line sits under the "inside data-lab" condition and the skip line names `#48` | F-9 |
+| `test_skill_hydra_gate_guarded_by_checkout` | SKILL.md → the `hydra_gate.py` line sits under the "inside data-lab" condition, that condition names both `packages/datalab/` and `compose.yaml`, and the skip line names `#48` | F-9, U-17 |
 | `test_skill_missing_project_points_to_readme` | SKILL.md names `datalab-new` and "README §New project"; `README.md` has a `## New project` heading | F-3 |
 | `test_resources_module_referenced_exists` | SKILL.md uses `python -m datalab.resources`; `packages/datalab/src/datalab/resources.py` exists | U-4 |
 | `test_old_skill_location_is_gone` | `.claude/skills/experiment` → does not exist | move |
+| `test_plugin_json_has_no_version` | `plugins/datalab/.claude-plugin/plugin.json` → no `version` key | U-13 |
+| `test_u11_skill_upgrade_command` | SKILL.md → the missing-module remedy is `uv lock --upgrade-package datalab` | U-11 |
+| `test_readme_says_upgrade_after_plugin_update` | README §Claude Code → mentions `uv lock --upgrade-package datalab` after a plugin update | U-12 |
 
 #### Rename `/experiment` → `/datalab:experiment` (MODIFY, exact strings)
 - `packages/datalab/src/datalab/new_project.py` final `next:` line: `… uv sync, then run /datalab:experiment`.
@@ -79,6 +85,7 @@ methodology text is unchanged.
 #### `README.md` (MODIFY, §Claude Code)
 For any dev: `claude plugin marketplace add simonharel-simpro/data-lab` then `claude plugin install datalab@data-lab`
 (needs read access to the private repo + git credentials; refresh with `claude plugin marketplace update data-lab`).
+After a plugin update, run `uv lock --upgrade-package datalab` in each project so its contracts match the skill (U-12).
 The skill dispatches the `ds-*` agents, installed separately via trouvetou (#47). In data-lab, test unpushed skill
 edits with `claude --plugin-dir plugins/datalab` (disable the installed copy if both load).
 
@@ -91,3 +98,5 @@ must not hold (data-lab-only paths, links outside the plugin), the portable comm
 - `claude plugin validate .` and `claude plugin validate plugins/datalab` exit 0 (record output in IMPLEMENTATION_STATUS).
 - Manual: `claude --plugin-dir plugins/datalab` in data-lab → `/datalab:experiment` is listed; on a scratch project the
   first ledger snippet runs with `--project projects/<name>`.
+
+<!-- plan-validate: READY 2026-11-10 sha256:8b8395802cd6 -->

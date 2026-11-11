@@ -7,12 +7,12 @@
 **Context.** Today `datalab` only works as an editable install from a data-lab checkout: `project.repo_root()` walks up
 from the package file to a dir with `packages/datalab` + `compose.yaml` (F-10, no git subprocess); `ledger_model.contract()`
 reads `repo_root()/contracts/milestones.json`; `new_project._build` copies `root/templates/project` and `wiring` rewrites
-data-lab's `.pre-commit-config.yaml` + `ci.yml`. Goal: `datalab` installed **from git** (`uvx --from
+data-lab's `.pre-commit-config.yaml` + `ci.yml`. Goal: `datalab` installed **from git** (`uvx --refresh --from
 "git+https://github.com/simonharel-simpro/data-lab#subdirectory=packages/datalab" datalab-new <name>`) scaffolds a
 project in **another repo** (a workspace marked by `datalab.toml`). Inside data-lab nothing changes in behaviour.
 
-**Decisions (from the plan ledger).** D-4 URL constant · D-7 outside source pins the installed commit, else
-`branch = "main"` · D-8 contracts/template stay at the repo root, the wheel carries copies via `force-include`, lookup =
+**Decisions (from the plan ledger).** D-4 URL constant · D-7 outside source `branch = "main"`, the project's `uv.lock`
+pins the commit, upgrade = `uv lock --upgrade-package datalab` · D-8 contracts/template stay at the repo root, the wheel carries copies via `force-include`, lookup =
 checkout for editable installs, package data otherwise · D-9 workspace = nearest regular file `datalab.toml` from the
 start path; inside data-lab = that workspace has `packages/datalab/` + `compose.yaml`. D-2: no wiring outside (#48).
 
@@ -40,6 +40,9 @@ One comment line: `# data-lab workspace marker (datalab.project.workspace_root);
 - `contract_path(name: str) -> Path`: `name` must be a bare file name present in the contracts folder (no `/`, no
   `..`), else `ProjectError` listing the available names. Folder = `_folder("contracts", "contracts")`.
 - `template_dir() -> Path`: `_folder("template", "templates/project")`.
+- `ruff_toml() -> Path`: checkout `repo_root()/"ruff.toml"` when `repo_root()` succeeds, else
+  `files("datalab")/"ruff.toml"`; missing → `ProjectError` naming the path.
+- Import `from importlib.resources import files` at module level so tests patch `datalab.resources.files`.
 - `_folder(packaged: str, checkout: str) -> Path`: try `repo_root()` → `root / checkout` (editable checkout wins, F-7);
   on `ProjectError` → `Path(str(importlib.resources.files("datalab") / packaged))`. If the chosen folder does not exist →
   `ProjectError` naming the path tried. **No fallback** from one source to the other for a missing file (U-5).
@@ -59,14 +62,11 @@ Update the comment on line 19 to say "contracts/milestones.json (via datalab.res
   call `wiring.plan` **only inside** (F-4); outside, never import-time or call-time touch `.pre-commit-config.yaml`/ci.yml.
 - `_render_outside_source(project: Path) -> None`: in `pyproject.toml` replace the exact line
   `datalab = { path = "../../packages/datalab", editable = true }` by
-  `datalab = { git = "<DATALAB_GIT_URL>", subdirectory = "packages/datalab", rev = "<sha>" }` when `_installed_commit()`
-  returns a sha, else `... branch = "main" }` and print to stderr `datalab: no install commit found, the project
-  follows data-lab main` (F-2). Missing line → `ProjectError("template pyproject has no datalab source line")`.
-- `_installed_commit() -> str | None`: `importlib.metadata.distribution("datalab").read_text("direct_url.json")` → JSON →
-  `vcs_info.commit_id` when it is 40 hex chars; anything else (absent, editable, malformed) → `None`.
-- After `os.rename(tmp, target)`, outside only: `_write_workspace_ruff(root)`: copy the packaged/checkout `ruff.toml`
-  (resource `contract`-style lookup: `_folder` gives `ruff.toml` from the wheel root copy or the checkout root; add a
-  `ruff_toml() -> Path` helper in `resources.py`) with `open(path, "x")` (exclusive create). `FileExistsError` → print
+  `datalab = { git = "<DATALAB_GIT_URL>", subdirectory = "packages/datalab", branch = "main" }` (F-2, D-7). Missing
+  line → `ProjectError("template pyproject has no datalab source line")`.
+- Outside, `(root / "projects").mkdir(exist_ok=True)` before building (U-18).
+- After `os.rename(tmp, target)`, outside only: `_write_workspace_ruff(root)`: copy `resources.ruff_toml()` to
+  `root/"ruff.toml"` with `open(path, "x")` (exclusive create). `FileExistsError` → print
   `kept existing <path>` (F-10, U-7). Never written inside data-lab.
 - Outside, after success print `no hook/CI wiring outside data-lab (#48)`.
 - `_uv_lock`: `subprocess.run([...], stdin=subprocess.DEVNULL, env={**os.environ, "GIT_TERMINAL_PROMPT": "0",
@@ -91,15 +91,23 @@ published); build with `uv build --wheel`.
 `fake_repo` fixture also writes `datalab.toml`. Add a `workspace` fixture: `tmp_path/"ws"` with `datalab.toml` and an
 empty `projects/`, no `packages/datalab`.
 
+#### `templates/project/.gitignore` (MODIFY)
+Append (keep the existing `logs/ outputs/ multirun/ data/raw/`): `.venv/`, `__pycache__/`, `.env`, `.coverage`,
+`*.json.tmp`, `.pytest_cache/`, `.ruff_cache/` (U-14: outside, data-lab's root `.gitignore` does not apply).
+
 #### `templates/project/README.md` (MODIFY)
 Replace "datalab comes from ../../packages/datalab" / "repo root" wording: inside data-lab datalab is the editable
 `../../packages/datalab`; in another workspace it comes from git (pinned in `uv.lock`). The stack: `docker compose up -d`
 in your data-lab checkout (D-6). Keep `/experiment` (Phase 2 renames it).
 
 #### `README.md` (MODIFY, §New project)
-Add "In another repo (workspace)": `touch datalab.toml` at its root, then
-`uvx --from "git+https://github.com/simonharel-simpro/data-lab#subdirectory=packages/datalab" datalab-new <name>`;
+Inside data-lab keep `uv run --project packages/datalab datalab-new <name>` and say to use it, not uvx (U-19). Add
+"In another repo (workspace)": `touch datalab.toml` at its root, then
+`uvx --refresh --from "git+https://github.com/simonharel-simpro/data-lab#subdirectory=packages/datalab" datalab-new <name>`;
 needs read access to the private repo + git credentials (`gh auth setup-git`); no hook/CI wiring there yet (#48).
+Also state: get a newer datalab with `uv lock --upgrade-package datalab` in the project (U-11); project names are
+unique per stack, all workspaces log to the same local MLflow (U-15, #50); to see workspace projects in the app run
+it with `DATALAB_PROJECTS_DIR=<ws>/projects` (ledgers from another datalab commit may not render) (U-16).
 
 #### `ARCHITECTURE.md` / `decisions.md` (MODIFY)
 ARCHITECTURE "Shared package": workspace marker, `resources.py`, inside/outside rule, wheel contents. ADR
@@ -134,15 +142,20 @@ datalab strict pyright), "nearest `projects/` dir" (rejected: `~/projects`), rel
 |---|---|---|
 | `test_f4_outside_scaffold_never_touches_user_ci` | `workspace` + own `.pre-commit-config.yaml` and `.github/workflows/ci.yml` → rc 0, both byte-identical, stdout has `#48` | F-4 |
 | `test_f4_outside_without_ci_files_succeeds` | bare `workspace` → rc 0, `projects/<name>/pyproject.toml` exists | F-4 |
-| `test_f2_outside_source_pins_installed_commit` | `_installed_commit` → `"a"*40` → pyproject line == `datalab = { git = "https://github.com/simonharel-simpro/data-lab", subdirectory = "packages/datalab", rev = "aaaa…" }` | F-2 |
-| `test_f2_no_direct_url_uses_main_and_warns` | `_installed_commit` → None → line ends `branch = "main" }`, stderr has the notice | F-2, D-7 |
+| `test_f2_outside_source_follows_main` | outside scaffold → pyproject line == `datalab = { git = "https://github.com/simonharel-simpro/data-lab", subdirectory = "packages/datalab", branch = "main" }`; `DATALAB_GIT_URL` appears once in `src/datalab` | F-2, D-7 |
+| `test_u18_outside_creates_projects_dir` | `tmp/ws` holding only `datalab.toml` → rc 0, `ws/projects/<name>/PROJECT.md` exists | U-18 |
 | `test_u1_inside_decided_by_workspace_not_install` | outside `workspace` while `repo_root` is the real checkout → git source + `<ws>/ruff.toml` + no `wiring.plan` call; `fake_repo` (inside) → path source unchanged, wiring planned, no workspace ruff written | U-1 |
 | `test_f10_failed_lock_leaves_no_ruff_toml` | outside, injected `lock` raises `ProjectError` → rc 1, no `<ws>/ruff.toml`, no `.tmp-` dir | F-10 |
 | `test_f10_existing_ruff_toml_untouched` | `<ws>/ruff.toml` = `"x = 1\n"` → byte-identical, stdout `kept existing` | F-10, U-7 |
 | `test_f5_success_message_names_workspace` | outside success → stdout contains `in workspace <ws>` | F-5 |
 | `test_f1_uv_lock_runs_non_interactive` | fake `uv` on PATH dumping env + stdin → `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, stdin empty | F-1 |
 | `test_f1_auth_failure_is_classified` | fake `uv` exits 1 with `fatal: could not read Username` → `ProjectError` naming the URL and `gh auth setup-git` | F-1 |
-| `test_f3_readme_has_outside_bootstrap` | root `README.md` → contains `uvx --from "git+https://github.com/simonharel-simpro/data-lab#subdirectory=packages/datalab" datalab-new` | F-3 |
+| `test_f3_readme_has_outside_bootstrap` | root `README.md` → contains `uvx --refresh --from "git+https://github.com/simonharel-simpro/data-lab#subdirectory=packages/datalab" datalab-new` | F-3, F-2 |
+| `test_u11_upgrade_command_matches_source_form` | root `README.md` → contains `uv lock --upgrade-package datalab`; the rendered source has `branch =` and no `rev =` | U-11 |
+| `test_u14_template_gitignore_covers_python_patterns` | `templates/project/.gitignore` lines ⊇ {`.venv/`, `__pycache__/`, `.env`, `.coverage`, `*.json.tmp`, `.pytest_cache/`, `.ruff_cache/`} | U-14 |
+| `test_u15_readme_states_unique_names` | README §New project mentions unique names per stack and `#50` | U-15 |
+| `test_u16_readme_documents_projects_dir` | README §New project mentions `DATALAB_PROJECTS_DIR` | U-16 |
+| `test_u19_readme_inside_uses_editable_form` | README §New project contains `uv run --project packages/datalab datalab-new` | U-19 |
 
 Existing tests: the scaffold test (`test_scaffold.py`) keeps passing unchanged (inside path); `test_ledger*` keep
 reading `REPO_ROOT/contracts` (single source unchanged).
@@ -151,6 +164,8 @@ reading `REPO_ROOT/contracts` (single source unchanged).
 - `uv run --project packages/datalab pytest` (coverage ≥ 70), `pytest -m scaffold`, pyright strict on src, ruff,
   lint-imports, `pre-commit run --all-files --hook-stage pre-push`.
 - Manual (record in IMPLEMENTATION_STATUS): `uv build --wheel` into a tmp dir, install the wheel in a fresh venv, run
-  `datalab-new demo` in a tmp workspace with `datalab.toml` using a local `file://` clone as the git source (never the
-  GitHub URL in automated tests) → project created, `uv lock` green, `python -m datalab.resources milestones.json`
+  `datalab-new demo` with an injected no-op lock in a tmp workspace with `datalab.toml`, then replace the rendered git URL
+  by a local `file://` clone and run `uv lock` (never the GitHub URL in automated tests) → project created, `uv lock` green, `python -m datalab.resources milestones.json`
   prints a site-packages path.
+
+<!-- plan-validate: READY 2026-11-10 sha256:7a3e8ae98600 -->
