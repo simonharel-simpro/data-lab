@@ -100,3 +100,13 @@ Per-phase detail (files, tests, deviations) lives in the archived plans and in t
 
 Implemented 2026-11-09 (general-purpose): 21 files modified across contracts, datalab ledger, template, enum gate, app and
 the `/experiment` skill; pre-push gate green (datalab 248, app 120), `pytest -m scaffold` 1 passed.
+
+# platform — standalone datalab + Claude plugin (steps 1+2 of the platform/experiments split)
+
+Integration branch: `feat/platform` (base `develop`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
+Plan: `IMPLEMENTATION_PLAN_PLATFORM.md` + `IMPLEMENTATION_PLAN_PLATFORM_PHASE_{1,2}.md` (READY stamps).
+
+| Phase | Title | Status | Branch |
+|-------|-------|--------|--------|
+| 1 | Standalone `datalab`: workspace marker, packaged resources, `datalab-new` outside data-lab | ⏳ pending | — |
+| 2 | Plugin `datalab` + marketplace, `/datalab:experiment` with portable paths | ⏳ pending | — |
