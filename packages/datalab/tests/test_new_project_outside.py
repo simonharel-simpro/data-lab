@@ -110,6 +110,33 @@ def test_f10_existing_ruff_toml_untouched(workspace: Path, capsys: pytest.Captur
     assert "kept existing" in capsys.readouterr().out
 
 
+def test_f10_missing_packaged_ruff_writes_nothing(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing() -> Path:
+        raise ProjectError("datalab resources: ruff.toml does not exist")
+
+    monkeypatch.setattr(new_project, "ruff_toml", missing)
+
+    assert main(["demo"], root=workspace, lock=_no_lock) == 1
+
+    assert not (workspace / "ruff.toml").exists()
+    assert sorted(p.name for p in (workspace / "projects").iterdir()) == []
+
+
+def test_f10_ruff_write_failure_reports_created_project(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def read_only_workspace(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError("read-only workspace")
+
+    # shadows the builtin inside new_project only: its sole open() call is the workspace ruff.toml write
+    monkeypatch.setattr(new_project, "open", read_only_workspace, raising=False)
+
+    assert main(["demo"], root=workspace, lock=_no_lock) == 1
+
+    assert (workspace / "projects" / "demo" / "PROJECT.md").exists()
+    assert "project created but" in capsys.readouterr().err
+
+
 def test_f5_success_message_names_workspace(workspace: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["demo"], root=workspace, lock=_no_lock) == 0
 

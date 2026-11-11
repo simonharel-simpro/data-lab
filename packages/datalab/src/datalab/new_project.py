@@ -100,13 +100,18 @@ def _render_outside_source(project: Path) -> None:
     pyproject.write_text(text.replace(_PATH_SOURCE, _GIT_SOURCE), encoding="utf-8")
 
 
-def _write_workspace_ruff(root: Path) -> None:
+def _write_workspace_ruff(root: Path, text: str) -> bool:
+    """Runs after the project is published: a failure here must not claim "nothing written"."""
     path = root / "ruff.toml"
     try:
         with open(path, "x", encoding="utf-8") as out:
-            out.write(ruff_toml().read_text(encoding="utf-8"))
+            out.write(text)
     except FileExistsError:
         print(f"kept existing {path}")
+    except OSError as err:
+        print(f"datalab-new: project created but {path} not written: {err}", file=sys.stderr)
+        return False
+    return True
 
 
 def _build(
@@ -146,12 +151,13 @@ def _publish(root: Path, name: str, title: str, pkg: str, lock: Callable[[Path],
         return 2
     tmp = root / "projects" / f".{name}.tmp-{secrets.token_hex(4)}"
     try:
+        ruff_text = None if inside else ruff_toml().read_text(encoding="utf-8")  # resolved before anything is built
         wiring_plan = _build(root, tmp, target, (name, title, pkg), lock)
-        if not inside:
-            _write_workspace_ruff(root)
     except (OSError, ProjectError) as err:
         shutil.rmtree(tmp, ignore_errors=True)
         print(f"datalab-new: failed, nothing written: {err}", file=sys.stderr)
+        return 1
+    if ruff_text is not None and not _write_workspace_ruff(root, ruff_text):
         return 1
     if wiring_plan is not None and not _wired(wiring_plan, target):
         return 1
