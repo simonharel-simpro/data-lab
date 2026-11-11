@@ -1,8 +1,9 @@
 # Dispatch briefs
 
-One brief per milestone id of `contracts/milestones.json`. Fill the placeholders, paste the brief, then the common
-block and the agent's row from `agent-overrides.md`. `{metric}` is the `metric` string of `run.json`, restated word
-for word. Every path is under `projects/<name>/`; `<pkg>` is the project's package (`<name>` with `-` → `_`).
+One brief per milestone id of `milestones.json` (read through `datalab.resources`, SKILL.md section 1). Fill the
+placeholders, paste the brief, then the common block and the agent's row from `agent-overrides.md`. `{metric}` is the
+`metric` string of `run.json`, restated word for word. Every path is under `projects/<name>/`; `<pkg>` is the
+project's package (`<name>` with `-` → `_`).
 
 Fields every brief carries: **Inputs**, **Metric**, **Deliverable**, **Allowed reads**, **Forbidden**, **Return**.
 Forbidden in every brief: editing `src/` or `tests/` (ask for code as a spec instead), recomputing or rewriting the

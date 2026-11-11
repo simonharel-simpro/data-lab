@@ -3,7 +3,14 @@ name: experiment
 description: Run a data-lab experiment milestone by milestone with the ds-* specialists, stopping for expert validation at each step (projects/<name>, run.json ledger, frozen split, shared MLflow).
 ---
 
-# /experiment — the data-lab orchestrator
+# /datalab:experiment — the data-lab orchestrator
+
+**Working directory.** Every command runs from the workspace root (the folder holding `datalab.toml`);
+`projects/<name>` paths are relative to it. "Inside data-lab" means the workspace root holds `packages/datalab/` **and**
+`compose.yaml` (the same predicate as `datalab.project.is_datalab_checkout`); a step marked inside data-lab is the
+only thing that differs in another workspace.
+
+**Agents.** The `ds-*` specialists come from the user-level trouvetou install (#47); this plugin ships none.
 
 ## 1. What this is
 
@@ -20,15 +27,20 @@ never do a specialist's work and you never write Python: code goes through secti
 | `run.json` without kind or todo | `run.json` with `kind` (training \| comparison \| exploration) and `todo` statuses, strict order |
 | `--multirun` sweeps, budget a hard stop | grid in-process, one child per combination (D-4); budget shown, never enforced (D-6) |
 
-Contract: `contracts/EXPERIMENT.md`. Milestone ids, agents and sequences: `contracts/milestones.json` only.
+Contracts: `EXPERIMENT.md` (the experiment contract) and `milestones.json` (milestone ids, agents and sequences: the
+only source for them). Read each at the path printed by
+`uv run --project projects/<name> python -m datalab.resources EXPERIMENT.md` (resp.
+`uv run --project projects/<name> python -m datalab.resources milestones.json`). If that command fails with
+`No module named datalab.resources`, stop and tell the expert to run `uv lock --upgrade-package datalab` in
+`projects/<name>`. Before the project exists, the contract read waits until after `datalab-new`.
 
 ## 2. Running the ledger
 
-Every ledger change uses this snippet, from the repo root; never hand-edit `run.json`. Python strings are
+Every ledger change uses this snippet, from the workspace root; never hand-edit `run.json`. Python strings are
 triple-quoted so the expert's words pass verbatim; the quoted heredoc stops the shell from expanding them.
 
 ```bash
-uv run --locked --project packages/datalab python - <<'PY'
+uv run --locked --project projects/<name> python - <<'PY'
 from pathlib import Path
 from datalab import ledger
 d = Path('projects/<name>')
@@ -36,7 +48,7 @@ l = ledger.read(d)
 l = ledger.<op>(l, ...)          # produce / decide / freeze_split / record_data / redo
 ledger.write_atomic(d, l)
 PY
-uv run --locked --project packages/datalab python -m datalab.ledger validate projects/<name>
+uv run --locked --project projects/<name> python -m datalab.ledger validate projects/<name>
 ```
 
 - The first ledger: replace the `read` and `<op>` lines with `l = ledger.new_ledger(ledger.Kind.TRAINING, """...""")`
@@ -51,7 +63,7 @@ uv run --locked --project packages/datalab python -m datalab.ledger validate pro
 The MLflow twin (the tracking functions take the project **name**):
 
 ```bash
-uv run --locked --project packages/datalab python - <<'PY'
+uv run --locked --project projects/<name> python - <<'PY'
 from datetime import timedelta
 from pathlib import Path
 from datalab import tracking
@@ -70,7 +82,8 @@ ids** (F-9).
 
 Always resume from disk, never from the conversation.
 
-a. `projects/<name>/` must exist; else tell the expert to run `uv run --project packages/datalab datalab-new <name>`.
+a. `projects/<name>/` must exist; else tell the expert to create it from the workspace root — see README §New project
+   (inside data-lab: `uv run --project packages/datalab datalab-new <name>`; another workspace: the `uvx` bootstrap).
 b. Stale runs: run the MLflow twin, show every stale RUNNING run (> 24 h), ask with AskUserQuestion which to close
    ("none" is a valid answer), then `close_runs` with exactly those ids. Never close a run the expert did not name.
 c. No `run.json`: governance gate (section 4); ask the kind (training | comparison | exploration) and the metric
@@ -91,19 +104,20 @@ Face datasets proceed without sign-off.
 
 ## 5. The flow
 
-Read the kind's sequence from `contracts/milestones.json` (`sequences.<kind>`, agent per id in `milestones`); never
+Read the kind's sequence from `milestones.json` (section 1; `sequences.<kind>`, agent per id in `milestones`); never
 hardcode it. Run each milestone with the ⏸️ protocol (section 6). A transition whose milestone is absent from the
-sequence never runs; an exploration is scoping → eda → report, and logs runs (if any) from project code with
+sequence never runs; an exploration logs runs (if any) from project code with
 `datalab.tracking`. Transition work, which is not a milestone:
 
 - After `dataset` is validated: acquire the data exactly as `dataset.md` names it (id + revision). Write the rows as
-  JSONL to `data/raw/data.jsonl`; a comparison (no cleaning milestone) also copies it unchanged to
+  JSONL to `data/raw/data.jsonl`; a kind whose sequence has no `cleaning` milestone also copies it unchanged to
   `data/clean/data.jsonl` (`paths.data_file`). A network error: retry once, then stop and report. A gated dataset
   without `HF_TOKEN`: stop, "auth required". A size beyond the disk or the run: ask first. Never proceed on partial
   data, never fabricate. Then freeze the split (section 7) before any other dispatch.
 - Before `modeling`: the BOX (section 8).
-- After `modeling` is produced: the Hydra gate, `python3 tools/pre_commit_checks/hydra_gate.py projects/<name>`. FAIL
-  = a redo of modeling (section 10); do not present the winner.
+- After `modeling` is produced: the Hydra gate. Inside data-lab: `python3 tools/pre_commit_checks/hydra_gate.py
+  projects/<name>` (mandatory; a missing script is an error); FAIL = a redo of modeling (section 10); do not present
+  the winner. In another workspace: skip it and say `no Hydra gate outside data-lab (#48)`.
 - `audit`: fresh-context `ds-validator` (section 9).
 - `tracking`: list stale runs and ask again (section 3b) before dispatching `ds-mlflow-tracker`.
 
@@ -130,9 +144,9 @@ without an explicit `validate` in between; never dispatch the next agent "to sav
 
 Right after `dataset` is validated (and the data acquired), BEFORE any other dispatch:
 
-1. Write `projects/<name>/split.json` (schema: `contracts/EXPERIMENT.md` §3, `datalab.split`) with the strategy, seed,
-   target, group_key and time_col that `dataset.md` proposed and the expert validated. Index lists address the rows of
-   the acquired file; their union is every row. A comparison: `grouped`, group_key the persona or question id,
+1. Write `projects/<name>/split.json` (schema: `EXPERIMENT.md` §3 read through section 1, `datalab.split`) with the
+   strategy, seed, target, group_key and time_col that `dataset.md` proposed and the expert validated. Index lists
+   address the rows of the acquired file; their union is every row. A comparison: `grouped`, group_key the persona or question id,
    **train = the dev set, val may be empty, test non-empty**.
 2. `validate`, then `freeze_split(l, d / "split.json", "<strategy, seed, partition sizes>")` → `write_atomic` →
    `validate`.

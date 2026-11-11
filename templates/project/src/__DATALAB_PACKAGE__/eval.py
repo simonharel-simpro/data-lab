@@ -58,7 +58,7 @@ def _read_ledger(folder: Path) -> RunLedger:
     try:
         return ledger.read(folder)
     except LedgerError as err:
-        raise PrepareError(f"eval runs at the audit only: /experiment ({err})") from err
+        raise PrepareError(f"eval runs at the audit only: /datalab:experiment ({err})") from err
 
 
 def _check_time_kinds(folder: Path, data_file: Path) -> None:

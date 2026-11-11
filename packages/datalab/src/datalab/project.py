@@ -23,6 +23,7 @@ RESERVED: Final = frozenset(
 # Identical literal in app/src/lib/card.ts; read with fullmatch for the same "$" reason as NAME_RE.
 METRIC_KEY_RE: Final = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 _UNSAFE: Final = re.compile(r"[^0-9A-Za-z]")  # Demo-RAG index.py: Weaviate class names are [A-Z][_0-9A-Za-z]*
+MARKER: Final = "datalab.toml"
 _FRONTMATTER: Final = re.compile(r"\A---[ \t]*\n(.*?)^---[ \t]*$", re.DOTALL | re.MULTILINE)
 
 
@@ -59,6 +60,10 @@ def package_name(name: str) -> str:
     return pkg
 
 
+def is_datalab_checkout(root: Path) -> bool:
+    return (root / "packages" / "datalab").is_dir() and (root / "compose.yaml").is_file()
+
+
 def repo_root(start: Path | None = None) -> Path:
     """The data-lab checkout this package lives in. Found from the package file, not cwd or git (F-10).
 
@@ -67,9 +72,18 @@ def repo_root(start: Path | None = None) -> Path:
     """
     here = (start or Path(__file__)).resolve()
     for candidate in here.parents:
-        if (candidate / "packages" / "datalab").is_dir() and (candidate / "compose.yaml").is_file():
+        if is_datalab_checkout(candidate):
             return candidate
     raise ProjectError(f"repo root not found above {here}: install datalab editable from a data-lab checkout")
+
+
+def workspace_root(start: Path | None = None) -> Path:
+    """The nearest folder above `start` (default cwd) holding a regular file `datalab.toml`; its content is ignored."""
+    origin = (start or Path.cwd()).resolve()
+    for folder in (origin, *origin.parents):
+        if (folder / MARKER).is_file():
+            return folder
+    raise ProjectError(f"no {MARKER} found from {origin} up to the filesystem root: create one at your workspace root")
 
 
 def _find_card(start: Path, root: Path) -> Path | None:
@@ -132,7 +146,7 @@ def card_metric(project_dir: Path) -> CardMetric:
 
 def load(start: Path | None = None, *, root: Path | None = None) -> Project:
     """The project whose `PROJECT.md` is the nearest one above `start` (default: cwd), inside `root/projects`."""
-    root = (root or repo_root()).resolve()
+    root = (root or workspace_root(start)).resolve()
     origin = (start or Path.cwd()).resolve()
     card = _find_card(origin, root)
     if card is None:

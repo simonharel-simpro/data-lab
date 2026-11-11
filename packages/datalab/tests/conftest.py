@@ -31,12 +31,17 @@ def sqlite_uri(tmp_path: Path) -> str:
 
 
 @pytest.fixture
-def fake_repo(tmp_path: Path) -> Path:
-    """A repo-shaped tree below tmp_path (so a stray card can sit above it) with the real template + decoys."""
+def fake_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A repo-shaped tree below tmp_path (so a stray card can sit above it) with the real template + decoys.
+
+    `datalab-new` reads the template through `template_dir()`, which in this env is the real checkout's; the
+    fixture points it at the copy below so tests can corrupt or remove the template without touching the repo.
+    """
     root = tmp_path / "repo"
     (root / "packages" / "datalab").mkdir(parents=True)
     (root / "projects").mkdir()
     (root / "compose.yaml").write_text("name: fake\n", encoding="utf-8")
+    (root / "datalab.toml").write_text("# marker\n", encoding="utf-8")
     template = root / "templates" / "project"
     shutil.copytree(TEMPLATE, template)
     (template / ".venv" / "bin").mkdir(parents=True)
@@ -46,6 +51,16 @@ def fake_repo(tmp_path: Path) -> Path:
     for relative in (".pre-commit-config.yaml", ".github/workflows/ci.yml"):
         (root / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO_ROOT / relative, root / relative)
+    monkeypatch.setattr("datalab.new_project.template_dir", lambda: template)
+    return root
+
+
+@pytest.fixture
+def workspace(tmp_path: Path) -> Path:
+    """A workspace outside data-lab: the marker and an empty projects/, no packages/datalab."""
+    root = tmp_path / "ws"
+    (root / "projects").mkdir(parents=True)
+    (root / "datalab.toml").write_text("# marker\n", encoding="utf-8")
     return root
 
 

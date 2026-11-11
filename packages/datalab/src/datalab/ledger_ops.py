@@ -100,7 +100,7 @@ def _check_decide_options(
         raise LedgerError("a winner is required to validate modeling, and only then")
 
 
-def decide(  # noqa: PLR0913  # redo_from / winner: optional kw-only, passed by name by /experiment (#39)
+def decide(  # noqa: PLR0913  # redo_from / winner: optional kw-only, passed by name by /datalab:experiment (#39)
     lg: RunLedger,
     milestone: str,
     decision: Decision,
