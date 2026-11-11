@@ -2,3 +2,10 @@ logs/
 outputs/
 multirun/
 data/raw/
+.venv/
+__pycache__/
+.env
+.coverage
+*.json.tmp
+.pytest_cache/
+.ruff_cache/

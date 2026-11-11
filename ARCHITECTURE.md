@@ -113,13 +113,20 @@ ruff.toml               single ruff config for every Python tree
   split (`split.json` and its hash), and the hook + CI wiring of new projects (`wiring`, checked by `wiring_parity`).
 - **Must NOT:** read unprefixed env vars such as `MLFLOW_TRACKING_URI` (F-5); validate the card beyond `name` (D-3).
 - **Modules** (*pure* = in the import-linter contract "pure modules stay pure (no weaviate/mlflow)"): `project`
-  (*pure*: `NAME_RE`, `load`, `repo_root`, naming), `settings` (`Settings`, `connect_weaviate`), `tracking`
+  (*pure*: `NAME_RE`, `load`, `repo_root`, `workspace_root`, `is_datalab_checkout`, naming), `resources`
+  (*pure*: `contract_path`, `template_dir`, `ruff_toml`, `python -m datalab.resources <file>`), `settings` (`Settings`, `connect_weaviate`), `tracking`
   (`preflight`, `tracked_run`, `tracked_trial`), `tracking_outcome` (per-parent tally of trial outcomes),
   `tracking_queries` (`project_spend`), `new_project` (`datalab-new`), `ledger` (*pure*, facade + `validate` CLI),
   `ledger_model` (*pure*, `RunLedger`, `TRANSITIONS`), `ledger_rules` (*pure*, I-1..I-15), `ledger_ops` (*pure*),
   `ledger_access` (*pure*, test-partition access, test looks), `ledger_checks` (*pure*, V-1..V-3), `split` (*pure*),
-  `tags` (*pure*, `Tag`), `wiring` (text-level hook + CI matrix wiring), `wiring_parity` (test-time check). Root found
-  from the package file, so only editable installs work (F-10).
+  `tags` (*pure*, `Tag`), `wiring` (text-level hook + CI matrix wiring), `wiring_parity` (test-time check).
+  `repo_root` is found from the package file (F-10) and only works for editable installs.
+- **Workspace (ADR 2026-11-10):** a workspace is the nearest folder above the start path with a regular file
+  `datalab.toml` (content ignored); `load()` and `datalab-new` use it. "Inside data-lab" means the workspace holds
+  `packages/datalab/` and `compose.yaml` (`is_datalab_checkout`), never the install mode. Inside: path dependency,
+  hook + CI wiring. Outside: git dependency (`branch = "main"`, `uv.lock` pins the commit), `<ws>/ruff.toml` written
+  once, no wiring (#48). `resources` reads the checkout's contracts/template when `repo_root()` succeeds, else the
+  copies the wheel force-includes (git-tracked files only); no fallback between the two.
 
 ```python
 def collection_name(project: str, *parts: str) -> str:

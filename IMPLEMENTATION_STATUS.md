@@ -108,5 +108,10 @@ Plan: `IMPLEMENTATION_PLAN_PLATFORM.md` + `IMPLEMENTATION_PLAN_PLATFORM_PHASE_{1
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
-| 1 | Standalone `datalab`: workspace marker, packaged resources, `datalab-new` outside data-lab | ⏳ pending | — |
+| 1 | Standalone `datalab`: workspace marker, packaged resources, `datalab-new` outside data-lab | ✅ landed 2026-11-11 (gate green except env-only `test_g_10` — Docker Desktop off in WSL) | `phase-1-standalone-datalab` |
 | 2 | Plugin `datalab` + marketplace, `/datalab:experiment` with portable paths | ⏳ pending | — |
+
+Phase 1 manual exit check (2026-11-11): `uv build --wheel` → fresh venv → `datalab-new demo` (no-op lock) in a tmp
+workspace with only `datalab.toml` → project + workspace `ruff.toml` created, git source `branch = "main"`;
+`python -m datalab.resources milestones.json` → site-packages path; URL swapped to a local `file://` clone → `uv lock` green
+(commit pinned in `uv.lock`). `pytest -m scaffold` 2 passed (incl. U-6 wheel == `git ls-files`).

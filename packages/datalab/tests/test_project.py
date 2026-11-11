@@ -13,10 +13,12 @@ from datalab.project import (
     card_metric,
     collection_name,
     experiment_name,
+    is_datalab_checkout,
     load,
     package_name,
     repo_root,
     validate_name,
+    workspace_root,
 )
 from tests.conftest import REPO_ROOT
 
@@ -221,3 +223,60 @@ def test_goal_values_match_contract() -> None:
     value_sets = json.loads((REPO_ROOT / "contracts" / "value_sets.json").read_text(encoding="utf-8"))
 
     assert [g.value for g in Goal] == value_sets["goals"]
+
+
+def test_f5_nearest_marker_wins(tmp_path: Path) -> None:
+    (tmp_path / "a" / "b" / "c").mkdir(parents=True)
+    (tmp_path / "a" / "datalab.toml").write_text("", encoding="utf-8")
+    (tmp_path / "a" / "b" / "datalab.toml").write_text("", encoding="utf-8")
+
+    assert workspace_root(tmp_path / "a" / "b" / "c") == tmp_path / "a" / "b"
+
+
+def test_f5_marker_dir_ignored(tmp_path: Path) -> None:
+    (tmp_path / "a" / "datalab.toml").mkdir(parents=True)
+    start = tmp_path / "a"
+    # a stray marker above tmp_path would make the premise false; the walk reaches the filesystem root
+    if any((p / "datalab.toml").is_file() for p in start.resolve().parents):
+        pytest.skip("a datalab.toml exists above the temp dir")
+
+    with pytest.raises(ProjectError):
+        workspace_root(start)
+
+
+def test_f5_no_marker_raises(tmp_path: Path) -> None:
+    if any((p / "datalab.toml").is_file() for p in tmp_path.resolve().parents):
+        pytest.skip("a datalab.toml exists above the temp dir")
+
+    with pytest.raises(ProjectError, match=str(tmp_path.resolve())):
+        workspace_root(tmp_path)
+
+
+@pytest.mark.parametrize("content", ["", "\x00not toml"])
+def test_u8_empty_and_garbage_marker_accepted(tmp_path: Path, content: str) -> None:
+    (tmp_path / "datalab.toml").write_text(content, encoding="utf-8")
+
+    assert workspace_root(tmp_path) == tmp_path.resolve()
+
+
+def test_u9_workspace_from_start_not_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for ws in ("x", "y"):
+        (tmp_path / ws / "projects").mkdir(parents=True)
+        (tmp_path / ws / "datalab.toml").write_text("", encoding="utf-8")
+    _card(tmp_path / "y" / "projects" / "p", "---\nname: p\n---\n")
+    monkeypatch.chdir(tmp_path / "x")
+
+    project = load(tmp_path / "y" / "projects" / "p")
+
+    assert project == Project(name="p", root=(tmp_path / "y" / "projects" / "p").resolve())
+
+
+def test_is_datalab_checkout(tmp_path: Path) -> None:
+    both, no_compose, no_package = (tmp_path / n for n in ("both", "no_compose", "no_package"))
+    for root in (both, no_compose):
+        (root / "packages" / "datalab").mkdir(parents=True)
+    no_package.mkdir()
+    for root in (both, no_package):
+        (root / "compose.yaml").write_text("", encoding="utf-8")
+
+    assert [is_datalab_checkout(r) for r in (both, no_compose, no_package)] == [True, False, False]

@@ -407,3 +407,23 @@ change on both sides plus V-3).
 **Consequences:** The I-7 message for a comparison changes wording ("features is not in the comparison sequence, so
 features must be null"); only the `I-7:` prefix is pinned. A future kind that drops a milestone gets the same guards
 for free. Plan: `archive/2026-11-10-exploration/IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md`.
+
+## 2026-11-10 — Standalone datalab: workspace marker + packaged resources
+
+**Status:** accepted
+**Context:** A second developer must scaffold and run experiments in their own repo, outside data-lab. `datalab` only
+worked as an editable install: `repo_root()` walks up from the package file, and the contracts and the project
+template were read from that checkout.
+**Decision:** A workspace is the nearest folder with a regular file `datalab.toml` (D-9); inside data-lab means that
+workspace holds `packages/datalab/` and `compose.yaml`. Contracts, template and `ruff.toml` stay at the repo root
+(single source); the wheel carries copies through hatch `force-include`, and `datalab.resources` reads the checkout for
+editable installs and the packaged copy otherwise, with no fallback between them (D-8). Outside projects depend on
+datalab by git with `branch = "main"`; their `uv.lock` pins the commit and `uv lock --upgrade-package datalab` upgrades
+it (D-7). Hook and CI wiring is skipped outside data-lab (#48).
+**Alternatives considered:** moving contracts and template physically into `src/datalab` (rejected: the app imports
+them from the repo root, and the template's own gate would then run under datalab's strict pyright); the nearest
+`projects/` folder as the workspace (rejected: it matches `~/projects`); a release tag per version (rejected: it
+forces relocks and a tag ritual).
+**Consequences:** `datalab.toml` must exist at a workspace root. An outside project follows `main` until it upgrades.
+A wheel built from a dirty tree must still hold only git-tracked template files (checked by a scaffold test).
+Plan: `IMPLEMENTATION_PLAN_PLATFORM_PHASE_1.md`.
