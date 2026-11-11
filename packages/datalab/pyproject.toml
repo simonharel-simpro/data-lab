@@ -31,6 +31,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/datalab"]
 
+# Build with `uv build --wheel`: an sdist is unsupported (never published; the `../../` sources are outside it).
+# The wheel carries copies of the repo-root contracts, template and ruff config; datalab.resources reads them
+# when no checkout is above the package.
+[tool.hatch.build.targets.wheel.force-include]
+"../../contracts" = "datalab/contracts"
+"../../templates/project" = "datalab/template"
+"../../ruff.toml" = "datalab/ruff.toml"
+
 [tool.importlinter]
 root_package = "datalab"
 include_external_packages = true
@@ -40,6 +48,7 @@ name = "pure modules stay pure (no weaviate/mlflow)"
 type = "forbidden"
 source_modules = [
     "datalab.project",
+    "datalab.resources",
     "datalab.split",
     "datalab.ledger_model",
     "datalab.ledger_rules",

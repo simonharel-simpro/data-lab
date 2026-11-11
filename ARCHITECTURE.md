@@ -82,10 +82,12 @@ tools/check_hydra_project.py  vendored verbatim from trouvetou (sha256 in its he
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
                         fixtures (job `app`); one matrix job `projects` (fail-fast off; mini-rag, voice-arch): gates + pip-audit, Hydra gate, ledger
                         validate; Python gates `--locked`
-tests/                  root tests (compose contract, check_file_size, hydra_gate, weavit-web), run by the `gates-root`
+tests/                  root tests (compose contract, check_file_size, hydra_gate, weavit-web, plugin), run by the `gates-root`
                         pre-push hook (coverage >= 70 on `tools/`)
-.claude/skills/experiment/  the `/experiment` skill: SKILL.md, references/agent-overrides.md,
-                        references/dispatch-briefs.md; its contract is contracts/EXPERIMENT.md
+.claude-plugin/marketplace.json  the `data-lab` Claude Code marketplace: lists the `datalab` plugin (./plugins/datalab)
+plugins/datalab/        the `datalab` Claude Code plugin: .claude-plugin/plugin.json (no `version`: releases follow the
+                        commit) + skills/experiment/ (the `/datalab:experiment` skill: SKILL.md,
+                        references/agent-overrides.md, references/dispatch-briefs.md); contracts read via datalab.resources
 .claude/hooks/          Claude Code hooks: loop guards (loop-git-guard.sh, loop-compaction-flag.sh), statusline-meter.sh
 ruff.toml               single ruff config for every Python tree
 ```
@@ -113,13 +115,20 @@ ruff.toml               single ruff config for every Python tree
   split (`split.json` and its hash), and the hook + CI wiring of new projects (`wiring`, checked by `wiring_parity`).
 - **Must NOT:** read unprefixed env vars such as `MLFLOW_TRACKING_URI` (F-5); validate the card beyond `name` (D-3).
 - **Modules** (*pure* = in the import-linter contract "pure modules stay pure (no weaviate/mlflow)"): `project`
-  (*pure*: `NAME_RE`, `load`, `repo_root`, naming), `settings` (`Settings`, `connect_weaviate`), `tracking`
+  (*pure*: `NAME_RE`, `load`, `repo_root`, `workspace_root`, `is_datalab_checkout`, naming), `resources`
+  (*pure*: `contract_path`, `template_dir`, `ruff_toml`, `python -m datalab.resources <file>`), `settings` (`Settings`, `connect_weaviate`), `tracking`
   (`preflight`, `tracked_run`, `tracked_trial`), `tracking_outcome` (per-parent tally of trial outcomes),
   `tracking_queries` (`project_spend`), `new_project` (`datalab-new`), `ledger` (*pure*, facade + `validate` CLI),
   `ledger_model` (*pure*, `RunLedger`, `TRANSITIONS`), `ledger_rules` (*pure*, I-1..I-15), `ledger_ops` (*pure*),
   `ledger_access` (*pure*, test-partition access, test looks), `ledger_checks` (*pure*, V-1..V-3), `split` (*pure*),
-  `tags` (*pure*, `Tag`), `wiring` (text-level hook + CI matrix wiring), `wiring_parity` (test-time check). Root found
-  from the package file, so only editable installs work (F-10).
+  `tags` (*pure*, `Tag`), `wiring` (text-level hook + CI matrix wiring), `wiring_parity` (test-time check).
+  `repo_root` is found from the package file (F-10) and only works for editable installs.
+- **Workspace (ADR 2026-11-10):** a workspace is the nearest folder above the start path with a regular file
+  `datalab.toml` (content ignored); `load()` and `datalab-new` use it. "Inside data-lab" means the workspace holds
+  `packages/datalab/` and `compose.yaml` (`is_datalab_checkout`), never the install mode. Inside: path dependency,
+  hook + CI wiring. Outside: git dependency (`branch = "main"`, `uv.lock` pins the commit), `<ws>/ruff.toml` written
+  once, no wiring (#48). `resources` reads the checkout's contracts/template when `repo_root()` succeeds, else the
+  copies the wheel force-includes (git-tracked files only); no fallback between the two.
 
 ```python
 def collection_name(project: str, *parts: str) -> str:
@@ -257,6 +266,18 @@ livekit, even through another module); `booking/` has its own contract "booking 
 | MLflow / runs | `bench`, `bench_record`, `budget`, `decide` (imports `mlflow`), `rate`, `runner`, `sweep`, `sweep_log` (no direct import, but reaches `datalab` via `settings` and `livekit` via `worker_logic`), `sweep_query` |
 | IO adapters / LiveKit | `audio`, `bench_runs`, `caller`, `corpus`, `dispatch`, `live_caller`, `livekit_env`, `llm_dump`, `llm_guard`, `openrouter_key`, `seams`, `settings`, `token`, `tool_schemas`, `worker_logic`, the `agents` package |
 | entry points | `worker`, `smoke_agent` (and the `main()` of `runner`, `bench`, `decide`, `rate`) |
+
+### Claude plugin (`plugins/datalab`, served by `.claude-plugin/marketplace.json`, platform Phase 2)
+- **Does:** ships the `/datalab:experiment` skill to any workspace (a root with `datalab.toml`, projects under
+  `projects/<name>/`). Commands run from the workspace root in portable forms: the ledger through
+  `uv run --locked --project projects/<name> python …`, the contracts through
+  `uv run --project projects/<name> python -m datalab.resources EXPERIMENT.md|milestones.json` (prints the path), a
+  missing project through README §New project. Only steps gated on the `is_datalab_checkout` predicate
+  (`packages/datalab/` and `compose.yaml` at the root) differ: the Hydra gate runs inside data-lab and is skipped
+  elsewhere (#48).
+- **Must NOT:** name data-lab-only paths (`--project packages/datalab`, `contracts/…`, `tools/…`) outside those gated
+  sentences; link outside `plugins/datalab/` (installs are copied to a cache); ship the `ds-*` agents (user-level
+  trouvetou install, #47); hardcode a milestone sequence (only `milestones.json`). `tests/test_plugin.py` guards it.
 
 ### Projection (Weavit fork, `tools/weavit-ui`)
 - **Does:** the host reads vectors (lean cursor loop, `src/main/projection/readVectors.ts`) → sidecar stdin →

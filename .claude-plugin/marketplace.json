@@ -1,0 +1,11 @@
+{
+  "name": "data-lab",
+  "owner": {"name": "Simon Harel"},
+  "plugins": [
+    {
+      "name": "datalab",
+      "source": "./plugins/datalab",
+      "description": "data-lab experiment methodology: /datalab:experiment (milestones, frozen split, ledger, MLflow)"
+    }
+  ]
+}

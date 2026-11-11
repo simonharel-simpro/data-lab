@@ -49,7 +49,7 @@ def test_f_21_eval_without_ledger_exits_2(
 ) -> None:
     assert _eval(configs, data_overrides) == 2
 
-    assert "/experiment" in capsys.readouterr().err
+    assert "/datalab:experiment" in capsys.readouterr().err
     assert MlflowClient(tracking).get_experiment_by_name(A) is None
 
 

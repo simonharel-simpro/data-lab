@@ -1,7 +1,7 @@
 # __DATALAB_PROJECT__
 
 ```bash
-uv sync                      # own env; datalab comes from ../../packages/datalab (editable)
+uv sync                      # own env; datalab: editable ../../packages/datalab inside data-lab, git (pinned in uv.lock) elsewhere
 cp .env.example .env         # only if you need non-default ports
 ```
 
@@ -13,4 +13,4 @@ cp .env.example .env         # only if you need non-default ports
 - Train: `uv run python -m __DATALAB_PACKAGE__.train experiment=default [hparams_search=<grid>]` (one parent run, one
   child per candidate and grid combination; a grid is `configs/hparams_search/<name>.yaml`).
 - Eval: `uv run python -m __DATALAB_PACKAGE__.eval` (audit only: it reads the test partition when `run.json` allows it).
-- Run the experiment with `/experiment`. The shared stack must be up (`docker compose up -d` at the repo root).
+- Run the experiment with `/datalab:experiment`. The shared stack must be up (`docker compose up -d` in your data-lab checkout).

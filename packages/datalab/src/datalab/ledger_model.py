@@ -10,13 +10,15 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from datalab.project import ProjectError, repo_root
+from datalab.project import ProjectError
+from datalab.resources import contract_path
 
 SHA256 = r"^[0-9a-f]{64}$"
 Sha = Annotated[str, Field(pattern=SHA256)]
 NonEmpty = Annotated[str, Field(min_length=1)]
 
-# Milestone ids the code names; any other id is data from contracts/milestones.json (decisions.md, ADR 2026-11-08).
+# Milestone ids the code names; any other id is data from contracts/milestones.json (via datalab.resources;
+# decisions.md, ADR 2026-11-08).
 DATASET: Final = "dataset"
 FEATURES: Final = "features"
 MODELING: Final = "modeling"
@@ -66,7 +68,7 @@ class Contract:
 @cache
 def contract() -> Contract:
     try:
-        path = repo_root() / "contracts" / "milestones.json"
+        path = contract_path("milestones.json")
     except ProjectError as err:
         raise LedgerError(str(err)) from err
     try:

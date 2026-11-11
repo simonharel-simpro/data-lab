@@ -68,21 +68,35 @@ split-brain view: REST on data-lab, gRPC on Demo-RAG (F-4).
 
 ## New project
 
+Inside data-lab (use the editable command, not `uvx`: the project then depends on `packages/datalab` by path):
+
 ```bash
 uv run --project packages/datalab datalab-new mini-rag --title "Mini RAG"   # from the repo root
-# or install the command once (editable: it finds the repo from the package location)
-uv tool install --editable packages/datalab && datalab-new mini-rag
 cd projects/mini-rag && uv sync
 ```
+
+In another repo (a workspace): mark its root with `datalab.toml`, then bootstrap from git.
+
+```bash
+touch datalab.toml
+uvx --refresh --from "git+https://github.com/simonharel-simpro/data-lab#subdirectory=packages/datalab" datalab-new mini-rag
+cd projects/mini-rag && uv sync
+```
+
+This needs read access to the private repo and git credentials (`gh auth setup-git`). It creates `projects/` and a
+`ruff.toml` in the workspace (an existing one is kept), and writes no hook/CI wiring there yet (#48). The project
+depends on datalab through `branch = "main"`, and its `uv.lock` pins the commit; get a newer datalab with
+`uv lock --upgrade-package datalab` in the project. Project names are unique per stack: every workspace logs to the
+same local MLflow (a clash warning is tracked in #50). To see a workspace's projects in the app, run it with
+`DATALAB_PROJECTS_DIR=<ws>/projects` (ledgers written by a datalab at another commit may not render).
 
 Naming rules: lowercase letters and digits, single dashes between words (`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`), not a
 reserved word (`test`, `datalab`, `datalab-test`, `template`, and the YAML words `y n yes no on off true false
 null`). An existing `projects/<name>` (even an empty folder or a file) is refused and nothing is written.
 
 The template (`templates/project/`) gives: `PROJECT.md` (the card: `name`, `title`, `status: idée`, `tags`, four
-sections to fill), a `pyproject.toml` named `proj-<name>` that depends on `packages/datalab` (editable path dep),
-an empty `src/` for your package, `.env.example` and a short README. A non-editable install of `datalab` cannot find
-the repo and refuses to run.
+sections to fill), a `pyproject.toml` named `proj-<name>` that depends on datalab (editable path dep inside
+data-lab, git dep elsewhere), an empty `src/` for your package, `.env.example` and a short README.
 
 In code: `datalab.project.load()` (identity from `PROJECT.md`), `datalab.project.collection_name()` (Weaviate),
 `datalab.tracking.tracked_run()` (MLflow run tagged `project=<name>`), `datalab.settings.Settings` (`DATALAB_*`).
@@ -130,8 +144,22 @@ are unanswerable and "I don't know" counts as missing (D-7).
 
 ## Claude Code
 
-`.claude/skills/experiment/` holds the `/experiment` skill (runs a project's experiment milestone by milestone, contract
-`contracts/EXPERIMENT.md`); `.claude/hooks/` holds the loop guards and the statusline meter.
+The `/datalab:experiment` skill (runs a project's experiment milestone by milestone, contract
+`contracts/EXPERIMENT.md`) ships in the `datalab` plugin (`plugins/datalab/`), served by the `data-lab` marketplace at
+this repo's root (`.claude-plugin/marketplace.json`). Install it once, for any workspace:
+
+```bash
+claude plugin marketplace add simonharel-simpro/data-lab
+claude plugin install datalab@data-lab
+claude plugin marketplace update data-lab      # later: pull the skill from the latest main
+```
+
+This needs read access to the private repo and git credentials (`gh auth setup-git`). After a plugin update, run
+`uv lock --upgrade-package datalab` in each project so its contracts match the skill (U-12). The skill dispatches the
+`ds-*` agents, which the plugin does not ship: install them separately at user level via trouvetou (#47).
+
+In data-lab, test unpushed skill edits with `claude --plugin-dir plugins/datalab` (disable the installed copy with
+`claude plugin disable datalab@data-lab` if both load). `.claude/hooks/` holds the loop guards and the statusline meter.
 
 ## Checks
 
