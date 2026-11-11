@@ -124,5 +124,5 @@ Phase 2 (2026-11-11, general-purpose): skill moved to `plugins/datalab/skills/ex
 `.claude-plugin/marketplace.json` + `plugins/datalab/.claude-plugin/plugin.json` (no version, D-11); `/experiment` →
 `/datalab:experiment` everywhere; `tests/test_plugin.py` 13 tests (all seen red); ADR in `decisions.md`; deviation
 entry in `IMPLEMENTATION_NOTES.md`. `claude plugin validate .` and `plugins/datalab` → rc 0 (warnings: no version —
-intended —, no author/description). `pytest -m scaffold` 2 passed. Manual check pending: `claude --plugin-dir
-plugins/datalab` lists `/datalab:experiment`.
+intended —, no author/description). `pytest -m scaffold` 2 passed. Manual check 2026-11-11: `claude --plugin-dir
+plugins/datalab -p …` lists `datalab:experiment`.
