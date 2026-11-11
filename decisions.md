@@ -406,4 +406,4 @@ developer-chosen sequence (the contract would guarantee almost nothing); `metric
 change on both sides plus V-3).
 **Consequences:** The I-7 message for a comparison changes wording ("features is not in the comparison sequence, so
 features must be null"); only the `I-7:` prefix is pinned. A future kind that drops a milestone gets the same guards
-for free. Plan: `IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md`.
+for free. Plan: `archive/2026-11-10-exploration/IMPLEMENTATION_PLAN_EXPLORATION_PHASE_1.md`.
