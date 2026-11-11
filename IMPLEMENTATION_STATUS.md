@@ -56,51 +56,26 @@ Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (
 - **Review cycle:** the validation reads GAPS FOUND only because bandit and radon are not installed (a decision
   still open); the deferred items are tracked in #12, #13 and #14.
 
-# voice-arch — LiveKit voice-agent architecture experiment
+# voice-arch — LiveKit voice-agent architecture experiment — ✅ built (PR #26, #27) · 📦 archived 2026-11-10 → [archive/2026-11-10-voice-arch/](archive/2026-11-10-voice-arch/INDEX.md)
 
-Integration branch: `feat/voice-arch` (base `main`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
-Plan: `IMPLEMENTATION_PLAN.md` + `IMPLEMENTATION_PLAN_PHASE_{1,2,3}.md` (READY stamps).
+Plan: [archived](archive/2026-11-10-voice-arch/IMPLEMENTATION_PLAN.md) (generic-named `IMPLEMENTATION_PLAN.md` + `_PHASE_{1,2,3}.md`).
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
 | 1 | Infra, gates, OpenRouter audio, stage-1 bench | ✅ landed on feat/voice-arch @ fd114c3 (/check clean, fix-check 2 iter) | `phase-1-infra-bench` |
 | 2 | Booking domain + architectures A/B/C + worker | ✅ landed on feat/voice-arch @ 7fbfe3b (/check clean, fix-check 1 iter) | `phase-2-booking-archs` |
-| 3 | Simulated caller, sweep runner, scoring, decision | ✅ landed on feat/voice-arch @ 0e69038 (/check clean; live call ESC-3-2; sweeps await user) | `phase-3-caller-runner` |
+| 3 | Simulated caller, sweep runner, scoring, decision | ✅ landed on feat/voice-arch @ 0e69038 (/check clean) | `phase-3-caller-runner` |
 
-## voice-arch Phase 1 — Infra, gates, OpenRouter audio, stage-1 bench
-**Implemented:** 2026-11-06 · **Agent:** python-fastapi (3 dispatches: A scaffold/infra/core, B bench/tools/docs, C D-17 caller default)
-**Tooling:** ruff ✅ · pyright 0 · lint-imports 1/1 kept · pytest 82 passed (3 integration deselected), coverage 88.3 % (floor 70) · pre-push hooks all pass · live spike 3/3
-- Stage-1 bench (MLflow `voice-arch/bench`, 0.17 $): STT `assemblyai/universal-3-6-pro` (4/40 errors, p50 0.61 s), TTS `deepgram/aura-2` (TTFB p50 0.38 s), LLM `google/gemini-3.5-flash-lite` (20/20, TTFT 0.82 s); per-turn sum ≈ 2.3 s (> 1.2 s bar, as planned, #25)
-- Escalations: ESC-1-1 resolved (plan scoring kept); ESC-1-2 open, reversible: caller model provisionally `anthropic/claude-haiku-5.5` (user to confirm)
-- Deferred to the user (approved deviation): browser smoke (README runbook); LiveKit healthcheck unverified until first `--profile voice up`
-- Deviations logged in [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md) (fields punctuation fix, extra modules seams/candidates/bench_runs, direct mlflow/pydantic-settings pins)
+Stage-1 bench (MLflow `voice-arch/bench`): STT `assemblyai/universal-3-6-pro`, TTS `deepgram/aura-2`, LLM
+`google/gemini-3.5-flash-lite`; per-turn sum ≈ 2.3 s (> 1.2 s bar, #25). PR #27 added the Google provider pin (ESC-2-1)
+and the empty-completion retry guard `llm_guard.py` (ESC-3-2, partial). Deviations: [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md).
 
-## voice-arch Phase 2 — Booking domain + architectures A/B/C + worker
-
-**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ ruff, pyright, lint-imports, pytest 185 passed, pre-push hooks
-
-- ✅ Pure domain `booking/` (record, calendar, actions, instructions); `arch.py`, `result.py`
-- ✅ `agents/` (state, tools, arch_a orchestrator, arch_b TaskGroup, arch_c + call record, registry)
-- ✅ `worker.py` (AgentServer, agent_name booking-agent) + pure `worker_logic.py`
-- ✅ Live text-mode integration: A, B, C each pass the clean caller and U-18 slot change (6/6)
-- ⏳ Browser call per arch — deferred to the user (recorded deviation, VA-16)
-
-Open escalations: ESC-1-2 (caller model). ESC-2-1 addressed by the Google provider pin (`4cf4ff1`, PR #27).
-Deviations in [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md): worker_logic split, unpinned LLM, non-awaited step-task reply on a user-ended
-context copy (Gemini 400), arch C slot updates via apply_choose_slot, caller must wait for the first task question.
-
-## voice-arch Phase 3 — Simulated caller, sweep runner, scoring, decision, human ratings
-
-**Implemented:** 2026-11-06 · **Agent:** python-fastapi · **Tooling:** ✅ pyright, ruff, lint-imports (2 contracts), pytest 272 passed, pre-push hooks, weak_tests 0
-
-- ✅ personas (6, validated at load), caller (LiveKit AgentSession on a self-connected room), call + runner (one MLflow run per sweep, budget check, crash-copy JSONL), naturalness, scoring, decide (D-15 rule), rate
-- ❌ Live call: 2 runs (arch A, self_correction) timed out after the address turn — the agent never replied (ESC-3-2); text-mode replay of the same turns works
-- ⏳ Full sweeps, `decide` into PROJECT.md, human ratings — deferred to the user (approved)
-
-Open escalations: ESC-3-1 (provider_error outcome counting). ESC-3-2 partly addressed: the stall is an empty Gemini completion, now retried with rising
-temperature (`llm_guard.py`, PR #27); one `self_correction` turn still came back empty on all 4 attempts, so what to do when the guard gives up is
-an open user decision (see [IMPLEMENTATION_NOTES.md](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md) "Sweep prerequisites").
-
+**Pending (operational, the user runs these; a code change goes through a new `/plan-fix` or `/plan-features`):**
+- Decide what happens when the empty-completion guard gives up (one `self_correction` turn stayed empty on all 4 attempts): end the call as an agent failure, another nudge, or investigate the context (ESC-3-2; [notes](archive/2026-11-10-review-2026-11-08/IMPLEMENTATION_NOTES.md) "Sweep prerequisites").
+- Decide whether the 240 s `call_timeout_s` default fits `self_correction` calls before the sweeps.
+- ESC-1-2: confirm the caller model (provisionally `anthropic/claude-haiku-5.5`). ESC-3-1: how `provider_error` outcomes count.
+- Run the full sweeps, `decide` into `PROJECT.md`, human ratings.
+- Browser call per arch (VA-16) and browser smoke; LiveKit healthcheck unverified until the first `--profile voice up`.
 
 # experiment — trouvetou experiment methodology — ✅ shipped (PR #33) · 📦 archived 2026-11-10 → [archive/2026-11-10-experiment/](archive/2026-11-10-experiment/INDEX.md)
 
