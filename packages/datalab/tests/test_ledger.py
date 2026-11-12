@@ -41,7 +41,9 @@ def test_f_18_ledger_vectors(name: str, entry: dict[str, Any], valid: bool) -> N
         return
     with pytest.raises(LedgerError) as caught:
         parse(text)
-    assert str(caught.value).startswith(_expected_prefix(entry["rule"])), name
+    message = str(caught.value)
+    assert message.startswith(_expected_prefix(entry["rule"])), name
+    assert entry["blames"] in message, name
 
 
 def test_contract_matches_kind_enum() -> None:

@@ -14,7 +14,10 @@ def test_access_problem(lg: RunLedger, split_sha: str, note: str | None) -> str 
     if lg.milestones[AUDIT].status is Status.VALIDATED:
         return "the audit is already validated: the test partition is closed"
     if split_sha != lg.split_sha256:
-        return "split.json changed since the freeze: its hash differs from run.json split_sha256"
+        return (
+            "split.json changed since the freeze: its hash differs from run.json split_sha256 "
+            "(an edit, or git line-ending conversion: see .gitattributes)"
+        )
     if look_number(lg, split_sha) > 1 and not (note or "").strip():
         return "a repeated test look on this split needs an expert note"
     return None

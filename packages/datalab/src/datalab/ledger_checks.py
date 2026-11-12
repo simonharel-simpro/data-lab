@@ -27,7 +27,10 @@ def check_split_hash(project_dir: Path, ledger: RunLedger) -> None:
     if not path.is_file():
         raise LedgerError("V-2: run.json freezes a split but split.json is missing")
     if split_sha256(path) != ledger.split_sha256:
-        raise LedgerError("V-2: split.json changed after the freeze (its hash differs from run.json split_sha256)")
+        raise LedgerError(
+            "V-2: split.json changed after the freeze (its hash differs from "
+            "run.json split_sha256 — an edit, or git line-ending conversion: see .gitattributes)"
+        )
 
 
 def check_metric(project_dir: Path, ledger: RunLedger) -> None:

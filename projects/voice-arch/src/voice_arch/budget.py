@@ -4,7 +4,7 @@ import logging
 from typing import Final, cast
 
 from mlflow import MlflowClient
-from mlflow.entities import RunStatus, ViewType
+from mlflow.entities import Run, RunStatus, ViewType
 
 from datalab.project import experiment_name
 from datalab.settings import Settings
@@ -26,8 +26,15 @@ class BudgetExceeded(Exception):
         self.budget = budget
 
 
+def _has_no_cost(run: Run) -> bool:
+    if "cost_usd" in run.data.metrics:
+        return False
+    return run.info.status != _FINISHED or run.data.tags.get("cost_unknown") == "true"
+
+
 def _unmeasured_estimates(client: MlflowClient) -> float:
-    """Estimates of the runs that are not FINISHED and never logged a `cost_usd` (crashed, killed, or still running)."""
+    """Estimates of the runs that never logged a `cost_usd` and are not FINISHED (crashed, killed, still running)
+    or are tagged `cost_unknown=true` (the key was unreadable, F-12)."""
     total = 0.0
     for sub, estimate in ESTIMATES_USD.items():
         experiment = client.get_experiment_by_name(experiment_name(PROJECT, sub))
@@ -43,8 +50,12 @@ def _unmeasured_estimates(client: MlflowClient) -> float:
                 page_token=token,
             )
             for run in page:
-                if run.info.status != _FINISHED and "cost_usd" not in run.data.metrics:
-                    logger.warning("run %s has no cost_usd: counted at the %.2f $ estimate", run.info.run_id, estimate)
+                if _has_no_cost(run):
+                    logger.warning(
+                        "run %s has no cost_usd (not finished, or cost unknown): counted at the %.2f $ estimate",
+                        run.info.run_id,
+                        estimate,
+                    )
                     total += estimate
             token = cast("str | None", page.token)  # pyright: ignore[reportUnknownMemberType]  # PagedList.token
             if not token:

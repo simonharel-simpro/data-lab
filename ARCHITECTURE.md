@@ -247,9 +247,9 @@ return _row(persona, rep, room, _classify(handle, result), result)
   delete the room. Rows are appended to `results/<run_id>.jsonl`; metrics, params and `per_conversation.json` are
   logged at the end. `cost_usd` (caller included) is the key's cumulative usage: logged after every call
   (`step=index`, so a killed sweep loses at most one call) and once more on tracker exit (`step=len(rows)`), even for
-  a FAILED run; an unreadable key tags the run `cost_unknown=true` and the sweep carries on (F-12).
+  a FAILED run; an unreadable key tags the run `cost_unknown=true`, the sweep carries on, and `spent_so_far` counts that run at its estimate (F-12).
 - **Budget:** `budget.spent_so_far` is `datalab.tracking_queries.project_spend("voice-arch")` (every run, whatever its
-  status, RUNNING included) plus P-2: a `voice-arch/<sub>` run that is not FINISHED and logged no `cost_usd` counts
+  status, RUNNING included) plus P-2: a `voice-arch/<sub>` run that logged no `cost_usd` and is not FINISHED or is tagged `cost_unknown=true` counts
   at `ESTIMATES_USD[sub]` (conversations 15 $, bench 2 $), with a warning.
 - **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
   transition model, each call is classified once from what the handle reports.

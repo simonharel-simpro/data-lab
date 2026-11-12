@@ -239,3 +239,27 @@ def test_record_data_refuses_exploration(tmp_path: Path) -> None:
 
     with pytest.raises(LedgerError, match="the split must be frozen"):
         record_data(_exploration_after_scoping(), data)
+
+
+def _stale_pair(tmp_path: Path) -> tuple[Path, RunLedger, RunLedger]:
+    folder = project(tmp_path, new_ledger(Kind.EXPLORATION, "score (max): x").model_dump(mode="json"))
+    return folder, read(folder), read(folder)
+
+
+def test_stale_write_does_not_revert_produce(tmp_path: Path) -> None:
+    folder, a, b = _stale_pair(tmp_path)
+    write_atomic(folder, ledger.produce(a, "scoping", ["scope.md"]), base=a)
+
+    with pytest.raises(LedgerError, match="changed since it was read"):
+        write_atomic(folder, b, base=b)
+
+    assert read(folder).milestones["scoping"].status is Status.PRODUCED
+
+
+def test_write_without_base_keeps_old_behaviour(tmp_path: Path) -> None:
+    folder, a, b = _stale_pair(tmp_path)
+    write_atomic(folder, ledger.produce(a, "scoping", ["scope.md"]), base=a)
+
+    write_atomic(folder, b)
+
+    assert read(folder).milestones["scoping"].status is Status.TODO

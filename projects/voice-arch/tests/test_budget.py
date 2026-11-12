@@ -81,11 +81,19 @@ def test_crashed_run_without_cost_counts_at_the_estimate(sqlite_uri: str) -> Non
     conversations = client.create_experiment("voice-arch/conversations")
     _run(client, conversations, None, status=None)  # RUNNING, never logged a cost
     _run(client, bench, None, "FAILED")
-    _run(client, bench, None, "FINISHED")  # finished without a cost: key unreadable (F-12), counts nothing
 
     expected = ESTIMATES_USD["conversations"] + ESTIMATES_USD["bench"]
     assert (ESTIMATES_USD["conversations"], ESTIMATES_USD["bench"]) == (15.0, 2.0)
     assert spent_so_far(_settings(sqlite_uri)) == pytest.approx(expected)
+
+
+def test_finished_run_tagged_cost_unknown_counts_at_estimate(sqlite_uri: str) -> None:
+    client = MlflowClient(sqlite_uri)
+    bench = client.create_experiment("voice-arch/bench")
+    client.set_tag(_run(client, bench, None, "FINISHED"), "cost_unknown", "true")
+    _run(client, bench, None, "FINISHED")  # no cost and no tag: nothing says its cost is unknown
+
+    assert spent_so_far(_settings(sqlite_uri)) == pytest.approx(2.0)
 
 
 def test_run_with_cost_is_not_also_counted_at_the_estimate(sqlite_uri: str) -> None:
