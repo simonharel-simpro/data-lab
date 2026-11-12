@@ -22,7 +22,8 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
   Lint + format (#13): eslint 10 flat config (`@eslint/js` + `typescript-eslint` `recommended` + `eslint-plugin-astro`
   `flat/recommended`) and prettier 3 with `prettier-plugin-astro`; scripts `lint`, `format`, `format:check`; eight exact
-  npm `overrides` (decisions.md, 2026-11-09).
+  npm `overrides` (decisions.md, 2026-11-09). JS SAST: `eslint-plugin-security` (recommended), warnings fail the lint
+  (`--max-warnings 0`).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
   web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
   Projection tab: `weavit-projector` Rust sidecar (umap-rs 0.4.5, ndarray, rayon), deck.gl 9.3.11 canvas; Rust gates
@@ -39,7 +40,7 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   `enum-discipline` (+ `-mini-rag`, `-voice-arch`, one per tree): no raw string compared to a declared StrEnum value.
   Pre-push stage: `gates-root` (pyright + pytest + coverage >= 70 on `tools/` + root `tests/`, one ad-hoc
   `uv run --no-project` env, #7), `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
-  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
+  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test && npm run build`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
 - **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (LLM over the Anthropic
@@ -314,7 +315,8 @@ livekit, even through another module); `booking/` has its own contract "booking 
   `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
   Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
 - **Lint + format (#13):** `npm run lint` (`eslint.config.js`: `recommended` rule sets plus
-  `@typescript-eslint/no-explicit-any` and `consistent-type-imports`, both `error`), `npm run format:check`
+  `@typescript-eslint/no-explicit-any` and `consistent-type-imports`, both `error`; `eslint-plugin-security`
+  (recommended), warnings fail the lint (`--max-warnings 0`)), `npm run format:check`
   (`.prettierrc.json`: width 120, single quotes, trailing commas; `npm run format` rewrites). Both run in CI and in
   `gates-app`. A caught error rethrown with a new message keeps it as `{ cause: err }` (`preserve-caught-error`).
 - **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.

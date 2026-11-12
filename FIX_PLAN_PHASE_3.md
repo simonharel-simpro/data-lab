@@ -1,5 +1,6 @@
 # Fix Plan — Phase 3: App & CI gates
 
+**Status:** ✅ Complete (3/3 fix units) — branch fix-phase-3-app-ci-gates, 2026-11-12
 **Severity:** 🟡
 **Agent:** general-purpose
 **Depends on:** Phase 2 (2.2 and 2.4b also edit `.pre-commit-config.yaml`; land them first to avoid conflicts)

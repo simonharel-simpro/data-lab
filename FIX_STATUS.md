@@ -9,9 +9,9 @@
 |-------|-------|----------|--------|-----------|------------|
 | 1 | Resilience + test quality | 🟡 | ✅ Complete | 9/9 | 100% |
 | 2 | Python lint, hooks & docs | 🟡 | ✅ Complete | 13/13 | 100% |
-| 3 | App & CI gates | 🟡 | ⏳ Pending | 0/3 | 0% |
+| 3 | App & CI gates | 🟡 | ✅ Complete | 3/3 | 100% |
 
-**Overall:** 22/25 fix units complete (88%)
+**Overall:** 25/25 fix units complete (100%)
 
 ---
 
@@ -88,6 +88,38 @@
 
 ---
 
-## Next Phase Preview
+## Phase 3 — App & CI gates
 
-**Phase 3: App & CI gates** — 3 fix units, 🟡, depends on Phase 2 ✅
+**Implemented:** 2026-11-12
+**Branch:** fix-phase-3-app-ci-gates
+**Agent:** general-purpose
+**Tooling:** ✅ `pre-commit run --all-files --hook-stage pre-push` all hooks pass (app hook now builds)
+
+### Completed
+- ✅ Fix Unit 3.1: five Python trees declared in `.ci-gate-exemptions.json`; the gate inventory lists six trees, RESULT PASS
+- ✅ Fix Unit 3.2: `gates-app` runs `npm run build`; the build passes with MLflow unreachable — grep 1→0
+- ✅ Fix Unit 3.3: `eslint-plugin-security@4.2.0` (exact), `eslint . --max-warnings 0`, `src/lib/**` override, one reasoned disable on `NAME_RE`; lint seen failing with the disable removed — grep 1→0
+
+### Notes
+- New dev dependency (plan-authorized): `eslint-plugin-security` 4.2.0 with transitives `safe-regex` 2.1.1 and `regexp-tree` 0.1.27; `npm audit --audit-level=moderate` clean.
+- With MLflow down the app build waits ~29 s on the failed fetch, so the pre-push hook is ~30 s slower in that case.
+- No ADR was written for adding `eslint-plugin-security` (decisions.md is outside the unit's file list); ARCHITECTURE.md names it. Follow-up.
+
+### Cross-phase Regressions
+- none (`fix_plan_gate.py assert-zero --done` OK)
+
+### Verification Checklist
+| Item | Status |
+|------|--------|
+| All fix units processed | ✅ |
+| All grep patterns clean (`fix_plan_gate.py assert-zero --phase 3`) | ✅ |
+| Tooling clean | ✅ |
+| No cross-phase regressions | ✅ |
+
+---
+
+## Gaps Requiring Attention
+
+- Deferred by plan: #8 (win32 skips), #41 (`_layout.py`), #53 (scenario traceability, incl. the 3 Phase 1 behaviour changes), #54 (property tests).
+- ADR for `eslint-plugin-security` (see Phase 3 notes).
+- After the PR merges: run `/validate-review`.
