@@ -16,14 +16,14 @@ from datalab.settings import Settings
 from tests.call_fakes import SHIPPED, FakeEnv, FakeHandle, FakeTracker, persona, result_for
 from tests.fakes import FakeLlm
 from voice_arch.arch import Arch
-from voice_arch.budget import BudgetExceeded
-from voice_arch.call import AgentNeverJoined, ProviderAuthStop
+from voice_arch.budget import BudgetExceededError
+from voice_arch.call import AgentNeverJoinedError, ProviderAuthStopError
 from voice_arch.caller import make_caller_session
 from voice_arch.openrouter_key import SpendTracker
 from voice_arch.personas import load_personas
 from voice_arch.runner import run_sweep
 from voice_arch.settings import VoiceSettings
-from voice_arch.sweep import CallerFaultRate, SweepContext, SweepPlan, Tracker
+from voice_arch.sweep import CallerFaultRateError, SweepContext, SweepPlan, Tracker
 
 EXPERIMENT = "voice-arch/conversations"
 NO_FULL_COST: Callable[[], float | None] = lambda: None  # noqa: E731  # one-line test constant
@@ -86,7 +86,7 @@ def sweep(tmp_path: Path, sqlite_uri: str, voice_settings: VoiceSettings) -> Swe
 async def test_f_2_sweep_aborts_when_no_agent_joins_within_deadline(sweep: Sweep) -> None:
     env = FakeEnv([FakeHandle(joins=False)])
 
-    with pytest.raises(AgentNeverJoined):
+    with pytest.raises(AgentNeverJoinedError):
         await sweep.run(env, ["self_correction", "speller"], reps=2)
 
     assert sweep.only_run().info.status == "FAILED"
@@ -97,7 +97,7 @@ async def test_f_4_402_aborts_sweep_and_creates_no_further_rooms(sweep: Sweep) -
     who = persona()
     env = FakeEnv([FakeHandle(result_for(who, http_status=402))])
 
-    with pytest.raises(ProviderAuthStop):
+    with pytest.raises(ProviderAuthStopError):
         await sweep.run(env, ["self_correction", "speller"], reps=2)
 
     assert sweep.only_run().info.status == "FAILED"
@@ -109,7 +109,7 @@ async def test_f_6_more_than_10_percent_caller_faults_fails_the_run(sweep: Sweep
     faulty = [FakeHandle(result_for(who), caller_error="tts 500") for _ in range(2)]
     env = FakeEnv(faulty)
 
-    with pytest.raises(CallerFaultRate):
+    with pytest.raises(CallerFaultRateError):
         await sweep.run(env, ["self_correction", "speller"], reps=5)
 
     run = sweep.only_run()
@@ -130,7 +130,7 @@ async def test_budget_exceeded_mid_sweep_stops_before_next_call(sweep: Sweep) ->
     after_first_call, final_cost = 5.5, 5.7
     tracker = partial(FakeTracker, readings=[after_first_call], final=final_cost)
 
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceededError):
         await sweep.run(
             FakeEnv(), ["self_correction", "speller"], 2, spent=45.0, last_full=lambda: 4.0, tracker=tracker
         )
@@ -145,7 +145,7 @@ async def test_budget_exceeded_runs_one_room_only(sweep: Sweep) -> None:
     env = FakeEnv()
     tracker = partial(FakeTracker, readings=[9.0])
 
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceededError):
         await sweep.run(env, ["self_correction"], 3, spent=45.0, last_full=lambda: 4.0, tracker=tracker)
 
     assert len(env.rooms) == 1
@@ -154,7 +154,7 @@ async def test_budget_exceeded_runs_one_room_only(sweep: Sweep) -> None:
 async def test_sweep_refused_when_estimate_reaches_budget(sweep: Sweep) -> None:
     env = FakeEnv()
 
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceededError):
         await sweep.run(env, ["self_correction"], 1, spent=45.0)
 
     assert env.rooms == []

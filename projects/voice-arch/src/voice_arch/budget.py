@@ -19,7 +19,7 @@ _PAGE = 1000
 _FINISHED: Final = RunStatus.to_string(RunStatus.FINISHED)
 
 
-class BudgetExceeded(Exception):
+class BudgetExceededError(Exception):
     def __init__(self, spent: float, budget: float) -> None:
         super().__init__(f"experiment budget reached: {spent:.2f} $ spent of {budget:.2f} $")
         self.spent = spent
@@ -72,4 +72,4 @@ def spent_so_far(settings: Settings) -> float:
 def check_budget(spent: float, estimate: float, budget: float) -> None:
     """One rule everywhere: reaching the budget stops."""
     if spent + estimate >= budget:
-        raise BudgetExceeded(spent, budget)
+        raise BudgetExceededError(spent, budget)

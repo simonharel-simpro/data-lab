@@ -1,6 +1,6 @@
 # Fix Status — data-lab (REVIEW 2026-11-11)
 
-**Last updated:** 2026-11-11
+**Last updated:** 2026-11-12
 **Plan:** FIX_PLAN.md (multi-phase, 3 phases) · integration branch `fix/review-2026-11-11` → `develop` · driven by `/loop-fix` · tracker #55
 
 ## Progress Summary
@@ -8,10 +8,10 @@
 | Phase | Theme | Severity | Status | Fix Units | Completion |
 |-------|-------|----------|--------|-----------|------------|
 | 1 | Resilience + test quality | 🟡 | ✅ Complete | 9/9 | 100% |
-| 2 | Python lint, hooks & docs | 🟡 | ⏳ Pending | 0/13 | 0% |
+| 2 | Python lint, hooks & docs | 🟡 | ✅ Complete | 13/13 | 100% |
 | 3 | App & CI gates | 🟡 | ⏳ Pending | 0/3 | 0% |
 
-**Overall:** 9/25 fix units complete (36%)
+**Overall:** 22/25 fix units complete (88%)
 
 ---
 
@@ -52,6 +52,42 @@
 
 ---
 
+## Phase 2 — Python lint, hooks & docs
+
+**Implemented:** 2026-11-12
+**Branch:** fix-phase-2-lint-hooks-docs
+**Agent:** python-fastapi (three sequential dispatches)
+**Tooling:** ✅ `pre-commit run --all-files --hook-stage pre-push` all hooks pass
+
+### Completed
+- ✅ Fix Unit 2.1a / 2.1b / 2.1c: every `# type: ignore[...]` / `# pyright: ignore[...]` carries a reason — 19 files, grep 14+10+5→0
+- ✅ Fix Unit 2.2: `suppression-reason` pygrep hook (seen failing with one reason stripped)
+- ✅ Fix Unit 2.4a: StrEnum value maps moved to `tools/pre_commit_checks/enum_maps.py`; `check_enum_discipline.py` 202→116 lines, hook output unchanged
+- ✅ Fix Unit 2.4b: `file-size` + `check-function-length` cover `tools/` (vendored files excluded), 2 new tests — grep 2→0
+- ✅ Fix Unit 2.3a / 2.3b / 2.3c: 8 internal exceptions renamed `…Error` — grep 17+22+11→0
+- ✅ Fix Unit 2.3d: ruff `ANN`, `PGH`, `T20`, `N` + reasoned per-file ignores; scaffold-shaped copy passes — grep 1→0
+- ✅ Fix Unit 2.3e: pyright strict on `tools/check_file_size.py`, `hydra_gate.py`, `enum_maps.py`
+- ✅ Fix Unit 2.5: ARCHITECTURE.md lists `value_sets.json`, the pre_commit_checks files, `.ci-gate-exemptions.json`, the new hooks, project isolation
+- ✅ Fix Unit 2.6: six ADRs dated 2026-11-11
+
+### Notes
+- The plan's `suppression-reason` hook `name:` was unquoted and broke YAML (`type: ignore` contains `: `); it is single-quoted, same text.
+- `test_vendored_tools_files_are_out_of_scope` passes on the old code too (the old `_in_scope` rejected every `tools/` path); it guards the exclusions now that `tools/` is in scope.
+- A bare `ruff format .` from the root rewrites python blocks inside Markdown (ARCHITECTURE.md, two archive files); the hook only formats `.py`. Do not run it bare.
+
+### Cross-phase Regressions
+- none (`fix_plan_gate.py assert-zero --done` OK)
+
+### Verification Checklist
+| Item | Status |
+|------|--------|
+| All fix units processed | ✅ |
+| All grep patterns clean (`fix_plan_gate.py assert-zero --phase 2`) | ✅ |
+| Tooling clean | ✅ |
+| No cross-phase regressions | ✅ |
+
+---
+
 ## Next Phase Preview
 
-**Phase 2: Python lint, hooks & docs** — 13 fix units, 🟡, depends on Phase 1 ✅
+**Phase 3: App & CI gates** — 3 fix units, 🟡, depends on Phase 2 ✅

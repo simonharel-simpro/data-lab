@@ -1,5 +1,6 @@
 # Fix Plan — Phase 2: Python lint, hooks & docs
 
+**Status:** ✅ Complete (13/13 fix units) — branch fix-phase-2-lint-hooks-docs, 2026-11-12
 **Severity:** 🟡
 **Agent:** python-fastapi (this repo is NOT a FastAPI app: ignore that agent's router/service/repository layer rules; apply its Python typing, tooling and documentation rules only)
 **Depends on:** Phase 1 (shares test files; 2.3d turns on ruff rules that Phase 1's new code must already satisfy)

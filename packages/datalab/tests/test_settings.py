@@ -111,7 +111,7 @@ def test_sqlite_tracking_uri_still_validates(tmp_path: Path) -> None:
     uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
 
     # Settings kwarg.
-    assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]
+    assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 @pytest.mark.parametrize("uri", ["http://", "://", "garbage://", "x ://y", "http:// host"])
@@ -126,4 +126,4 @@ def test_malformed_tracking_uri_fails_at_settings(uri: str) -> None:
 )
 def test_valid_tracking_uri_schemes_still_validate(uri: str) -> None:
     # Settings kwarg.
-    assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]
+    assert Settings(_env_file=None, mlflow_tracking_uri=uri).mlflow_tracking_uri == uri  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits

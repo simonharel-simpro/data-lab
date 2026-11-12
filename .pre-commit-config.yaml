@@ -16,19 +16,29 @@ repos:
       - id: gitleaks
   - repo: local
     hooks:
+      - id: suppression-reason
+        name: 'type/pyright ignores carry a reason (`# type: ignore[code]  # why`)'
+        language: pygrep
+        entry: '#\s*(type|pyright):\s*ignore\[[^\]]*\]\s*$'
+        types: [python]
+        exclude: ^tools/(check_hydra_project|pre_commit_checks/_layout)\.py$
       - id: file-size
-        name: src modules <= 200 lines
+        name: src + tools modules <= 200 lines
         # No root uv project exists, so the hook runs the stdlib-only script directly.
         entry: python tools/check_file_size.py
         language: python
-        files: ^(packages|projects|templates)/[^/]+/src/.*\.py$
+        files: ^((packages|projects|templates)/[^/]+/src/|tools/).*\.py$
+        # keep in sync with _EXCLUDED_TOOLS in tools/check_file_size.py (and check-function-length below)
+        exclude: ^tools/(weavit-ui/|check_hydra_project\.py$|pre_commit_checks/_layout\.py$)
       - id: check-function-length
-        name: src functions <= 30 lines, classes <= 150 (REVIEW M3.3)
+        name: src + tools functions <= 30 lines, classes <= 150 (REVIEW M3.3)
         # /scaffold-linter function-length (recipe check_file_length.py, function/class half). Same scope as
         # file-size; stdlib-only, so no uv env. pre-commit passes the matching files.
         entry: python tools/pre_commit_checks/check_function_length.py
         language: python
-        files: ^(packages|projects|templates)/[^/]+/src/.*\.py$
+        files: ^((packages|projects|templates)/[^/]+/src/|tools/).*\.py$
+        # keep in sync with _EXCLUDED_TOOLS in tools/check_file_size.py (and file-size above)
+        exclude: ^tools/(weavit-ui/|check_hydra_project\.py$|pre_commit_checks/_layout\.py$)
       - id: declared-deps
         name: datalab imports are declared dependencies
         # Vendored recipe (tools/pre_commit_checks). It reads pyproject.toml/uv.lock and scans src/ relative to the

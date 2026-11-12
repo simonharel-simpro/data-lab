@@ -30,14 +30,14 @@ from _layout import NO_SOURCE_ROOT_MSG, module_for_path, source_files
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
-    tomllib = None  # type: ignore[assignment]
+    tomllib = None  # type: ignore[assignment]  # optional import fallback
 
 try:
     from importlib.metadata import packages_distributions
 except ImportError:  # pragma: no cover - Python < 3.10
     # Without it, dist->import aliases (pillow->PIL) are unknown and every aliased
     # import would be reported undeclared. Skipping is correct; guessing is not.
-    packages_distributions = None  # type: ignore[assignment]
+    packages_distributions = None  # type: ignore[assignment]  # optional import fallback
 
 _NAME_RE = re.compile(r"[A-Za-z0-9._-]+")
 

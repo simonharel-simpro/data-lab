@@ -136,7 +136,7 @@ def test_agent_reasoning_effort_defaults_to_low_and_rejects_minimal(monkeypatch:
     monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_KEY", "devkey")
     monkeypatch.setenv("VOICE_ARCH_LIVEKIT_API_SECRET", "s" * 32)
     # Pydantic-settings kwarg.
-    assert VoiceSettings(_env_file=None).agent_reasoning_effort == "low"  # pyright: ignore[reportCallIssue]
+    assert VoiceSettings(_env_file=None).agent_reasoning_effort == "low"  # pyright: ignore[reportCallIssue]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
     monkeypatch.setenv("VOICE_ARCH_AGENT_REASONING_EFFORT", "minimal")  # the value that reproduced the failure
     with pytest.raises(ValidationError):

@@ -55,7 +55,7 @@ def session_report(ctx: JobContext, session: AgentSession[BookingState]) -> dict
     to_dict = cast(
         "Callable[[], dict[str, object]]",
         # livekit's SessionReport is untyped.
-        ctx.make_session_report(session).to_dict,  # pyright: ignore[reportUnknownMemberType]
+        ctx.make_session_report(session).to_dict,  # pyright: ignore[reportUnknownMemberType]  # LiveKit SessionReport is untyped
     )
     return to_dict()
 

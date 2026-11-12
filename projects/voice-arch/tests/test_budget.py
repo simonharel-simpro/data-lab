@@ -4,7 +4,7 @@ import pytest
 from mlflow import MlflowClient
 
 from datalab.settings import Settings
-from voice_arch.budget import ESTIMATES_USD, BudgetExceeded, check_budget, spent_so_far
+from voice_arch.budget import ESTIMATES_USD, BudgetExceededError, check_budget, spent_so_far
 
 
 def _settings(sqlite_uri: str) -> Settings:
@@ -52,7 +52,7 @@ def test_spent_so_far_counts_the_latest_cost_metric_of_a_run(sqlite_uri: str) ->
 
 
 def test_check_budget_stops_when_reaching_the_budget() -> None:
-    with pytest.raises(BudgetExceeded) as err:
+    with pytest.raises(BudgetExceededError) as err:
         check_budget(48.0, 2.0, 50.0)
 
     assert (err.value.spent, err.value.budget) == (48.0, 50.0)

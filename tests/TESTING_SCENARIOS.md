@@ -87,8 +87,8 @@
 | VA-15 | Result send after room deleted | `send_text` raises | logged, the job still returns | 🆕 New | voice-arch P2 |
 | VA-16 | Browser call per arch | `voice_arch.worker dev`, token with `--agent booking-agent`, `dispatch --arch a/b/c` | a booking completes by voice, the agent hangs up after the goodbye | 🆕 New (user) | voice-arch P2 |
 | VA-17 | Persona data validated | personas.jsonl with an unknown/booked slot, a bad problem type, an extra key, a duplicate id | `PersonaError` naming the line and the cause | 🆕 New | voice-arch P3 |
-| VA-18 | Agent never joins | dispatch accepted, no worker | `AgentNeverJoined` after `agent_join_timeout_s`, sweep run FAILED, one room | 🆕 New | voice-arch P3 |
-| VA-19 | OpenRouter 401/402 on either side | agent result or caller session reports 402 | `ProviderAuthStop`, run FAILED, no further room, `cost_usd` still logged | 🆕 New | voice-arch P3 |
+| VA-18 | Agent never joins | dispatch accepted, no worker | `AgentNeverJoinedError` after `agent_join_timeout_s`, sweep run FAILED, one room | 🆕 New | voice-arch P3 |
+| VA-19 | OpenRouter 401/402 on either side | agent result or caller session reports 402 | `ProviderAuthStopError`, run FAILED, no further room, `cost_usd` still logged | 🆕 New | voice-arch P3 |
 | VA-20 | Caller fails | caller TTS/LLM error closes its session, result arrives | row `caller_fault`, excluded from `exact_rate`; > 10 % of rows -> run FAILED after logging | 🆕 New | voice-arch P3 |
 | VA-21 | Call never ends / agent leaves without result | no result by `call_timeout_s` / participant left | `timeout` / `agent_lost`, counted as a miss in `exact_rate` | 🆕 New | voice-arch P3 |
 | VA-22 | Budget | `spent` + estimate >= 50 $ / key usage reaches the budget mid-sweep | refused before any room / stopped before the next call, FAILED run keeps rows and `cost_usd` | 🆕 New | voice-arch P3 |

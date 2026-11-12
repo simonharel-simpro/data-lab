@@ -12,7 +12,7 @@ from mini_rag.corpus import Chunk
 from mini_rag.generate import GenerationError
 from mini_rag.index import Retrieval
 from mini_rag.questions import Question
-from mini_rag.run import Answer, EmptyRetrieval, RunConfig, Search, run
+from mini_rag.run import Answer, EmptyRetrievalError, RunConfig, Search, run
 from mini_rag.settings import PilotSettings
 
 _QUESTIONS = [
@@ -129,7 +129,7 @@ def test_search_returning_no_passages_fails_the_run(tmp_path: Path, sqlite_uri: 
         answered.append(question)
         return _answer(question, passages)
 
-    with pytest.raises(EmptyRetrieval, match="q2"):
+    with pytest.raises(EmptyRetrievalError, match="q2"):
         _run(tmp_path, sqlite_uri, answer=recording, search=empty_on_second)
 
     found = _only_run(sqlite_uri)
