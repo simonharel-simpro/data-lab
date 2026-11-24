@@ -16,7 +16,7 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 - **Python:** 3.12, managed with uv; one env per project; ruff (single root `ruff.toml`), pytest.
   py312+: `from __future__ import annotations` is not required; PEP 604/585 syntax is native and ruff `UP` keeps it
   modern (decisions.md, 2026-11-09).
-- **App:** Astro 7.4.1 on Node 22 (static output, no server adapter); zod via `astro/zod`; tests with `node --test`
+- **App:** Astro 7.4.13 on Node 22 (>=22.23.4) (static output, no server adapter); zod via `astro/zod`; tests with `node --test`
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
   Lint + format (#13): eslint 10 flat config (`@eslint/js` + `typescript-eslint` `recommended` + `eslint-plugin-astro`
   `flat/recommended`) and prettier 3 with `prettier-plugin-astro`; scripts `lint`, `format`, `format:check`; eight exact
@@ -34,7 +34,7 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   `enum-discipline` (+ `-mini-rag`, `-voice-arch`, one per tree): no raw string compared to a declared StrEnum value.
   Pre-push stage: `gates-root` (pyright + pytest + coverage >= 70 on `tools/` + root `tests/`, one ad-hoc
   `uv run --no-project` env, #7), `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
-  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
+  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test`; needs node >=22.23.4 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
 - **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (LLM over the Anthropic
