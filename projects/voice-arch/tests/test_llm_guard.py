@@ -19,7 +19,7 @@ class _Stream(llm.LLMStream):
 
     async def _run(self) -> None:
         # Attr missing in stubs.
-        self._llm.temperatures.append(self._extra_kwargs["temperature"])  # pyright: ignore[reportAttributeAccessIssue]
+        self._llm.temperatures.append(self._extra_kwargs["temperature"])  # pyright: ignore[reportAttributeAccessIssue]  # asserts the plugin's private config
         self._llm.attempts += 1  # pyright: ignore[reportAttributeAccessIssue]  # attr missing in stubs
         if self._llm.attempts > self._llm.empty_attempts:  # pyright: ignore[reportAttributeAccessIssue]  # not in stubs
             delta = llm.ChoiceDelta(role="assistant", content="Hello")
@@ -146,7 +146,7 @@ async def test_guard_wraps_the_real_openrouter_stream_and_keeps_its_temperature(
     await stream.aclose()  # cancelled before its first await: nothing is sent
 
     # Private LiveKit attr.
-    assert stream._extra_kwargs["temperature"] == 0.4  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
+    assert stream._extra_kwargs["temperature"] == 0.4  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]  # asserts the plugin's private config
 
 
 async def test_guard_dumps_the_request_of_every_empty_attempt(monkeypatch: pytest.MonkeyPatch) -> None:

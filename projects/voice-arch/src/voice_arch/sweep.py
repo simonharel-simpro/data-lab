@@ -12,7 +12,7 @@ import mlflow
 from datalab.project import Project
 from datalab.settings import Settings
 from voice_arch.arch import Arch
-from voice_arch.budget import BudgetExceeded
+from voice_arch.budget import BudgetExceededError
 from voice_arch.call import CallRow, Outcome, run_one_call
 from voice_arch.call_env import CallEnv
 from voice_arch.personas import Persona
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 MAX_CALLER_FAULT_PERCENT: Final = 10
 
 
-class CallerFaultRate(Exception):
+class CallerFaultRateError(Exception):
     pass
 
 
@@ -83,7 +83,7 @@ class Sweep:
             return
         mlflow.log_metric("cost_usd", now, step=index)  # cumulative: a killed sweep loses at most one call's cost
         if not last and self.spent + now >= self.settings.experiment_budget_usd:  # a finished sweep is never failed
-            raise BudgetExceeded(self.spent + now, self.settings.experiment_budget_usd)
+            raise BudgetExceededError(self.spent + now, self.settings.experiment_budget_usd)
 
     async def calls(self, run_id: str, tracker: Tracker) -> None:
         plan = [(p, rep) for p in self.personas for rep in range(self.reps)]
@@ -103,7 +103,7 @@ class Sweep:
         per_conversation = [row.model_dump(mode="json") for row in self.rows]
         # mlflow's stub says `dict`; it logs a list as JSON just as well.
         # List logged as JSON.
-        mlflow.log_dict(per_conversation, "per_conversation.json")  # pyright: ignore[reportArgumentType]
+        mlflow.log_dict(per_conversation, "per_conversation.json")  # pyright: ignore[reportArgumentType]  # log_dict is typed dict[str, Any]; the payload is a list
         faults = sum(r.outcome is Outcome.CALLER_FAULT for r in self.rows)
         if faults * 100 > MAX_CALLER_FAULT_PERCENT * len(self.rows):
-            raise CallerFaultRate(f"{faults} of {len(self.rows)} calls failed on the caller's side (F-6)")
+            raise CallerFaultRateError(f"{faults} of {len(self.rows)} calls failed on the caller's side (F-6)")

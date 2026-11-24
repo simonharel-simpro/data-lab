@@ -33,7 +33,7 @@ from voice_arch.openrouter_key import SpendTracker
 from voice_arch.seams import ChatModel, Synthesizer, Transcriber
 from voice_arch.settings import VoiceSettings, load_settings
 from voice_arch.winners import (
-    NoEligibleCandidate,
+    NoEligibleCandidateError,
     pick_llm,
     pick_stt,
     pick_tts,
@@ -103,7 +103,7 @@ async def bench_tts(env: BenchEnv, ttss: Mapping[str, Synthesizer], lines: list[
         }
         try:
             choice, reason = pick_tts(rows), ""
-        except NoEligibleCandidate as err:
+        except NoEligibleCandidateError as err:
             choice, reason = None, str(err)
         return Outcome(metrics, choice, choice.reason if choice else reason, {})
 

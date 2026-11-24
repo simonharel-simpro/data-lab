@@ -82,7 +82,10 @@ def file_sha256(path: Path) -> str:
 def check_data_hash(expected: str | None, data_file: Path) -> None:
     """Nothing is frozen while `expected` is None; otherwise the data file must still hash to it."""
     if expected is not None and file_sha256(data_file) != expected:
-        raise PrepareError("data_file changed since modeling: its hash differs from run.json data_sha256")
+        raise PrepareError(
+            "data_file changed since modeling: its hash differs from run.json data_sha256 "
+            "(an edit, or git line-ending conversion: see .gitattributes)"
+        )
 
 
 def _check_frozen(lg: RunLedger | None, experiment_dir: Path, data_file: Path) -> None:

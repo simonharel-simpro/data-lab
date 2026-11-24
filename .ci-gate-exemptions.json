@@ -29,6 +29,33 @@
       "reason": "no root uv project by design (ADR 3), so `uv run pytest` cannot spawn at the root; covered by the `gates-root` pre-push hook (pytest + coverage floor 70 on tools/)"
     }
   ],
+  "trees": [
+    {
+      "path": ".",
+      "stack": "python",
+      "reason": "root tools/ + tests/: no manifest by design (ADR 3)"
+    },
+    {
+      "path": "packages/datalab",
+      "stack": "python",
+      "reason": "manifest at depth 2, below the inventory's depth-0/1 detection"
+    },
+    {
+      "path": "projects/mini-rag",
+      "stack": "python",
+      "reason": "manifest at depth 2, below the inventory's depth-0/1 detection"
+    },
+    {
+      "path": "projects/voice-arch",
+      "stack": "python",
+      "reason": "manifest at depth 2, below the inventory's depth-0/1 detection"
+    },
+    {
+      "path": "templates/project",
+      "stack": "python",
+      "reason": "manifest at depth 2, below the inventory's depth-0/1 detection"
+    }
+  ],
   "exemptions": [
     {
       "tree": "app",

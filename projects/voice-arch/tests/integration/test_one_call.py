@@ -49,7 +49,7 @@ class RecordingEnv(LiveKitCallEnv):
 @pytest.fixture
 def live() -> VoiceSettings:
     # Pydantic-settings kwarg.
-    return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]
+    return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 async def test_one_live_call_produces_a_row(

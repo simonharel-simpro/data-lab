@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 
-class NoEligibleCandidate(Exception):
+class NoEligibleCandidateError(Exception):
     """No candidate can win: an empty field, or every TTS candidate unintelligible."""
 
 
@@ -41,7 +41,7 @@ class LlmRow:
 def pick_stt(rows: Sequence[SttRow]) -> Choice:
     """Candidates within `ceil(n / 40)` errors of the best (margin measured from the best) tie: lowest p50 wins."""
     if not rows:
-        raise NoEligibleCandidate("no STT candidate")
+        raise NoEligibleCandidateError("no STT candidate")
     best = min(r.errors for r in rows)
     margin = math.ceil(max(r.n_utterances for r in rows) / 40)
     tied = [r for r in rows if r.errors <= best + margin]
@@ -55,14 +55,14 @@ def pick_stt(rows: Sequence[SttRow]) -> Choice:
 def pick_tts(rows: Sequence[TtsRow]) -> Choice:
     eligible = [r for r in rows if r.intelligible]
     if not eligible:
-        raise NoEligibleCandidate("no intelligible TTS candidate")
+        raise NoEligibleCandidateError("no intelligible TTS candidate")
     winner = min(eligible, key=lambda r: (r.ttfb_p50_s, r.model))
     return Choice(winner.model, f"intelligible, lowest TTFB p50 {winner.ttfb_p50_s:.2f} s of {len(eligible)}")
 
 
 def pick_llm(rows: Sequence[LlmRow]) -> Choice:
     if not rows:
-        raise NoEligibleCandidate("no LLM candidate")
+        raise NoEligibleCandidateError("no LLM candidate")
     best = max(r.correct for r in rows)
     winner = min((r for r in rows if r.correct == best), key=lambda r: (r.ttft_p50_s, r.model))
     return Choice(winner.model, f"{winner.correct}/{winner.n_cases} correct, TTFT p50 {winner.ttft_p50_s:.2f} s")

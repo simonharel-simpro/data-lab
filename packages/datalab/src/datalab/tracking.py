@@ -2,7 +2,6 @@
 
 import logging
 import math
-import os
 import threading
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
@@ -18,7 +17,14 @@ from datalab.project import Project, experiment_name
 from datalab.settings import Settings
 from datalab.tags import Tag
 from datalab.tracking_outcome import OUTCOMES, Outcome, after_failure, ending_run, tag_outcome
-from datalab.tracking_queries import StaleRun, close_runs, experiments_page, project_spend, stale_runs
+from datalab.tracking_queries import (
+    StaleRun,
+    bound_http_retries,
+    close_runs,
+    experiments_page,
+    project_spend,
+    stale_runs,
+)
 
 __all__ = [
     "StaleRun", "TrackingUnavailable", "Trial", "TrialError", "close_runs", "preflight", "project_spend",
@@ -26,9 +32,6 @@ __all__ = [
 ]  # fmt: skip
 
 logger = logging.getLogger(__name__)
-
-
-_HTTP_DEFAULTS: Final = {"MLFLOW_HTTP_REQUEST_MAX_RETRIES": "2", "MLFLOW_HTTP_REQUEST_TIMEOUT": "30"}
 
 
 class TrackingUnavailable(RuntimeError):
@@ -62,15 +65,9 @@ class _Slot:
 _SLOT: Final = _Slot()
 
 
-def _bound_http_retries() -> None:
-    """MLflow's defaults (7 retries x 120 s, backoff 2) turn an outage into a ~20 min hang; a user value wins."""
-    for key, value in _HTTP_DEFAULTS.items():
-        os.environ.setdefault(key, value)
-
-
 def preflight(uri: str) -> None:
     """Fail in seconds, not after hours of compute, when MLflow is unreachable."""
-    _bound_http_retries()
+    bound_http_retries()
     mlflow.set_tracking_uri(uri)
     logger.info("MLflow tracking URI: %s", mlflow.get_tracking_uri())
     if uri.startswith(("http://", "https://")):
@@ -93,7 +90,7 @@ def tracked_run(
     tags: Mapping[str, str] | None = None,
 ) -> Generator[str, None, None]:
     """Open a run in `<name>` or `<name>/<sub>`; an exception inside marks it FAILED and is re-raised."""
-    _bound_http_retries()
+    bound_http_retries()
     extra = dict(tags or {})
     if "project" in extra:
         raise ValueError("tags may not override 'project': it always equals the project name")

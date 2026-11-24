@@ -8,7 +8,14 @@ from tests.call_fakes import FakeEnv, FakeHandle, persona, result_for
 from voice_arch import call
 from voice_arch.arch import Arch
 from voice_arch.booking.record import SCORED_FIELDS
-from voice_arch.call import AgentNeverJoined, CallRow, LiveKitUnresponsive, Outcome, ProviderAuthStop, run_one_call
+from voice_arch.call import (
+    AgentNeverJoinedError,
+    CallRow,
+    LiveKitUnresponsiveError,
+    Outcome,
+    ProviderAuthStopError,
+    run_one_call,
+)
 from voice_arch.call_env import CallerHandle
 from voice_arch.caller import CallerAgent
 from voice_arch.personas import Persona
@@ -38,7 +45,7 @@ async def test_f_2_agent_never_joins_raises() -> None:
     handle = FakeHandle(joins=False)
     env = FakeEnv([handle])
 
-    with pytest.raises(AgentNeverJoined):
+    with pytest.raises(AgentNeverJoinedError):
         await _call(env)
 
     assert env.deleted == env.rooms
@@ -59,7 +66,7 @@ async def test_f_4_402_raises_before_caller_fault() -> None:
     who = persona()
     env = FakeEnv([FakeHandle(result_for(who, http_status=402), caller_error="tts 402")])
 
-    with pytest.raises(ProviderAuthStop):
+    with pytest.raises(ProviderAuthStopError):
         await _call(env)
 
     assert env.deleted == env.rooms
@@ -68,14 +75,14 @@ async def test_f_4_402_raises_before_caller_fault() -> None:
 async def test_caller_side_402_stops_the_sweep() -> None:
     env = FakeEnv([FakeHandle(result=None, caller_http_status=402)])
 
-    with pytest.raises(ProviderAuthStop):
+    with pytest.raises(ProviderAuthStopError):
         await _call(env)
 
 
 async def test_f_4_401_also_stops_the_sweep() -> None:
     env = FakeEnv([FakeHandle(result_for(persona(), http_status=401))])
 
-    with pytest.raises(ProviderAuthStop):
+    with pytest.raises(ProviderAuthStopError):
         await _call(env)
 
 
@@ -175,7 +182,7 @@ async def test_run_one_call_bounds_a_step_that_never_returns(step: str, monkeypa
     monkeypatch.setattr(call, "STEP_TIMEOUT_S", 0.05)
     env = _HangingEnv(step)
 
-    with pytest.raises(LiveKitUnresponsive, match=step):
+    with pytest.raises(LiveKitUnresponsiveError, match=step):
         await _call(env)
 
     assert len(env.deleted) == 1  # _cleanup still ran

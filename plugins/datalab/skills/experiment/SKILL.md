@@ -45,14 +45,17 @@ from pathlib import Path
 from datalab import ledger
 d = Path('projects/<name>')
 l = ledger.read(d)
+base = l                         # what was read: write_atomic refuses if run.json changed since
 l = ledger.<op>(l, ...)          # produce / decide / freeze_split / record_data / redo
-ledger.write_atomic(d, l)
+ledger.write_atomic(d, l, base=base)
 PY
 uv run --locked --project projects/<name> python -m datalab.ledger validate projects/<name>
 ```
 
-- The first ledger: replace the `read` and `<op>` lines with `l = ledger.new_ledger(ledger.Kind.TRAINING, """...""")`
-  (or `Kind.COMPARISON` / `Kind.EXPLORATION`).
+A `LedgerError` saying run.json changed since it was read means another writer got there first: re-read and redo the step, never force it.
+
+- The first ledger: replace the `read`, `base =` and `<op>` lines with `l = ledger.new_ledger(ledger.Kind.TRAINING, """...""")`
+  (or `Kind.COMPARISON` / `Kind.EXPLORATION`) and drop `base=base` from the write (there is no file yet).
 - A decision: `ledger.decide(l, "<m>", ledger.Decision.VALIDATE, """<expert's words>""")`; modeling adds
   `winner=ledger.Winner(candidate="<family>", run_id="<child run id>")` (keywords only).
 - The `dataset` and `features` fields (no op sets them): add `import json`, then
@@ -89,10 +92,10 @@ b. Stale runs: run the MLflow twin, show every stale RUNNING run (> 24 h), ask w
 c. No `run.json`: governance gate (section 4); ask the kind (training | comparison | exploration) and the metric
    (key + goal `max`/`min` + one line). Pick exploration to look at data, try an architecture or benchmark without
    a frozen test; it states what it looks at as its metric line. Write the card `metric: {key, goal}` in `PROJECT.md` first, then `new_ledger(kind,
-   "<key> (<goal>): <one line>")` + `write_atomic` + `validate` (V-3 ties the two).
+   "<key> (<goal>): <one line>")` + `write_atomic` (no `base`) + `validate` (V-3 ties the two).
 d. `run.json` present: `validate`. Exit 1: quote the FAIL line verbatim and never guess a fix. A corrupt file (invalid
    JSON, schema, `kind missing`): tell the expert, reconstruct from `PROJECT.md` + the artifacts on disk, show the
-   reconstruction, and write it with `write_atomic(d, l, replace_corrupt=True)` only after the expert agrees.
+   reconstruction, and write it with `write_atomic(d, l, replace_corrupt=True)` (no `base`: nothing valid to compare against) only after the expert agrees.
 e. The current milestone `produced` with decision null or `correct`: re-present it (section 6, step 4) and re-ask.
    Never advance on `current_milestone` alone.
 
@@ -125,14 +128,14 @@ sequence never runs; an exploration logs runs (if any) from project code with
 
 1. Dispatch the milestone's agent with its brief (`references/dispatch-briefs.md`, `{metric}` = `run.json` `metric`)
    and the common block plus its row from `references/agent-overrides.md`. Pass artifacts by path.
-2. `produce(l, "<m>", [<artifact paths relative to the project>])` → `write_atomic` → `validate`. Exit ≠ 0: stop
+2. `produce(l, "<m>", [<artifact paths relative to the project>])` → `write_atomic` (with `base=base`) → `validate`. Exit ≠ 0: stop
    and report the output.
 3. Append the narrative to `PROJECT.md`: Approche while the work happens, Enseignements for findings.
 4. Present: a tight summary, the artifact paths, **the metric restated** (`run.json` `metric`), and every past
    `decisions_log` note of this milestone.
 5. STOP. Ask with AskUserQuestion, options exactly `validate`, `correct`, `redo` (at the audit add `redo modeling`).
    No answer, an ambiguous one or silence: ask again. Never assume.
-6. `decide(l, "<m>", <Decision>, """<the expert's words>""")` → `write_atomic` → `validate`. Set `dataset` before
+6. `decide(l, "<m>", <Decision>, """<the expert's words>""")` → `write_atomic` (with `base=base`) → `validate`. Set `dataset` before
    validating `dataset` (I-11) and `features` before validating `features` (section 2).
 7. `correct`: re-dispatch the same agent with the correction, then `produce` again and go back to step 3. `redo`:
    section 10. `validate`: the next milestone.
@@ -148,7 +151,7 @@ Right after `dataset` is validated (and the data acquired), BEFORE any other dis
    strategy, seed, target, group_key and time_col that `dataset.md` proposed and the expert validated. Index lists
    address the rows of the acquired file; their union is every row. A comparison: `grouped`, group_key the persona or question id,
    **train = the dev set, val may be empty, test non-empty**.
-2. `validate`, then `freeze_split(l, d / "split.json", "<strategy, seed, partition sizes>")` → `write_atomic` →
+2. `validate`, then `freeze_split(l, d / "split.json", "<strategy, seed, partition sizes>")` → `write_atomic` (with `base=base`) →
    `validate`.
 
 Reads: before the freeze only the target, group_key and time_col columns may be read; after it EDA and every later
@@ -158,7 +161,7 @@ The split is never recomputed; only a redo at or before `dataset` reopens it.
 ## 8. BOX (before dispatching `ds-modeler`; not a milestone)
 
 1. `record_data(l, d / "data/clean/data.jsonl")` (the template's `paths.data_file`: the full data the card ranks
-   on) → `write_atomic` → `validate`. The file must not change afterwards: train and eval check its hash.
+   on) → `write_atomic` (with `base=base`) → `validate`. The file must not change afterwards: train and eval check its hash.
 2. Present for validation: the candidates (`configs/model/*.yaml` and the experiment's `candidates:`), the grid
    (`configs/hparams_search/<grid>.yaml`, one child per combination, the child count), the secondary metric keys
    (`experiment.metrics`), and — **display only** — the BOX budget next to `project_spend` (every `<project>/*`

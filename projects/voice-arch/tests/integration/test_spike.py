@@ -20,7 +20,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 @pytest.fixture
 def live() -> VoiceSettings:
     # Pydantic-settings kwarg.
-    return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]
+    return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 async def test_openrouter_stt_returns_text(live: VoiceSettings, tmp_path: Path) -> None:

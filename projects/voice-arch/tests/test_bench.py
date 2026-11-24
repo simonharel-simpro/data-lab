@@ -14,7 +14,7 @@ from tests.fakes import FakeLlm, FakeStt, FakeTts
 from voice_arch.bench import BenchEnv, bench_llm, bench_stt, bench_tts
 from voice_arch.bench_record import select
 from voice_arch.bench_runs import LlmCase
-from voice_arch.budget import BudgetExceeded
+from voice_arch.budget import BudgetExceededError
 from voice_arch.corpus import Corpus, Utterance, build_corpus
 from voice_arch.settings import VoiceSettings
 
@@ -95,7 +95,7 @@ async def test_bench_refuses_when_budget_spent(env_for: Callable[..., BenchEnv],
     client.log_metric(done.info.run_id, "cost_usd", 49.0)
     spy = FakeStt()
 
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetExceededError):
         await bench_stt(env, {"b/y": spy}, _UTTERANCES, _corpus(tmp_path))
 
     assert spy.calls == 0

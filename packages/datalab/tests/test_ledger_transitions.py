@@ -27,6 +27,13 @@ def _apply(lg: RunLedger, decision: Decision | None) -> RunLedger:
     return decide(lg, _LAST, decision, "because")
 
 
+_EXPECTED: dict[tuple[Status, Decision | None], Status] = {  # the spec, ARCHITECTURE.md §State Machines
+    (Status.TODO, None): Status.PRODUCED,
+    (Status.PRODUCED, None): Status.PRODUCED,
+    (Status.PRODUCED, Decision.CORRECT): Status.PRODUCED,
+    (Status.PRODUCED, Decision.VALIDATE): Status.VALIDATED,
+    (Status.PRODUCED, Decision.REDO): Status.TODO,
+}
 _PAIRS = [(s, d) for s in Status for d in (None, *Decision)]
 
 
@@ -34,11 +41,15 @@ _PAIRS = [(s, d) for s in Status for d in (None, *Decision)]
 def test_transitions_table_matches_ops(status: Status, decision: Decision | None) -> None:
     lg = _at(status)
 
-    if (status, decision) not in TRANSITIONS:
+    if (status, decision) not in _EXPECTED:
         with pytest.raises(LedgerError):
             _apply(lg, decision)
         return
-    assert _apply(lg, decision).milestones[_LAST].status is TRANSITIONS[(status, decision)]
+    assert _apply(lg, decision).milestones[_LAST].status is _EXPECTED[(status, decision)]
+
+
+def test_transitions_table_is_the_spec() -> None:
+    assert dict(TRANSITIONS) == _EXPECTED
 
 
 @pytest.mark.parametrize("status", list(Status))
@@ -57,7 +68,6 @@ def test_transitions_table_matches_architecture_md() -> None:
     doc = (REPO_ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
     lines = {line.strip() for line in doc.splitlines()}
 
-    missing = [_rendered(s, d, a) for (s, d), a in TRANSITIONS.items() if _rendered(s, d, a) not in lines]
+    missing = [_rendered(s, d, a) for (s, d), a in _EXPECTED.items() if _rendered(s, d, a) not in lines]
 
     assert missing == []
-    assert len(TRANSITIONS) == 5

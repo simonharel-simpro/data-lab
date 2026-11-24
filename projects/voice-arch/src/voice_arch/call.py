@@ -34,15 +34,15 @@ class Outcome(StrEnum):
     PROVIDER_ERROR = "provider_error"  # reserved: no rule assigns it yet (ESC-3-1)
 
 
-class AgentNeverJoined(Exception):
+class AgentNeverJoinedError(Exception):
     pass
 
 
-class LiveKitUnresponsive(RuntimeError):
+class LiveKitUnresponsiveError(RuntimeError):
     """A LiveKit step accepted the connection but never answered; the sweep aborts rather than hang (P-4)."""
 
 
-class ProviderAuthStop(Exception):
+class ProviderAuthStopError(Exception):
     """OpenRouter answered 401/402 on either side of the call: every further call would fail the same way."""
 
 
@@ -131,14 +131,14 @@ def _stop_on_auth(handle: CallerHandle, result: CallResult | None) -> None:
     statuses = {handle.caller_http_status, None if result is None else result.http_status}
     refused = {status for status in statuses if status is not None and status in AUTH_STATUSES}
     if refused:
-        raise ProviderAuthStop(f"OpenRouter refused the call (HTTP {sorted(refused)[0]})")
+        raise ProviderAuthStopError(f"OpenRouter refused the call (HTTP {sorted(refused)[0]})")
 
 
 async def _bounded[T](step: str, aw: Awaitable[T]) -> T:
     try:
         return await asyncio.wait_for(aw, STEP_TIMEOUT_S)
     except TimeoutError as err:
-        raise LiveKitUnresponsive(f"{step} did not answer within {STEP_TIMEOUT_S:.0f} s") from err
+        raise LiveKitUnresponsiveError(f"{step} did not answer within {STEP_TIMEOUT_S:.0f} s") from err
 
 
 async def _cleanup(env: CallEnv, handle: CallerHandle | None, room: str) -> None:
@@ -169,7 +169,7 @@ async def run_one_call(  # noqa: PLR0913  # call identity + two timeouts, kw-onl
         await _bounded("create_dispatch", env.create_dispatch(room, arch, run_id))
         handle = await _bounded("connect_caller", env.connect_caller(room, persona, arch))
         if not await handle.wait_agent(join_timeout_s):
-            raise AgentNeverJoined(f"no booking agent joined {room} within {join_timeout_s:.0f} s")
+            raise AgentNeverJoinedError(f"no booking agent joined {room} within {join_timeout_s:.0f} s")
         result = await _wait_for_result(handle, persona, call_timeout_s)
         _stop_on_auth(handle, result)
         return _row(persona, rep, room, _classify(handle, result), result)

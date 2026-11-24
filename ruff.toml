@@ -6,10 +6,26 @@ extend-exclude = ["tools/weavit-ui", "spike-astro", "app"]
 src = ["packages/*/src", "projects/*/src"]
 
 [lint]
-select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "BLE", "PLR0913"]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "BLE", "PLR0913", "ANN", "PGH", "T20", "N"]
+# Any is allowed with an explanatory comment (house rule, checked in review)
+ignore = ["ANN401"]
 
 [lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106", "PLR0913"]
+"**/tests/**" = ["S101", "S105", "S106", "PLR0913", "T20"]
+# CLIs and hooks: their stdout/stderr is the interface
+"tools/**" = ["T20"]
+".claude/archview/**" = ["T20"]
+"packages/datalab/src/datalab/{ledger,new_project,resources}.py" = ["T20"]
+"projects/mini-rag/src/mini_rag/run.py" = ["T20"]
+"projects/voice-arch/src/voice_arch/{bench,decide,dispatch,rate,runner,token}.py" = ["T20"]
+# the template CLIs, and every project scaffolded from them (root ruff.toml is copied into outside workspaces)
+"**/src/*/{eval,prepare,train}.py" = ["T20"]
+# __DATALAB_PACKAGE__ is the placeholder datalab-new renames: not a real module name
+"templates/project/src/__DATALAB_PACKAGE__/__init__.py" = ["N999"]
+# the fakes mirror the Weaviate client's lowercase attribute names (batch, aggregate, query)
+"projects/mini-rag/tests/test_index*.py" = ["N801"]
+# TrackingUnavailable is datalab public API imported by outside workspaces: renaming would break them
+"packages/datalab/src/datalab/tracking.py" = ["N818"]
 
 [format]
 # Vendored verbatim (sha256 in its header); the hooks pass --force-exclude.

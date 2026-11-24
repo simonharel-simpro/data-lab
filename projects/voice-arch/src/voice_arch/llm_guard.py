@@ -47,7 +47,7 @@ def retry_on_empty_completion(model: llm.LLM[object], dump_dir: Path | None = No
             attempts += 1
             await run()
             # Wraps LiveKit internals.
-            if not stream._event_ch.output_sent:  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]
+            if not stream._event_ch.output_sent:  # pyright: ignore[reportPrivateUsage,reportAttributeAccessIssue]  # LiveKit private channel: the only end-of-stream signal
                 dump_empty_request(stream, request, attempts, dump_dir)
                 raise APIConnectionError(EMPTY_COMPLETION, retryable=True)
 

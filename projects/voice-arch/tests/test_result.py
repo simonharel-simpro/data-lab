@@ -43,11 +43,11 @@ def test_http_status_of_finds_nested_status() -> None:
 
 
 def test_http_status_of_walks_the_cause_chain() -> None:
-    class RateLimited(Exception):
+    class RateLimitedError(Exception):
         status_code = 429
 
     try:
-        raise RuntimeError("wrapped") from RateLimited()
+        raise RuntimeError("wrapped") from RateLimitedError()
     except RuntimeError as outer:
         assert http_status_of(outer) == 429
 

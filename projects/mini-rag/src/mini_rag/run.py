@@ -26,7 +26,7 @@ Answer = Callable[[str, list[Chunk]], str]
 Search = Callable[[str, Retrieval, int], list[Chunk]]
 
 
-class EmptyRetrieval(RuntimeError):
+class EmptyRetrievalError(RuntimeError):
     """A question got no passages: the index answers nothing, so the run would score on zero evidence."""
 
 
@@ -74,7 +74,7 @@ def _answer_all(  # noqa: PLR0913  # one step of run(): selection, retrieval, k,
     for q in selected:
         passages = find(q.question, retrieval, k)
         if not passages:  # before `answer`: no LLM spend, and the run ends FAILED instead of scoring on nothing
-            raise EmptyRetrieval(f"question {q.id}: {retrieval} search returned no passages (empty index?)")
+            raise EmptyRetrievalError(f"question {q.id}: {retrieval} search returned no passages (empty index?)")
         prediction = answer(q.question, passages)  # a GenerationError propagates: run FAILED, no metrics (F-13)
         ids = [p.chunk_id for p in passages]
         result = Result(q.id, prediction, q.answer, outcome(prediction, q.answer), ids)

@@ -11,6 +11,7 @@ from typing import Final
 from mlflow import MlflowClient
 
 from datalab.settings import Settings
+from datalab.tracking import TrackingUnavailable, preflight
 from voice_arch.arch import Arch
 from voice_arch.call import Outcome
 from voice_arch.sweep_query import human_ratings, latest_full_metrics
@@ -109,7 +110,13 @@ def render(decision: Decision) -> str:
 
 
 def main() -> int:
-    client = MlflowClient(Settings().mlflow_tracking_uri)
+    settings = Settings()
+    try:
+        preflight(settings.mlflow_tracking_uri)
+    except TrackingUnavailable as err:
+        print(f"MLflow unavailable: {err}", file=sys.stderr)
+        return 1
+    client = MlflowClient(settings.mlflow_tracking_uri)
     summaries = [
         summary_from_metrics(arch, metrics, human_ratings(client, arch))
         for arch, metrics in latest_full_metrics(client).items()

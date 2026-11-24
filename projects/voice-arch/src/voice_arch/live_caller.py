@@ -51,7 +51,7 @@ class LiveCaller:
         room.on("participant_connected", self._on_joined)  # pyright: ignore[reportUnknownMemberType]  # untyped SDK
         room.on("participant_disconnected", self._on_left)  # pyright: ignore[reportUnknownMemberType]  # untyped SDK
         # Untyped LiveKit member.
-        room.on("participant_attributes_changed", self._on_attributes)  # pyright: ignore[reportUnknownMemberType]
+        room.on("participant_attributes_changed", self._on_attributes)  # pyright: ignore[reportUnknownMemberType]  # LiveKit's EventEmitter.on is untyped
         session.on("error", self._on_error)  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
         session.on("close", self._on_close)  # pyright: ignore[reportUnknownMemberType]  # untyped LiveKit member
 

@@ -1,0 +1,3 @@
+# run.json pins these by sha256: git must never rewrite their line endings
+split.json -text
+data/** -text

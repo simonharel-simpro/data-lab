@@ -75,13 +75,17 @@ def read(project_dir: Path) -> RunLedger:
         raise LedgerError(f"{path}: cannot read: {err}") from err
 
 
-def _check_overwrite(project_dir: Path, new: RunLedger, replace_corrupt: bool) -> None:
+def _check_overwrite(project_dir: Path, new: RunLedger, replace_corrupt: bool, base: RunLedger | None) -> None:
     try:
         old = read(project_dir)
     except LedgerError:
         if replace_corrupt:
             return
         raise
+    # The truly simultaneous window (this check, then os.replace) stays open and is accepted: data-lab is
+    # single-user; this closes the stale-read case.
+    if base is not None and old != base:
+        raise LedgerError("run.json changed since it was read: re-read it and apply the change again")
     if new.decisions_log[: len(old.decisions_log)] != old.decisions_log:
         raise LedgerError("decisions_log is append-only: the new ledger rewrites an earlier entry")
     if new.test_looks[: len(old.test_looks)] != old.test_looks:
@@ -114,11 +118,13 @@ def _publish(path: Path, text: str) -> None:
         raise
 
 
-def write_atomic(project_dir: Path, ledger: RunLedger, *, replace_corrupt: bool = False) -> None:
+def write_atomic(
+    project_dir: Path, ledger: RunLedger, *, base: RunLedger | None = None, replace_corrupt: bool = False
+) -> None:
     checked = revalidate(ledger.model_dump(mode="json"))
     path = project_dir / RUN_JSON
     if path.exists():
-        _check_overwrite(project_dir, checked, replace_corrupt)
+        _check_overwrite(project_dir, checked, replace_corrupt, base)
     doc = checked.model_dump(mode="json")
     doc["milestones"] = {m: doc["milestones"][m] for m in checked.sequence()}
     _publish(path, json.dumps(doc, indent=2, ensure_ascii=False) + "\n")

@@ -13,14 +13,17 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
 - **Vector store:** Weaviate 1.40.2 with the `text2vec-transformers` module, model `baai-bge-small-en-v1.5`
   (inference image `1.13.3`, English-only in v1, D-5 / #6). Default vectorizer `none`: collections opt in.
 - **Experiment tracking:** MLflow 3.17.2, SQLite backend, artifacts served by the tracking server.
-- **Python:** 3.12, managed with uv; one env per project; ruff (single root `ruff.toml`), pytest.
+- **Python:** 3.12, managed with uv; one env per project (project isolation is structural: each tree has its own uv
+  env, pyright `venv = ".venv"`, no extra paths, so `datalab` cannot import a project and a project cannot import
+  another: pyright, the tests and the declared-deps hook fail on it, ADR 2026-11-11); ruff (single root `ruff.toml`), pytest.
   py312+: `from __future__ import annotations` is not required; PEP 604/585 syntax is native and ruff `UP` keeps it
   modern (decisions.md, 2026-11-09).
 - **App:** Astro 7.4.1 on Node 22 (static output, no server adapter); zod via `astro/zod`; tests with `node --test`
   (type stripping, no vitest); dev deps `@astrojs/check`, `typescript`, `@types/node`, `yaml` (template contract test, Phase 3).
   Lint + format (#13): eslint 10 flat config (`@eslint/js` + `typescript-eslint` `recommended` + `eslint-plugin-astro`
   `flat/recommended`) and prettier 3 with `prettier-plugin-astro`; scripts `lint`, `format`, `format:check`; eight exact
-  npm `overrides` (decisions.md, 2026-11-09).
+  npm `overrides` (decisions.md, 2026-11-09). JS SAST: `eslint-plugin-security` (recommended), warnings fail the lint
+  (`--max-warnings 0`).
 - **Weaviate browser:** Weavit UI fork (`tools/weavit-ui`, Electron/TS), auto-connect to the `data-lab` profile;
   web mode (`tools/weavit-web.sh` → `node:http` server on 127.0.0.1:3080 hosting the same handlers and renderer).
   Projection tab: `weavit-projector` Rust sidecar (umap-rs 0.4.5, ndarray, rayon), deck.gl 9.3.11 canvas; Rust gates
@@ -30,11 +33,14 @@ a static export. A fork of Weavit UI (git submodule) browses the shared Weaviate
   `silero` plugins, `livekit-api` 1.2.2; every STT / TTS / LLM call goes to OpenRouter (`/audio/transcriptions`,
   `/audio/speech`, `/chat/completions`). Browser smoke client: `livekit-client` 2.23.0 from jsDelivr.
 - **Infra runtime:** Docker Compose (`compose.yaml`, project name `data-lab`).
-- **Hooks:** pre-commit stage: ruff check/format (Python only), gitleaks (staged files), file-size, declared deps (`declared-deps-voice-arch` covers the voice-arch tree).
+- **Hooks:** pre-commit stage: ruff check/format (Python only), `suppression-reason` (pygrep: every
+  `# type: ignore[code]` / `# pyright: ignore[code]` ends with `  # why`), gitleaks (staged files), file-size
+  (modules <= 200 lines) and `check-function-length` (functions <= 30 lines, classes <= 150), both scoped to
+  `*/src/` of packages/, projects/ and templates/ plus `tools/` (vendored files excluded), declared deps (`declared-deps-voice-arch` covers the voice-arch tree).
   `enum-discipline` (+ `-mini-rag`, `-voice-arch`, one per tree): no raw string compared to a declared StrEnum value.
   Pre-push stage: `gates-root` (pyright + pytest + coverage >= 70 on `tools/` + root `tests/`, one ad-hoc
   `uv run --no-project` env, #7), `gates-datalab`, `gates-mini-rag`, `gates-voice-arch` (lint-imports + pyright + pytest with coverage per tree),
-  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
+  `gates-app` (`npm run lint && npm run format:check && npm run check && npm test && npm run build`; needs node >=22.22 on PATH). `default_install_hook_types` wires both
   stages via `pre-commit install`. CI runs all of it plus the networked scans the hooks skip (full-history
   gitleaks, `pip-audit` per tree, `npm audit --audit-level=moderate`); its Python gates run `--locked`.
 - **Pilot deps (`projects/mini-rag`, own env):** anthropic 2.3.0 + httpx2 2.16.0 (LLM over the Anthropic
@@ -50,7 +56,9 @@ compose.yaml            shared infra: weaviate, t2v-transformers, mlflow, liveki
 infra/livekit.yaml      LiveKit server config (ports, node_ip 127.0.0.1; no keys: `LIVEKIT_KEYS` from the env)
 .env.example            DATALAB_* connection settings (ports, tracking URI)
 contracts/              cross-side contracts read by the Python and app test suites: name_vectors.json, EXPERIMENT.md,
-                        milestones.json, run_ledger_vectors.json, mlflow_tags.json
+                        milestones.json, run_ledger_vectors.json, mlflow_tags.json, value_sets.json (ledger statuses,
+                        decisions, kinds and goals; read by `packages/datalab/tests/test_ledger.py` and
+                        `app/src/lib/ledger.test.ts`, so the Python enums and the TS `as const` sets cannot drift)
 packages/datalab/       shared Python package: settings, project naming, tracking (Phase 2A); experiment ledger:
                         split, ledger_model/_rules/_ops/_access/_checks/ledger (run.json), tags, tracking_queries,
                         tracking_outcome,
@@ -72,11 +80,17 @@ tools/weavit-ui/        Weavit UI fork, git submodule (Phase 2C auto-connect; we
 tools/weavit-ui/native/projector/  `weavit-projector` Rust sidecar (PCA, exact kNN, UMAP; NDJSON on stdout)
 tools/weavit-web.sh     Starts Weavit web mode on the data-lab stack (seeds the profile, passes OPENROUTER_API_KEY,
                         builds the projector incrementally; serves even if cargo is missing or the build fails)
-tools/check_file_size.py  pre-commit hook: Python modules under src/ of packages/, projects/ and templates/ <= 200 lines (warns from 190)
-tools/pre_commit_checks/   pre-commit hook (vendored recipe): every datalab import is a declared dependency;
-                        hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root;
+tools/check_file_size.py  pre-commit hook: Python modules under src/ of packages/, projects/ and templates/, plus tools/,
+                        <= 200 lines (warns from 190); the vendored tools files are out of scope
+tools/pre_commit_checks/   pre-commit hooks (vendored harness recipes, except `hydra_gate.py` and `enum_maps.py`):
+                        check_declared_dependencies.py: every datalab import is a declared dependency;
+                        check_function_length.py: functions <= 30 lines, classes <= 150;
                         check_enum_discipline.py (hooks `enum-discipline`, `-mini-rag`, `-voice-arch`, one per tree):
-                        no raw string compared to a declared StrEnum value
+                        no raw string compared to a declared StrEnum value, with `enum_maps.py` holding this repo's
+                        per-tree StrEnum value maps;
+                        hydra_gate.py maps changed paths to project roots and runs the vendored gate once per root;
+                        _base.py / _layout.py: shared helpers of the recipes (`_layout.py` stays byte-identical)
+.ci-gate-exemptions.json  tracked gate waivers + declared trees for /audit-ci
 tools/check_hydra_project.py  vendored verbatim from trouvetou (sha256 in its header): Hydra is wired, not just shaped
 .github/workflows/ci.yml  every hook + the networked scans: pre-commit, full-history gitleaks, root compose test,
                         datalab gates + pip-audit (job `checks`); npm audit, app check, tests, builds incl.
@@ -237,7 +251,7 @@ def complete_current_task(ctx: Ctx, field: str) -> None:
   count a `caller_fault` in `exact_rate` (F-6); let a smoke run log unprefixed metrics (U-1).
 - **Pattern (a call is classified in a fixed order; auth failures stop the sweep before anything else):**
 ```python
-_stop_on_auth(handle, result)                       # 401/402 on either side -> ProviderAuthStop
+_stop_on_auth(handle, result)                       # 401/402 on either side -> ProviderAuthStopError
 return _row(persona, rep, room, _classify(handle, result), result)
 ```
 - **Data flow:** `runner.main()` loads settings/personas, then `run_sweep` checks the budget, opens the run and the
@@ -247,9 +261,9 @@ return _row(persona, rep, room, _classify(handle, result), result)
   delete the room. Rows are appended to `results/<run_id>.jsonl`; metrics, params and `per_conversation.json` are
   logged at the end. `cost_usd` (caller included) is the key's cumulative usage: logged after every call
   (`step=index`, so a killed sweep loses at most one call) and once more on tracker exit (`step=len(rows)`), even for
-  a FAILED run; an unreadable key tags the run `cost_unknown=true` and the sweep carries on (F-12).
+  a FAILED run; an unreadable key tags the run `cost_unknown=true`, the sweep carries on, and `spent_so_far` counts that run at its estimate (F-12).
 - **Budget:** `budget.spent_so_far` is `datalab.tracking_queries.project_spend("voice-arch")` (every run, whatever its
-  status, RUNNING included) plus P-2: a `voice-arch/<sub>` run that is not FINISHED and logged no `cost_usd` counts
+  status, RUNNING included) plus P-2: a `voice-arch/<sub>` run that logged no `cost_usd` and is not FINISHED or is tagged `cost_unknown=true` counts
   at `ESTIMATES_USD[sub]` (conversations 15 $, bench 2 $), with a warning.
 - **State:** a call row has an `Outcome` (scored, timeout, agent_lost, caller_fault, provider_error); there is no
   transition model, each call is classified once from what the handle reports.
@@ -301,7 +315,8 @@ livekit, even through another module); `booking/` has its own contract "booking 
   `lib/projects.ts` (the only `astro:content` user besides the pages), `integrations/export-guard.ts`.
   Everything under `lib/` except `projects.ts` is pure TS imported with `.ts` extensions, so `node --test` runs it.
 - **Lint + format (#13):** `npm run lint` (`eslint.config.js`: `recommended` rule sets plus
-  `@typescript-eslint/no-explicit-any` and `consistent-type-imports`, both `error`), `npm run format:check`
+  `@typescript-eslint/no-explicit-any` and `consistent-type-imports`, both `error`; `eslint-plugin-security`
+  (recommended), warnings fail the lint (`--max-warnings 0`)), `npm run format:check`
   (`.prettierrc.json`: width 120, single quotes, trailing commas; `npm run format` rewrites). Both run in CI and in
   `gates-app`. A caught error rethrown with a new message keeps it as `{ cause: err }` (`preserve-caught-error`).
 - **Invalid card = failed build (D-13):** schema errors come from Astro; `loadProjects()` adds `name` ≠ folder.
@@ -390,7 +405,7 @@ export function pickBest(runs: readonly MlflowRun[], metric: Metric) {
    crash copy), so a kill, a `GenerationError` or an MLflow outage keeps the answers computed so far.
 4. Metrics and the artifact are logged only after every question is scored: `score = accuracy − hallucination`
    (or `smoke_*`) and `per_question.json` (the canonical artifact); a `GenerationError`, or a question whose search
-   returns no passages (`EmptyRetrieval`), leaves a FAILED run without metrics (F-13).
+   returns no passages (`EmptyRetrievalError`), leaves a FAILED run without metrics (F-13).
 5. The app shows the card with the best FINISHED run by `score` (`max`).
 
 ```python
