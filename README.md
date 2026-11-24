@@ -12,6 +12,7 @@ project card). You don't rebuild the plumbing per experiment, and finished work 
 - [How it fits together](#how-it-fits-together)
 - [Quickstart](#quickstart)
 - [Typical workflow](#typical-workflow)
+- [How Claude runs an experiment](#how-claude-runs-an-experiment)
 - Reference: [Prerequisites](#prerequisites) · [Clone](#clone) · [Shared infra](#shared-infra) ·
   [Weavit UI](#weavit-ui) · [New project](#new-project) · [App](#app) · [Pilot](#pilot) ·
   [Claude Code](#claude-code) · [Checks](#checks)
@@ -71,7 +72,7 @@ http://127.0.0.1:3080.
 3. **Run the experiment.** There are two ways:
    - with Claude Code: `/datalab:experiment` runs the milestones in order, from scoping to report, and stops for
      your validation at each one. Which milestones depends on the experiment kind (`training`, `comparison` or
-     `exploration`, see `contracts/milestones.json`). Details in [Claude Code](#claude-code).
+     `exploration`, see `contracts/milestones.json`). See [How Claude runs an experiment](#how-claude-runs-an-experiment).
    - by hand: put candidates in `configs/model/`, then `uv run python -m my_idea.train experiment=default`, then
      `uv run python -m my_idea.eval`. Each run lands in MLflow tagged `project=my-idea`.
 
@@ -80,6 +81,58 @@ http://127.0.0.1:3080.
 4. **Look.** Check the project page in the app, the runs in MLflow, and the collections in Weavit.
 5. **Close it.** Set `status: conclu` (or `abandonné`) and fill `## Enseignements` and `## Suite`. For something you
    want to show, `DATALAB_STRICT_EXPORT=1 npm run build` in `app/` freezes it as a static site.
+
+## How Claude runs an experiment
+
+`/datalab:experiment` (in `plugins/datalab/`) is an orchestrator. It does none of the data-science work itself: it hands
+each step to a specialist `ds-*` agent, shows you the result, and **stops until you decide**. Everything it does is
+recorded in a ledger, `projects/<name>/run.json`, so a session can stop at any point and resume from disk.
+
+**1. Start.** Run the skill from the workspace root and name the project. If `run.json` is missing, it asks two
+things: the experiment **kind** and the **metric** (`key`, `goal`, one line on why). It writes the metric to the
+card and creates the ledger. Non-public data (proprietary, personal, regulated) needs your explicit sign-off first;
+public Hugging Face datasets don't.
+
+**2. Milestones.** The kind sets the sequence (`contracts/milestones.json`). Each milestone has one agent:
+
+| Milestone | Agent | training | comparison | exploration |
+|---|---|:-:|:-:|:-:|
+| scoping | `ds-scoper` | ✓ | ✓ | ✓ |
+| dataset | `ds-dataset-finder` | ✓ | ✓ | |
+| cleaning | `ds-data-cleaner` | ✓ | | |
+| eda | `ds-eda` | ✓ | ✓ | ✓ |
+| features | `ds-feature-engineer` | ✓ | | |
+| modeling | `ds-modeler` | ✓ | ✓ | |
+| audit | `ds-validator` | ✓ | ✓ | |
+| tracking | `ds-mlflow-tracker` | ✓ | ✓ | |
+| report | `ds-reporter` | ✓ | ✓ | ✓ |
+
+**3. The ⏸️ stop, at every milestone.** The agent produces its artifacts, which are recorded in the ledger. Claude
+then shows a short summary, the artifact paths and the metric restated, and asks you: **validate**, **correct**
+(same milestone, with your feedback) or **redo**. A redo resets that milestone and every later one to `todo`. At the
+audit you can also send it back to modeling. Two milestones never run without a validate in between.
+
+**4. Guards along the way.**
+
+- **Frozen split.** Right after `dataset` is validated, the data is downloaded as named (id + revision) and the
+  train/test split is frozen in `split.json`. Before that, only the target, group and time columns may be read.
+- **BOX before modeling.** Claude pins the data file's hash, then shows the candidates (`configs/model/`), the
+  search grid with its run count, and the budget next to what the project has already spent. Modeling starts only
+  after you validate. The budget is shown, never enforced: you decide.
+- **Winner and audit.** At modeling you pick the winning run from the MLflow leaderboard. The audit runs
+  `ds-validator` in a fresh context to try to break that winner (leakage, overfitting, a gamed metric). It is the
+  only step that reads the test partition, through the gated `python -m <pkg>.eval`, and every look at the test set
+  is logged in `run.json`.
+- **Code goes through the harness.** Specialists only write `configs/` YAML and Markdown. When a milestone needs code
+  in `src/`, Claude writes a plan (`/plan-features`), implements it (`/implement-phase`) and runs `/check`. The
+  milestone only counts as produced once the check passes.
+
+**5. Card and finish.** Validating scoping sets the card to `en cours`, and validating report sets it to `conclu`.
+The kind can't change after scoping: to change it, or to start a new experiment on the same project, Claude archives
+`run.json` and `split.json` as `run.<date>.json` and `split.<date>.json` and starts a new ledger.
+
+The full rules are in `plugins/datalab/skills/experiment/SKILL.md`, and the contract it enforces is
+`contracts/EXPERIMENT.md`. Setup (installing the plugin and the `ds-*` agents) is in [Claude Code](#claude-code).
 
 The rest of this file is reference.
 
