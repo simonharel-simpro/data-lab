@@ -1,8 +1,140 @@
 # data-lab
 
-A local data-science lab: one shared Weaviate (+ English vectorizer) and one MLflow, used by many projects
-under `projects/<name>/`, each with its own Python env. A read-only Astro app tells each project's story, and
-a Weavit UI fork (submodule) browses the shared Weaviate.
+A local, single-user data-science lab. One shared infra stack runs on your machine (Weaviate for vectors, MLflow for
+experiment tracking). Many small projects plug into it, each in its own Python env. A read-only site tells each
+project's story: what it tried, its best run, what was learned.
+
+The point: a new idea starts in one command, with the same conventions every time (settings, naming, tracking, a
+project card). You don't rebuild the plumbing per experiment, and finished work stays readable afterwards.
+
+## Contents
+
+- [How it fits together](#how-it-fits-together)
+- [Quickstart](#quickstart)
+- [Typical workflow](#typical-workflow)
+- [How Claude runs an experiment](#how-claude-runs-an-experiment)
+- Reference: [Prerequisites](#prerequisites) · [Clone](#clone) · [Shared infra](#shared-infra) ·
+  [Weavit UI](#weavit-ui) · [New project](#new-project) · [App](#app) · [Pilot](#pilot) ·
+  [Claude Code](#claude-code) · [Checks](#checks)
+- [Further reading](#further-reading)
+
+## How it fits together
+
+```
+  projects/<name>/                      shared stack (docker compose, 127.0.0.1 only)
+  ├─ PROJECT.md   (the card)            ┌──────────────────────────────┐
+  ├─ configs/     (Hydra)   ─datalab──► │ MLflow    :5050  runs        │ ◄── app/  Astro site, read-only
+  └─ src/<pkg>/   train/eval   package  │ Weaviate  :8090  collections │ ◄── Weavit UI  :3080
+                                        └──────────────────────────────┘
+```
+
+| Piece | Where | Role |
+|---|---|---|
+| Shared stack | `compose.yaml` | Weaviate + English vectorizer (bge-small), MLflow; LiveKit under the `voice` profile |
+| `datalab` package | `packages/datalab/` | settings (`DATALAB_*`), project naming, `tracked_run()`, the experiment ledger, the `datalab-new` scaffolder |
+| Projects | `projects/<name>/` | one uv env each, a `PROJECT.md` card, Hydra `train`/`eval` from the template |
+| App | `app/` | one page per project: its card plus its best MLflow run; never writes anything |
+| Weavit UI | `tools/weavit-ui/` (submodule) | browse and query the shared Weaviate, in the browser or as a desktop app |
+| Claude plugin | `plugins/datalab/` | `/datalab:experiment`: runs an experiment milestone by milestone with the `ds-*` agents |
+| Contracts | `contracts/` | the rules shared by the Python side and the app (`EXPERIMENT.md`, milestones, tags) |
+
+Current projects: `mini-rag`, the end-to-end pilot (BM25 vs vector retrieval plus an LLM, see [Pilot](#pilot)), and
+`voice-arch`, which compares voice-agent architectures on LiveKit (see `projects/voice-arch/README.md`).
+
+## Quickstart
+
+You need Docker, uv and Node 22 (details in [Prerequisites](#prerequisites)). Then, in about ten minutes:
+
+```bash
+git clone --recurse-submodules https://github.com/simonharel-simpro/data-lab.git && cd data-lab
+cp .env.example .env                  # the defaults work; add OPENROUTER_API_KEY only if you need it
+docker compose up -d && docker compose ps     # wait until all three services are "healthy"
+
+# run the pilot (needs an OpenRouter key)
+cd projects/mini-rag && uv sync
+echo 'MINI_RAG_LLM_API_KEY=<openrouter-key>' > .env
+uv run python -m mini_rag.run --retrieval bm25 --k 3
+
+# look at the result
+cd ../../app && nvm use && npm ci && npm run dev   # http://127.0.0.1:4321, the mini-rag card
+```
+
+MLflow's own UI is at http://127.0.0.1:5050, and `tools/weavit-web.sh` opens the Weaviate browser at
+http://127.0.0.1:3080.
+
+## Typical workflow
+
+1. **Start a project.** `uv run --project packages/datalab datalab-new my-idea --title "My idea"`, then
+   `cd projects/my-idea && uv sync`. You get a card, a Hydra layout and an env wired to the shared stack
+   ([New project](#new-project)).
+2. **Write the card.** Fill `## Objectif` in `PROJECT.md` (status `idée`). The app shows a "À compléter" badge for
+   whatever the current status still requires.
+3. **Run the experiment.** There are two ways:
+   - with Claude Code: `/datalab:experiment` runs the milestones in order, from scoping to report, and stops for
+     your validation at each one. Which milestones depends on the experiment kind (`training`, `comparison` or
+     `exploration`, see `contracts/milestones.json`). See [How Claude runs an experiment](#how-claude-runs-an-experiment).
+   - by hand: put candidates in `configs/model/`, then `uv run python -m my_idea.train experiment=default`, then
+     `uv run python -m my_idea.eval`. Each run lands in MLflow tagged `project=my-idea`.
+
+   Set `status: en cours` and add `## Approche`, `data` and `metric` to the card. The `metric` field is what picks the
+   best run shown in the app.
+4. **Look.** Check the project page in the app, the runs in MLflow, and the collections in Weavit.
+5. **Close it.** Set `status: conclu` (or `abandonné`) and fill `## Enseignements` and `## Suite`. For something you
+   want to show, `DATALAB_STRICT_EXPORT=1 npm run build` in `app/` freezes it as a static site.
+
+## How Claude runs an experiment
+
+`/datalab:experiment` (in `plugins/datalab/`) is an orchestrator. It does none of the data-science work itself: it hands
+each step to a specialist `ds-*` agent, shows you the result, and **stops until you decide**. Everything it does is
+recorded in a ledger, `projects/<name>/run.json`, so a session can stop at any point and resume from disk.
+
+**1. Start.** Run the skill from the workspace root and name the project. If `run.json` is missing, it asks two
+things: the experiment **kind** and the **metric** (`key`, `goal`, one line on why). It writes the metric to the
+card and creates the ledger. Non-public data (proprietary, personal, regulated) needs your explicit sign-off first;
+public Hugging Face datasets don't.
+
+**2. Milestones.** The kind sets the sequence (`contracts/milestones.json`). Each milestone has one agent:
+
+| Milestone | Agent | training | comparison | exploration |
+|---|---|:-:|:-:|:-:|
+| scoping | `ds-scoper` | ✓ | ✓ | ✓ |
+| dataset | `ds-dataset-finder` | ✓ | ✓ | |
+| cleaning | `ds-data-cleaner` | ✓ | | |
+| eda | `ds-eda` | ✓ | ✓ | ✓ |
+| features | `ds-feature-engineer` | ✓ | | |
+| modeling | `ds-modeler` | ✓ | ✓ | |
+| audit | `ds-validator` | ✓ | ✓ | |
+| tracking | `ds-mlflow-tracker` | ✓ | ✓ | |
+| report | `ds-reporter` | ✓ | ✓ | ✓ |
+
+**3. The ⏸️ stop, at every milestone.** The agent produces its artifacts, which are recorded in the ledger. Claude
+then shows a short summary, the artifact paths and the metric restated, and asks you: **validate**, **correct**
+(same milestone, with your feedback) or **redo**. A redo resets that milestone and every later one to `todo`. At the
+audit you can also send it back to modeling. Two milestones never run without a validate in between.
+
+**4. Guards along the way.**
+
+- **Frozen split.** Right after `dataset` is validated, the data is downloaded as named (id + revision) and the
+  train/test split is frozen in `split.json`. Before that, only the target, group and time columns may be read.
+- **BOX before modeling.** Claude pins the data file's hash, then shows the candidates (`configs/model/`), the
+  search grid with its run count, and the budget next to what the project has already spent. Modeling starts only
+  after you validate. The budget is shown, never enforced: you decide.
+- **Winner and audit.** At modeling you pick the winning run from the MLflow leaderboard. The audit runs
+  `ds-validator` in a fresh context to try to break that winner (leakage, overfitting, a gamed metric). It is the
+  only step that reads the test partition, through the gated `python -m <pkg>.eval`, and every look at the test set
+  is logged in `run.json`.
+- **Code goes through the harness.** Specialists only write `configs/` YAML and Markdown. When a milestone needs code
+  in `src/`, Claude writes a plan (`/plan-features`), implements it (`/implement-phase`) and runs `/check`. The
+  milestone only counts as produced once the check passes.
+
+**5. Card and finish.** Validating scoping sets the card to `en cours`, and validating report sets it to `conclu`.
+The kind can't change after scoping: to change it, or to start a new experiment on the same project, Claude archives
+`run.json` and `split.json` as `run.<date>.json` and `split.<date>.json` and starts a new ledger.
+
+The full rules are in `plugins/datalab/skills/experiment/SKILL.md`, and the contract it enforces is
+`contracts/EXPERIMENT.md`. Setup (installing the plugin and the `ds-*` agents) is in [Claude Code](#claude-code).
+
+The rest of this file is reference.
 
 ## Prerequisites
 
@@ -171,3 +303,10 @@ uvx pytest tests/        # compose port contract (needs docker on PATH)
 (cd packages/datalab && uv run pytest -m integration)  # live stack (docker compose up -d)
 (cd projects/mini-rag && uv run pytest --cov)         # pilot unit tests, coverage >= 70 %
 ```
+
+## Further reading
+
+- `ARCHITECTURE.md`: the stack, the layers and the data flow in detail.
+- `decisions.md`: why things are the way they are (ADRs).
+- `contracts/EXPERIMENT.md`: the experiment contract (layout, `run.json` ledger, `split.json`).
+- `IMPLEMENTATION_STATUS.md`: what is built and what is pending.

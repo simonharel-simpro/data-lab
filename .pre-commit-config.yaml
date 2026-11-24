@@ -131,7 +131,7 @@ repos:
       # <<< datalab-new: gates
       - id: gates-app
         name: app lint + format check + astro check + unit tests + coverage floor + build
-        # Needs node >=22.22 on PATH (see .nvmrc); node 20 rejects --test-coverage-lines.
+        # Needs node >=22.23.4 on PATH (astro 7.4.13) (see .nvmrc); node 20 rejects --test-coverage-lines.
         entry: bash -c 'cd app && npm run lint && npm run format:check && npm run check && npm test && npm run build'
         language: system
         pass_filenames: false
