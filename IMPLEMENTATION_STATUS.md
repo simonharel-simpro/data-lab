@@ -5,6 +5,8 @@
 [archive/2026-11-05-review-2026-11-04/](archive/2026-11-05-review-2026-11-04/INDEX.md)
 **Review cycle review-2026-11-08 (8 fix phases):** ✅ shipped (PR #42, healed PR #43) · 📦 archived 2026-11-10 →
 [archive/2026-11-10-review-2026-11-08/](archive/2026-11-10-review-2026-11-08/INDEX.md)
+**Review cycle review-2026-11-11 (3 fix phases, 25 units):** ✅ shipped (PR #56 → develop, PR #60 → main) · 📦 archived 2026-11-24 →
+[archive/2026-11-24-review-2026-11-11/](archive/2026-11-24-review-2026-11-11/INDEX.md)
 
 Integration branch: `feat/data-lab` (base `main`). Driven by `/loop-implement` (mode: checkpoint).
 
@@ -101,10 +103,10 @@ Per-phase detail (files, tests, deviations) lives in the archived plans and in t
 Implemented 2026-11-09 (general-purpose): 21 files modified across contracts, datalab ledger, template, enum gate, app and
 the `/experiment` skill; pre-push gate green (datalab 248, app 120), `pytest -m scaffold` 1 passed.
 
-# platform — standalone datalab + Claude plugin (steps 1+2 of the platform/experiments split)
+# platform — standalone datalab + Claude plugin (steps 1+2 of the platform/experiments split) — ✅ shipped (PR #51, #52) · 📦 archived 2026-11-24 → [archive/2026-11-24-platform/](archive/2026-11-24-platform/INDEX.md)
 
 Integration branch: `feat/platform` (base `develop`). Driven by `/loop-implement` (mode: autonomous, review chain: off).
-Plan: `IMPLEMENTATION_PLAN_PLATFORM.md` + `IMPLEMENTATION_PLAN_PLATFORM_PHASE_{1,2}.md` (READY stamps).
+Plan: [archived](archive/2026-11-24-platform/IMPLEMENTATION_PLAN_PLATFORM.md) + `IMPLEMENTATION_PLAN_PLATFORM_PHASE_{1,2}.md` (READY stamps).
 
 | Phase | Title | Status | Branch |
 |-------|-------|--------|--------|
@@ -123,6 +125,6 @@ Phase 2 (2026-11-11, general-purpose): skill moved to `plugins/datalab/skills/ex
 `--project projects/<name>`, contracts via `python -m datalab.resources`, Hydra gate inside data-lab only, #48);
 `.claude-plugin/marketplace.json` + `plugins/datalab/.claude-plugin/plugin.json` (no version, D-11); `/experiment` →
 `/datalab:experiment` everywhere; `tests/test_plugin.py` 13 tests (all seen red); ADR in `decisions.md`; deviation
-entry in `IMPLEMENTATION_NOTES.md`. `claude plugin validate .` and `plugins/datalab` → rc 0 (warnings: no version —
+entry in [`IMPLEMENTATION_NOTES.md`](archive/2026-11-24-platform/IMPLEMENTATION_NOTES.md). `claude plugin validate .` and `plugins/datalab` → rc 0 (warnings: no version —
 intended —, no author/description). `pytest -m scaffold` 2 passed. Manual check 2026-11-11: `claude --plugin-dir
 plugins/datalab -p …` lists `datalab:experiment`.

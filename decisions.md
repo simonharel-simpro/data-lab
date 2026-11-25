@@ -426,7 +426,7 @@ them from the repo root, and the template's own gate would then run under datala
 forces relocks and a tag ritual).
 **Consequences:** `datalab.toml` must exist at a workspace root. An outside project follows `main` until it upgrades.
 A wheel built from a dirty tree must still hold only git-tracked template files (checked by a scaffold test).
-Plan: `IMPLEMENTATION_PLAN_PLATFORM_PHASE_1.md`.
+Plan: `archive/2026-11-24-platform/IMPLEMENTATION_PLAN_PLATFORM_PHASE_1.md`.
 
 ## 2026-11-11 — Claude plugin `datalab` + marketplace `data-lab`
 
@@ -444,7 +444,7 @@ the plugin is the native channel and updates come from git); a semver `version` 
 release, and users miss pushes that skip it).
 **Consequences:** The skill text must stay portable, enforced by `tests/test_plugin.py`. Contracts are read through
 `python -m datalab.resources`. Projects run `uv lock --upgrade-package datalab` after a plugin update so their
-contracts match the skill. Plan: `IMPLEMENTATION_PLAN_PLATFORM_PHASE_2.md`.
+contracts match the skill. Plan: `archive/2026-11-24-platform/IMPLEMENTATION_PLAN_PLATFORM_PHASE_2.md`.
 
 ## 2026-11-11 — Project-card status is a hand-edited label, not an FSM
 
