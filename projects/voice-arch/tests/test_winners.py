@@ -2,7 +2,7 @@ import pytest
 
 from voice_arch.winners import (
     LlmRow,
-    NoEligibleCandidate,
+    NoEligibleCandidateError,
     SttRow,
     TtsRow,
     pick_llm,
@@ -39,14 +39,14 @@ def test_pick_stt_margin_scales_with_corpus_size() -> None:
 
 
 def test_pick_stt_with_no_rows_raises() -> None:
-    with pytest.raises(NoEligibleCandidate):
+    with pytest.raises(NoEligibleCandidateError):
         pick_stt([])
 
 
 def test_u_22_pick_tts_with_no_intelligible_candidate_raises() -> None:
     rows = [TtsRow("A", 0.3, False), TtsRow("B", 0.2, False)]
 
-    with pytest.raises(NoEligibleCandidate):
+    with pytest.raises(NoEligibleCandidateError):
         pick_tts(rows)
 
 

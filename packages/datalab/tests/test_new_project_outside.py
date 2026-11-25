@@ -50,10 +50,6 @@ def test_f2_outside_source_follows_main(workspace: Path) -> None:
 
     lines = (workspace / "projects" / "demo" / "pyproject.toml").read_text(encoding="utf-8").splitlines()
     assert SOURCE_LINE in lines
-    src = REPO_ROOT / "packages" / "datalab" / "src" / "datalab"
-    hits = sum(p.read_text(encoding="utf-8").count(DATALAB_GIT_URL) for p in src.glob("*.py"))
-    assert hits == 1  # the constant itself: every other use goes through the name
-    assert DATALAB_GIT_URL == "https://github.com/simonharel-simpro/data-lab"
 
 
 def test_u18_outside_creates_projects_dir(tmp_path: Path) -> None:

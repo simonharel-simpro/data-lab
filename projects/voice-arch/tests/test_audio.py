@@ -51,7 +51,7 @@ def test_make_tts_uses_settings_defaults_and_pcm(settings: VoiceSettings) -> Non
     tts = make_tts(settings)
 
     # Attr missing in stubs.
-    assert (tts.model, tts._opts.voice, tts._opts.response_format) == (  # pyright: ignore[reportAttributeAccessIssue]
+    assert (tts.model, tts._opts.voice, tts._opts.response_format) == (  # pyright: ignore[reportAttributeAccessIssue]  # asserts the plugin's private config
         "test/tts-x",
         "test-voice",
         "pcm",
@@ -76,7 +76,7 @@ async def test_make_llm_sends_reasoning_effort_only_when_asked(settings: VoiceSe
 
     assert "reasoning_effort" not in plain._extra_kwargs  # pyright: ignore[reportAttributeAccessIssue]  # not in stubs
     # Attr missing in stubs.
-    assert asked._extra_kwargs["reasoning_effort"] == "low"  # pyright: ignore[reportAttributeAccessIssue]
+    assert asked._extra_kwargs["reasoning_effort"] == "low"  # pyright: ignore[reportAttributeAccessIssue]  # asserts the plugin's private config
 
 
 async def test_agent_llm_is_pinned_retried_and_at_low_reasoning(settings: VoiceSettings) -> None:

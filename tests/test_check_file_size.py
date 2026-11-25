@@ -75,3 +75,17 @@ def test_template_module_over_cap_fails_and_names_file(
 
     assert _load().main([rel]) == 1
     assert "templates/project/src/pkg/m.py" in capsys.readouterr().err
+
+
+def test_tools_module_over_cap_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    rel = _module(tmp_path, "tools/x.py", 201)
+
+    assert _load().main([rel]) == 1
+
+
+def test_vendored_tools_files_are_out_of_scope() -> None:
+    module = _load()
+
+    assert not module._in_scope(Path("tools/weavit-ui/a.py"))
+    assert not module._in_scope(Path("tools/pre_commit_checks/_layout.py"))

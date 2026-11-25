@@ -99,7 +99,7 @@ def _ctx_of(*roles: str) -> llm.ChatContext:
     ctx = llm.ChatContext.empty()
     for role in roles:
         # Loose test fake.
-        ctx.add_message(role=role, content=[f"{role} said something"])  # pyright: ignore[reportArgumentType]
+        ctx.add_message(role=role, content=[f"{role} said something"])  # pyright: ignore[reportArgumentType]  # role is a plain str here; LiveKit types it as a Literal
     return ctx
 
 

@@ -445,3 +445,69 @@ release, and users miss pushes that skip it).
 **Consequences:** The skill text must stay portable, enforced by `tests/test_plugin.py`. Contracts are read through
 `python -m datalab.resources`. Projects run `uv lock --upgrade-package datalab` after a plugin update so their
 contracts match the skill. Plan: `IMPLEMENTATION_PLAN_PLATFORM_PHASE_2.md`.
+
+## 2026-11-11 — Project-card status is a hand-edited label, not an FSM
+
+**Status:** accepted
+**Context:** The card `status` (`idée|en cours|conclu|abandonné`) has no transition map, and ARCHITECTURE.md §State
+Machines already says nothing enforces the transitions. Python never reads the field, so it is not in
+`contracts/value_sets.json`.
+**Decision:** Keep a validated label: membership is checked in `app/src/lib/card.ts`, with no transition map and no
+`value_sets.json` entry until a Python reader exists.
+**Alternatives considered:** a `TRANSITIONS` const plus a git-diff CI check of card edits; a `card_statuses` entry in
+`value_sets.json`.
+**Consequences:** Any status change is allowed. Revisit this if a Python tool starts reading the status.
+
+## 2026-11-11 — Size hooks exclude test files and non-Python files
+
+**Status:** accepted
+**Context:** 17 test files are over 200 lines and test helpers pass 30 lines. The `file-size` and
+`check-function-length` hooks cover only `*/src/` and `tools/` Python. The app `.ts` / `.astro` sources are all under
+200 lines, and four small tracked `.sh` scripts exist.
+**Decision:** Tests and non-Python files stay out of the size hooks: parametrised scenario tables and fixtures read
+better together.
+**Alternatives considered:** a higher cap for tests; a size rule for JS/TS sources.
+**Consequences:** Those files can grow unbounded and are reviewed by hand.
+
+## 2026-11-11 — Scaffold tests run in CI only
+
+**Status:** accepted
+**Context:** `pytest -m scaffold` needs the network (`uv lock` against GitHub and PyPI), so it is deselected locally
+(`addopts` in `packages/datalab/pyproject.toml`).
+**Decision:** Keep it CI-only. When touching the template, run `pytest -m scaffold` by hand.
+**Alternatives considered:** a manual pre-push stage hook that runs it.
+**Consequences:** A template break is caught in CI, not at push.
+
+## 2026-11-11 — `gates-root` dev pins have no separate audit
+
+**Status:** accepted
+**Context:** `gates-root` pins pyright, pytest, pytest-cov and pyyaml inline in its ad-hoc env, and no `pip-audit`
+covers that env.
+**Decision:** Accept it. The same four versions are in `packages/datalab/uv.lock`, which CI audits (`ci.yml` pip-audit
+step), and these are dev tools only.
+**Alternatives considered:** a requirements file for the pins plus a CI pip-audit step.
+**Consequences:** If datalab's dev group (`>=`) drifts from the inline pins, the inline ones lose coverage: re-check
+when bumping the pins.
+
+## 2026-11-11 — Project isolation is enforced by per-tree envs, not import-linter
+
+**Status:** accepted
+**Context:** REVIEW §1 asked for forbidden import-linter contracts (datalab must not import projects, a project must
+not import another project).
+**Decision:** No contract. Each tree's env holds only itself plus datalab (pyright `venv = ".venv"`, no extra paths;
+verified with `find_spec`), so such an import fails pyright, the tests and the declared-deps hook.
+**Alternatives considered:** per-tree `forbidden` contracts naming every other project, to be updated on every new
+project.
+**Consequences:** `templates/project` has no local env, so only the CI scaffold test exercises it.
+
+## 2026-11-11 — Pyright strict covers project-owned tools only
+
+**Status:** accepted
+**Context:** Strict mode on all of `tools/` gives about 84 errors, most in vendored harness-recipe scripts
+(`check_declared_dependencies.py`, `check_function_length.py`, `check_enum_discipline.py`, `_layout.py`).
+**Decision:** Strict on `tools/check_file_size.py`, `hydra_gate.py` and `enum_maps.py` (the `strict` list in
+`pyrightconfig.json`). The recipe scripts stay at `basic` so they keep matching their recipes (same reasoning as #41).
+Test code (root `tests/` and each tree's `tests/`) also stays at `basic`: tests use fakes and fixtures that strict mode
+would force into casts.
+**Alternatives considered:** fixing all 84 errors (recipe drift); strict on tests.
+**Consequences:** Vendored scripts and tests get basic checking only. Typing fixes for the recipes go upstream.

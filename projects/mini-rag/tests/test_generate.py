@@ -47,10 +47,10 @@ def _raw_generator(response: httpx2.Response) -> LlmGenerator:
 def _with_transport(handler: object, **kwargs: object) -> LlmGenerator:
     """One factory for every test; max_retries=0 so error cases never sleep through SDK backoff."""
     # Mock handler typed loosely.
-    client = httpx2.Client(transport=httpx2.MockTransport(handler))  # type: ignore[arg-type]
+    client = httpx2.Client(transport=httpx2.MockTransport(handler))  # type: ignore[arg-type]  # httpx2 stub types the transport/client narrower than its runtime
     options: dict[str, object] = {"api_key": _KEY, "timeout_s": 5, "max_tokens": 64, "max_retries": 0} | kwargs
     # Mock handler typed loosely.
-    return LlmGenerator("https://openrouter.ai/api", "m", http_client=client, **options)  # type: ignore[arg-type]
+    return LlmGenerator("https://openrouter.ai/api", "m", http_client=client, **options)  # type: ignore[arg-type]  # httpx2 stub types the transport/client narrower than its runtime
 
 
 def test_f_13_html_200_raises_generation_error() -> None:

@@ -36,7 +36,7 @@ def _history(*messages: tuple[str, float]) -> ChatContext:
     history = ChatContext()
     for role, created_at in messages:
         # Loose test fake.
-        history.add_message(role=role, content="text", created_at=created_at)  # pyright: ignore[reportArgumentType]
+        history.add_message(role=role, content="text", created_at=created_at)  # pyright: ignore[reportArgumentType]  # role is a plain str here; LiveKit types it as a Literal
     return history
 
 

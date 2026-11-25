@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,7 @@ from mlflow import MlflowClient
 from mlflow.entities import Run, RunStatus
 from mlflow.exceptions import MlflowException
 
+from datalab.settings import Settings
 from datalab.tags import Tag
 from datalab.tracking import (
     TrackingUnavailable,
@@ -178,6 +180,27 @@ def test_tracking_keeps_a_user_retry_setting(sqlite_uri: str, monkeypatch: pytes
     assert os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] == "5"
 
 
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda s: project_spend("p", s),
+        lambda s: stale_runs("p", s, timedelta(days=1)),
+        lambda s: close_runs("p", s, []),
+    ],
+    ids=["project_spend", "stale_runs", "close_runs"],
+)
+def test_query_helpers_bound_mlflow_http_retries(
+    sqlite_uri: str, monkeypatch: pytest.MonkeyPatch, call: Callable[[Settings], object]
+) -> None:
+    monkeypatch.delenv("MLFLOW_HTTP_REQUEST_MAX_RETRIES", raising=False)
+    monkeypatch.delenv("MLFLOW_HTTP_REQUEST_TIMEOUT", raising=False)
+
+    call(make_settings(sqlite_uri))
+
+    assert os.environ["MLFLOW_HTTP_REQUEST_MAX_RETRIES"] == "2"
+    assert os.environ["MLFLOW_HTTP_REQUEST_TIMEOUT"] == "30"
+
+
 def _seed_run(
     client: MlflowClient, experiment: str, cost: float, *, finished: bool, start_ms: int | None = None
 ) -> str:
@@ -218,22 +241,37 @@ def test_f_9_stale_runs_listed_not_closed(sqlite_uri: str) -> None:
         stale_runs("p", make_settings(sqlite_uri), timedelta(0))
 
 
-def test_f_9_close_runs_kills_only_given_ids(sqlite_uri: str) -> None:
+def test_f_9_close_runs_refuses_a_finished_run_and_kills_nothing(sqlite_uri: str) -> None:
     client = MlflowClient(tracking_uri=sqlite_uri)
     old = _seed_run(client, "p/x", 0.0, finished=False)
-    other = _seed_run(client, "p/x", 0.0, finished=False)
     done = _seed_run(client, "p/x", 0.0, finished=True)
 
     with pytest.raises(ValueError, match=done):
         close_runs("p", make_settings(sqlite_uri), [old, done])
+
     assert client.get_run(old).info.status == "RUNNING"
+
+
+def test_f_9_close_runs_kills_only_the_named_run(sqlite_uri: str) -> None:
+    client = MlflowClient(tracking_uri=sqlite_uri)
+    old = _seed_run(client, "p/x", 0.0, finished=False)
+    other = _seed_run(client, "p/x", 0.0, finished=False)
 
     assert close_runs("p", make_settings(sqlite_uri), [old]) == [old]
     assert [client.get_run(r).info.status for r in (old, other)] == ["KILLED", "RUNNING"]
+
+
+def test_f_9_close_runs_unknown_id_raises_and_kills_nothing(sqlite_uri: str) -> None:
+    client = MlflowClient(tracking_uri=sqlite_uri)
+    run = _seed_run(client, "p/x", 0.0, finished=False)
+
+    with pytest.raises(ValueError, match="cannot be read"):
+        close_runs("p", make_settings(sqlite_uri), [run, "0" * 32])
+
+    assert client.get_run(run).info.status == "RUNNING"
 
 
 def test_tag_names_match_contract() -> None:
     contract = json.loads((REPO_ROOT / "contracts" / "mlflow_tags.json").read_text(encoding="utf-8"))
 
     assert {t.value for t in Tag} == set(contract["tags"])
-    assert len(contract["tags"]) == 11

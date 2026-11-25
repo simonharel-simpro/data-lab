@@ -139,7 +139,8 @@ def _check_winner(gate: _Gate, client: MlflowClient) -> None:
 
 def _score_test(gate: _Gate, trial_id: str) -> None:
     # The look is recorded before the test rows are materialised: a crash after this point still counts as a look.
-    ledger.write_atomic(gate.folder, ledger.record_test_look(gate.ledger, gate.split_sha, trial_id, gate.look_note))
+    look = ledger.record_test_look(gate.ledger, gate.split_sha, trial_id, gate.look_note)
+    ledger.write_atomic(gate.folder, look, base=gate.ledger)
     rows = read_rows(gate.data_file)
     test_rows = load_split(gate.folder, [Partition.TEST], rows=rows, allow_test=True)[Partition.TEST]
     model = instantiate(gate.model)

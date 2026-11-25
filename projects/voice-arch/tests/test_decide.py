@@ -1,6 +1,7 @@
+import mlflow
 import pytest
 
-from voice_arch.decide import ArchSummary, human_rating_mean, pick_arch
+from voice_arch.decide import ArchSummary, human_rating_mean, main, pick_arch
 
 
 def _summary(arch: str, exact: int, p50: float | None, *, cost: float | None = 0.1, n: int = 30) -> ArchSummary:
@@ -64,3 +65,17 @@ def test_no_summaries_is_an_error() -> None:
 def test_u_23_human_ratings_aggregate_by_mean_per_arch() -> None:
     assert human_rating_mean([4, 5, 3]) == 4.0
     assert human_rating_mean([]) is None
+
+
+def test_decide_unreachable_mlflow_fails_fast(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("DATALAB_MLFLOW_TRACKING_URI", "http://127.0.0.1:9")
+    previous = mlflow.get_tracking_uri()
+    try:
+        code = main()
+    finally:
+        mlflow.set_tracking_uri(previous)
+
+    assert code == 1
+    assert "MLflow unavailable" in capsys.readouterr().err

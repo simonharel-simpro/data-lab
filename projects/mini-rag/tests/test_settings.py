@@ -49,20 +49,20 @@ def test_settings_read_only_the_mini_rag_prefix(
 def test_scheme_less_llm_url_fails_at_settings() -> None:
     with pytest.raises(ValidationError, match="scheme"):
         # Settings kwarg.
-        PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url="dgx.lan:8000", gen_model="m")  # type: ignore[call-arg]
+        PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url="dgx.lan:8000", gen_model="m")  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 @pytest.mark.parametrize("url", ["http://", "://", "garbage://", "x ://y", "http:// host"])
 def test_malformed_llm_url_fails_at_settings(url: str) -> None:
     with pytest.raises(ValidationError, match="scheme"):
         # Settings kwarg.
-        PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url=url, gen_model="m")  # type: ignore[call-arg]
+        PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url=url, gen_model="m")  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 @pytest.mark.parametrize("url", ["http://dgx.lan:8000", "https://openrouter.ai/api"])
 def test_llm_url_with_scheme_and_host_validates(url: str) -> None:
     # Settings kwarg.
-    pilot = PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url=url, gen_model="m")  # type: ignore[call-arg]
+    pilot = PilotSettings(_env_file=None, llm_api_key=_KEY, llm_base_url=url, gen_model="m")  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
     assert pilot.llm_base_url == url
 
@@ -79,7 +79,7 @@ def test_dgx_needs_no_key_when_the_model_is_set(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("MINI_RAG_LLM_API_KEY", raising=False)
 
     # Settings kwarg.
-    pilot = PilotSettings(_env_file=None, llm_base_url="http://dgx.lan:8000", gen_model="deepseek-v4-flash")  # type: ignore[call-arg]
+    pilot = PilotSettings(_env_file=None, llm_base_url="http://dgx.lan:8000", gen_model="deepseek-v4-flash")  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
     assert pilot.llm_api_key is None
 
@@ -129,11 +129,11 @@ def test_validation_error_never_echoes_the_api_key(monkeypatch: pytest.MonkeyPat
 def test_provider_list_must_be_slugs(bad: str) -> None:
     with pytest.raises(ValidationError, match="provider slugs"):
         # Settings kwarg.
-        PilotSettings(_env_file=None, llm_api_key=_KEY, openrouter_providers=bad)  # type: ignore[call-arg]
+        PilotSettings(_env_file=None, llm_api_key=_KEY, openrouter_providers=bad)  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 def test_provider_list_is_trimmed_and_ordered() -> None:
     # Settings kwarg.
-    pilot = PilotSettings(_env_file=None, llm_api_key=_KEY, openrouter_providers=" deepinfra , parasail ")  # type: ignore[call-arg]
+    pilot = PilotSettings(_env_file=None, llm_api_key=_KEY, openrouter_providers=" deepinfra , parasail ")  # type: ignore[call-arg]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
     assert pilot.provider_list == ["deepinfra", "parasail"]

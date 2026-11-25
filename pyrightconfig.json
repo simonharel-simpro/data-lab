@@ -1,6 +1,7 @@
 {
   "include": ["tools", "tests"],
   "exclude": ["packages", "projects", "templates", "tools/weavit-ui", "app", "spike-astro", "**/.venv", "**/node_modules"],
+  "strict": ["tools/check_file_size.py", "tools/pre_commit_checks/hydra_gate.py", "tools/pre_commit_checks/enum_maps.py"],
   "typeCheckingMode": "basic",
   "pythonVersion": "3.12"
 }

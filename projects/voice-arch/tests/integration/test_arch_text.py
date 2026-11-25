@@ -45,7 +45,7 @@ YES = "Yes, that's all correct."
 @pytest.fixture
 def live() -> VoiceSettings:
     # Pydantic-settings kwarg.
-    return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]
+    return VoiceSettings(_env_file=(repo_root() / ".env", PROJECT_DIR / ".env"))  # pyright: ignore[reportCallIssue]  # _env_file is a pydantic-settings init kwarg the type stub omits
 
 
 async def _until_first_question(session: AgentSession[BookingState], arch: Arch) -> None:

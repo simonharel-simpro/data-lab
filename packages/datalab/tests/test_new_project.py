@@ -9,10 +9,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from datalab import new_project
+from datalab import ledger, new_project
 from datalab.new_project import main
 from datalab.project import ProjectError, load
 from tests.conftest import REPO_ROOT
+from tests.ledger_support import ledger as vector_ledger
 
 
 def _no_lock(project: Path) -> None:
@@ -230,3 +231,33 @@ def test_uv_lock_nonzero_exit_is_reported(
 
     assert "boom" in capsys.readouterr().err
     assert _projects_entries(fake_repo) == []
+
+
+def test_scaffold_ships_gitattributes(fake_repo: Path) -> None:
+    assert main(["demo"], root=fake_repo, lock=_no_lock) == 0
+
+    text = (fake_repo / "projects" / "demo" / ".gitattributes").read_text(encoding="utf-8")
+    assert "split.json -text" in text
+    assert "data/** -text" in text
+
+
+def test_gitattributes_pins_hashed_files() -> None:
+    git = shutil.which("git")
+    assert git is not None
+    result = subprocess.run(  # noqa: S603  # fixed argv: git from shutil.which, no shell
+        [git, "check-attr", "text", "--", "projects/mini-rag/split.json", "projects/voice-arch/data/x.jsonl"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    lines = result.stdout.splitlines()
+    assert len(lines) == 2
+    assert all(line.endswith(": text: unset") for line in lines)
+
+
+def test_crlf_split_mismatch_names_line_endings() -> None:
+    audit = vector_ledger("audit-first-look")
+
+    assert "line-ending" in str(ledger.test_access_problem(audit, "0" * 64, None))

@@ -1,5 +1,6 @@
 """Read-side MLflow queries of a project's runs: spend, stale RUNNING runs, closing them. Re-exported by `tracking`."""
 
+import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -15,6 +16,13 @@ from datalab.settings import Settings
 
 _PAGE = 1000
 _RUNNING: Final = RunStatus.to_string(RunStatus.RUNNING)
+_HTTP_DEFAULTS: Final = {"MLFLOW_HTTP_REQUEST_MAX_RETRIES": "2", "MLFLOW_HTTP_REQUEST_TIMEOUT": "30"}
+
+
+def bound_http_retries() -> None:
+    """MLflow's defaults (7 retries x 120 s, backoff 2) turn an outage into a ~20 min hang; a user value wins."""
+    for key, value in _HTTP_DEFAULTS.items():
+        os.environ.setdefault(key, value)
 
 
 def _next_token[T](page: PagedList[T]) -> str | None:
@@ -73,6 +81,7 @@ def _runs(client: MlflowClient, project: str, ids: list[str], extra: str = "") -
 
 def project_spend(project: str, settings: Settings) -> float:
     """Sum of `cost_usd` over every run of the project, whatever its status (RUNNING counts: F-7)."""
+    bound_http_retries()
     client = MlflowClient(tracking_uri=settings.mlflow_tracking_uri)
     ids = list(_experiments(client, project))
     if not ids:
@@ -90,6 +99,7 @@ def stale_runs(
     """RUNNING runs started before `now() - older_than`, by run id. Lists only: closing is `close_runs`."""
     if older_than <= timedelta(0):
         raise ValueError(f"older_than must be positive, got {older_than}")
+    bound_http_retries()
     client = MlflowClient(tracking_uri=settings.mlflow_tracking_uri)
     experiments = _experiments(client, project)
     if not experiments:
@@ -110,6 +120,7 @@ def stale_runs(
 
 def close_runs(project: str, settings: Settings, run_ids: Sequence[str]) -> list[str]:
     """Mark the named RUNNING runs of the project KILLED; all ids are checked before any is changed (F-9)."""
+    bound_http_retries()
     client = MlflowClient(tracking_uri=settings.mlflow_tracking_uri)
     ids = sorted(set(run_ids))
     for run_id in ids:
